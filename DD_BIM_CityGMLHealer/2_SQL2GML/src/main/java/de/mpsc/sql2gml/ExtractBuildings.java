@@ -1,11 +1,9 @@
 package de.mpsc.sql2gml;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -23,64 +21,34 @@ public class ExtractBuildings {
 
         Path inputPath = Paths.get(args[0]);
         Path outputPath = Paths.get(args[1]);
-        Set<String> targetIds = new HashSet<>(Arrays.asList(Arrays.copyOfRange(args, 2, args.length)));
+        Set<String> targetIds = new LinkedHashSet<>(Arrays.asList(Arrays.copyOfRange(args, 2, args.length)));
 
         System.out.println("Input:  " + inputPath);
         System.out.println("Output: " + outputPath);
         System.out.println("Target IDs (" + targetIds.size() + "): " + targetIds);
 
-        int totalBuildings = 0;
-        int writtenBuildings = 0;
+        // Track which requested IDs were actually matched (for the not-found report)
+        Set<String> foundIds = new LinkedHashSet<>();
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-                new FileInputStream(inputPath.toFile()), StandardCharsets.UTF_8));
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
-                new FileOutputStream(outputPath.toFile()), StandardCharsets.UTF_8))) {
-
-            String line;
-            StringBuilder memberBlock = null;
-            boolean inMember = false;
-
-            while ((line = reader.readLine()) != null) {
-                if (line.contains("<core:cityObjectMember>")) {
-                    inMember = true;
-                    memberBlock = new StringBuilder();
-                    memberBlock.append(line).append("\n");
-                } else if (inMember && line.contains("</core:cityObjectMember>")) {
-                    memberBlock.append(line).append("\n");
-                    totalBuildings++;
-
-                    // Check if this block contains one of the target building IDs
-                    String block = memberBlock.toString();
-                    boolean match = false;
-                    for (String id : targetIds) {
-                        if (block.contains("gml:id=\"" + id + "\"")) {
-                            match = true;
-                            break;
-                        }
-                    }
-                    if (match) {
-                        writer.write(block);
-                        writtenBuildings++;
-                    }
-
-                    inMember = false;
-                    memberBlock = null;
-                } else if (inMember) {
-                    memberBlock.append(line).append("\n");
-                } else if (line.contains("</core:CityModel>")) {
-                    writer.write(line);
-                    writer.newLine();
-                } else {
-                    // Header / boundedBy — copy as-is
-                    writer.write(line);
-                    writer.newLine();
+        GmlMemberFilter.Result result = GmlMemberFilter.filter(inputPath, outputPath, block -> {
+            for (String id : targetIds) {
+                if (block.contains("gml:id=\"" + id + "\"")) {
+                    foundIds.add(id);
+                    return true;
                 }
             }
+            return false;
+        });
+
+        System.out.println("Total buildings scanned: " + result.totalMembers());
+        System.out.println("Buildings written: " + result.writtenMembers());
+
+        Set<String> notFound = new LinkedHashSet<>(targetIds);
+        notFound.removeAll(foundIds);
+        if (!notFound.isEmpty()) {
+            System.out.println("WARNING: " + notFound.size() + " requested ID(s) not found: " + notFound);
         }
 
-        System.out.println("Total buildings scanned: " + totalBuildings);
-        System.out.println("Buildings written: " + writtenBuildings);
         System.out.println("Output: " + outputPath);
     }
 }

@@ -1,6 +1,6 @@
-package de.mpsc.sql2gml;
+package de.mpsc.sql2gml.legacy;
 
-import de.mpsc.sql2gml.model.*;
+import de.mpsc.sql2gml.legacy.model.*;
 import org.citygml4j.core.model.CityGMLVersion;
 import org.citygml4j.core.model.core.AbstractFeature;
 import org.citygml4j.core.model.core.AbstractGenericAttributeProperty;
@@ -238,7 +238,7 @@ public class CompleteWorkflow {
             DatabaseReader dbReader = new DatabaseReader(databasePath);
             
             // Read buildings (new structure with Building table)
-            List<de.mpsc.sql2gml.model.Building> dbBuildings = dbReader.readAllBuildings();
+            List<de.mpsc.sql2gml.legacy.model.Building> dbBuildings = dbReader.readAllBuildings();
             logger.info("Loaded {} buildings from database", dbBuildings.size());
             
             PolygonIndex idx = PolygonIndex.buildFromDatabase(dbBuildings);
@@ -622,7 +622,7 @@ public class CompleteWorkflow {
      * Used when a Building has isValid=0 — geometry stays unchanged, but logs must be preserved.
      */
     private static void collectInvalidBuildingLogs(
-            de.mpsc.sql2gml.model.Building dbBuilding, Map<String, Object> attrs) {
+            de.mpsc.sql2gml.legacy.model.Building dbBuilding, Map<String, Object> attrs) {
         for (BuildingPart dbPart : dbBuilding.getBuildingParts()) {
             for (Surface surface : dbPart.getSurfaces()) {
                 if (surface.getLog() != null && !surface.getLog().isEmpty()) {
@@ -837,7 +837,7 @@ public class CompleteWorkflow {
     }
 
     private static class PolygonIndex {
-        final Map<String, de.mpsc.sql2gml.model.Building> buildingsByGmlId = new HashMap<>();
+        final Map<String, de.mpsc.sql2gml.legacy.model.Building> buildingsByGmlId = new HashMap<>();
         final Map<String, Polygon> polygonIndex = new HashMap<>();
         final Map<Polygon, Surface> surfaceIndex = new HashMap<>();
         final Set<String> invalidBuildingIds = new HashSet<>();
@@ -849,11 +849,11 @@ public class CompleteWorkflow {
         final Map<String, List<String>> newPolyRefsByExistingPoly = new HashMap<>();
         final Set<String> anchorlessSurfaces = new HashSet<>();
 
-        static PolygonIndex buildFromDatabase(List<de.mpsc.sql2gml.model.Building> dbBuildings) {
+        static PolygonIndex buildFromDatabase(List<de.mpsc.sql2gml.legacy.model.Building> dbBuildings) {
             PolygonIndex idx = new PolygonIndex();
             int skippedByBuildingCascade = 0, skippedByPartCascade = 0, skippedBySurfaceCascade = 0;
 
-            for (de.mpsc.sql2gml.model.Building building : dbBuildings) {
+            for (de.mpsc.sql2gml.legacy.model.Building building : dbBuildings) {
                 idx.buildingsByGmlId.put(building.getBuildingIdGml(), building);
 
                 if (!building.isValid()) {
@@ -1162,7 +1162,7 @@ public class CompleteWorkflow {
             Map<String, Object> trackingAttrs = new LinkedHashMap<>();
 
             if (buildingId != null && idx.buildingsByGmlId.containsKey(buildingId)) {
-                de.mpsc.sql2gml.model.Building dbBuilding = idx.buildingsByGmlId.get(buildingId);
+                de.mpsc.sql2gml.legacy.model.Building dbBuilding = idx.buildingsByGmlId.get(buildingId);
 
                 if (dbBuilding.getLog() != null && !dbBuilding.getLog().isEmpty()) {
                     trackingAttrs.put("Log", dbBuilding.getLog());

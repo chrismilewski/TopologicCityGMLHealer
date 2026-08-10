@@ -34,12 +34,18 @@ import org.xmlobjects.gml.model.geometry.primitives.Polygon;
 import org.xmlobjects.gml.model.geometry.primitives.SolidProperty;
 import org.xmlobjects.gml.model.geometry.primitives.SurfaceProperty;
 
+import org.citygml4j.core.visitor.ObjectWalker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -48,17 +54,20 @@ import java.util.function.Consumer;
  */
 public final class CityGmlUtils {
 
+    private static final Logger log = LoggerFactory.getLogger(CityGmlUtils.class);
+
     /** Epsilon fuer Punkt-Gleichheit (XYZ-Vergleich). */
     private static final double POINT_EQUALITY_EPS = 1e-6;
+
+    /** STRUKTUR-Marker fuer Balkon-Flaechen, ausgeschlossen aus der lod3Solid-Huelle (siehe Doku.md Schritt 6). */
+    public static final String STRUKTUR_BALCONY_DECK = "Balkondecke";
+    public static final String STRUKTUR_BALCONY_RAILING = "Balkonbruestung";
 
     private CityGmlUtils() {
         // Utility-Klasse
     }
 
-    /**
-     * Liest ein StringAttribute aus einem AbstractCityObject
-     * (Building, WallSurface, FloorSurface, etc.).
-     */
+    /** Liest ein StringAttribute aus einem AbstractCityObject. */
     public static String getStringAttribute(AbstractCityObject cityObject, String name) {
         if (cityObject.getGenericAttributes() == null) {
             return null;
@@ -74,22 +83,14 @@ public final class CityGmlUtils {
                 .orElse(null);
     }
 
-    /**
-     * Fuegt ein StringAttribute zu einem AbstractCityObject hinzu
-     * (Building, WallSurface, FloorSurface, etc.).
-     */
+    /** Fuegt ein StringAttribute zu einem AbstractCityObject hinzu. */
     public static void addStringAttribute(AbstractCityObject cityObject, String name, String value) {
         StringAttribute attr = new StringAttribute(name, value);
         AbstractGenericAttributeProperty prop = new AbstractGenericAttributeProperty(attr);
         cityObject.getGenericAttributes().add(prop);
     }
 
-    /**
-     * Setzt ein StringAttribute auf einem AbstractCityObject.
-     * Aktualisiert den Wert wenn das Attribut bereits existiert,
-     * fuegt es sonst neu hinzu.
-     * Verwenden fuer Updates bestehender Attribute (z.B. nach Geometrie-Aenderung).
-     */
+    /** Setzt ein StringAttribute; aktualisiert den Wert falls es bereits existiert, sonst neu. */
     public static void setStringAttribute(AbstractCityObject cityObject, String name, String value) {
         if (cityObject.getGenericAttributes() != null) {
             for (var prop : cityObject.getGenericAttributes()) {
@@ -102,10 +103,7 @@ public final class CityGmlUtils {
         addStringAttribute(cityObject, name, value);
     }
 
-    /**
-     * Liest ein StringAttribute als Double.
-     * Gibt null zurueck bei fehlendem Attribut oder Parse-Fehler.
-     */
+    /** Liest ein StringAttribute als Double; null bei fehlendem Attribut oder Parse-Fehler. */
     public static Double parseDoubleAttribute(AbstractCityObject cityObject, String name) {
         String str = getStringAttribute(cityObject, name);
         if (str == null) return null;
@@ -116,22 +114,14 @@ public final class CityGmlUtils {
         }
     }
 
-    /**
-     * Setzt den gml:name eines CityGML-Objekts.
-     * Wird als <gml:name>...</gml:name> serialisiert.
-     */
+    /** Setzt den gml:name eines CityGML-Objekts. */
     public static void setGmlName(AbstractCityObject cityObject, String name) {
         cityObject.getNames().add(new Code(name));
     }
 
     // ==================== Geometrie-Berechnungen ====================
 
-    /**
-     * Berechnet die 2D-Flaeche eines Polygons (Gauss'sche Trapezformel / Shoelace).
-     * Ignoriert die Z-Koordinate, berechnet die projizierte Flaeche in der XY-Ebene.
-     *
-     * Formel: A = 0.5 * |sum(x_i * y_{i+1} - x_{i+1} * y_i)|
-     */
+    /** 2D-Flaeche eines Polygons (Shoelace-Formel), Z-Koordinate wird ignoriert. */
     public static double calculatePolygonArea2D(List<Point3D> points) {
         List<Point3D> pts = removeClosingPoint(points);
         double area = 0.0;
@@ -144,21 +134,7 @@ public final class CityGmlUtils {
         return Math.abs(area) / 2.0;
     }
 
-    /**
-     * Berechnet den Azimut der Wandnormalen fuer eine vertikale Wand
-     * definiert durch die Kante A -> B.
-     *
-     * Die Wandnormale steht senkrecht auf der Kante in der Horizontalebene.
-     * Fuer ein Polygon mit CW-Wicklung (CityGML GroundSurface) zeigt die
-     * Normale nach aussen.
-     *
-     * Berechnung:
-     *   Kantenrichtung: (dx, dy) = (B.x - A.x, B.y - A.y)
-     *   Wandnormale:    (-dy, dx)  (Kreuzprodukt Kante x Vertikale)
-     *   Azimut:         atan2(normal_east, normal_north) = atan2(-dy, dx)
-     *
-     * Ergebnis: Kompassrichtung in Grad (0=Nord, 90=Ost, 180=Sued, 270=West).
-     */
+    /** Azimut der Wandnormalen (Grad, 0=Nord) fuer eine vertikale Wand entlang Kante A->B. */
     private static double calculateWallNormalAzimuth(Point3D a, Point3D b) {
         double dx = b.x - a.x;
         double dy = b.y - a.y;
@@ -167,20 +143,14 @@ public final class CityGmlUtils {
         return azimuth;
     }
 
-    /**
-     * Berechnet die 2D-Kantenlaenge zwischen zwei Punkten (ignoriert Z).
-     */
+    /** 2D-Kantenlaenge zwischen zwei Punkten (ignoriert Z). */
     public static double calculateEdgeLength2D(Point3D a, Point3D b) {
         double dx = b.x - a.x;
         double dy = b.y - a.y;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    /**
-     * Formatiert einen double-Wert als String, analog zu den bestehenden
-     * Attribut-Werten in der GML-Datei (max. 5 Nachkommastellen, ohne
-     * abschliessende Nullen).
-     */
+    /** Formatiert einen double-Wert als String (max. 5 Nachkommastellen, ohne abschliessende Nullen). */
     public static String formatNum(double value) {
         String s = String.format(java.util.Locale.US, "%.5f", value);
         if (s.contains(".")) {
@@ -190,18 +160,12 @@ public final class CityGmlUtils {
         return s;
     }
 
-    /**
-     * Rundet einen Z-Wert auf 3 Nachkommastellen (mm-Genauigkeit).
-     * Verhindert Floating-Point-Artefakte bei Additions-Operationen
-     * wie z.B. 159.57 + 1.26 = 160.82999999999998 → 160.83.
-     */
+    /** Rundet einen Z-Wert auf mm-Genauigkeit, gegen Floating-Point-Artefakte. */
     public static double roundZ(double z) {
         return Math.round(z * 1000.0) / 1000.0;
     }
 
-    /**
-     * Extrahiert 3D-Punkte aus einem Polygon.
-     */
+    /** Extrahiert 3D-Punkte aus einem Polygon. */
     public static List<Point3D> toPoints(Polygon polygon) {
         if (polygon.getExterior() == null || polygon.getExterior().getObject() == null) {
             return Collections.emptyList();
@@ -223,17 +187,41 @@ public final class CityGmlUtils {
         return points;
     }
 
+    /** Toleranz fuer das Verschmelzen aufeinanderfolgender (nahezu) gleicher Punkte (1 mm). */
+    public static final double POINT_MERGE_TOL = 0.001;
+
+    private static double dist3D(Point3D a, Point3D b) {
+        double dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /**
+     * Entfernt aufeinanderfolgende (zyklisch) Punkte, die naeher als {@code tol} beieinander
+     * liegen. Erwartet/liefert einen OFFENEN Ring (ohne Schliessungspunkt).
+     */
+    public static List<Point3D> dedupConsecutive(List<Point3D> pts, double tol) {
+        List<Point3D> open = removeClosingPoint(pts);
+        if (open.size() < 2) return new ArrayList<>(open);
+        List<Point3D> out = new ArrayList<>(open.size());
+        for (Point3D p : open) {
+            if (out.isEmpty() || dist3D(p, out.get(out.size() - 1)) >= tol) out.add(p);
+        }
+        // zyklischer Schluss: letzter ~ erster?
+        while (out.size() >= 2 && dist3D(out.get(0), out.get(out.size() - 1)) < tol) {
+            out.remove(out.size() - 1);
+        }
+        return out;
+    }
+
     /**
      * Erstellt ein Polygon aus einer Liste von 3D-Punkten.
+     * Aufeinanderfolgende Duplikate werden entfernt (Sicherheitsnetz gegen GE_R_CONSECUTIVE_POINTS_SAME).
      */
     public static Polygon createPolygon(List<Point3D> pts) {
-        List<Point3D> closed = new ArrayList<>(pts);
-        if (!pts.isEmpty()) {
-            Point3D first = pts.get(0);
-            Point3D last = pts.get(pts.size() - 1);
-            if (!first.nearlyEquals(last)) {
-                closed.add(first);
-            }
+        List<Point3D> open = dedupConsecutive(pts, POINT_MERGE_TOL);
+        List<Point3D> closed = new ArrayList<>(open);
+        if (!open.isEmpty()) {
+            closed.add(open.get(0));
         }
 
         List<Double> coords = new ArrayList<>(closed.size() * 3);
@@ -271,10 +259,7 @@ public final class CityGmlUtils {
 
     // ==================== Gebäude-Abfragen ====================
 
-    /**
-     * Sammelt alle Boundary-Objekte eines bestimmten Typs.
-     * Beispiel: collectBoundariesByType(building, WallSurface.class)
-     */
+    /** Sammelt alle Boundary-Objekte eines bestimmten Typs. */
     public static <T> List<T> collectBoundariesByType(AbstractBuilding building, Class<T> type) {
         List<T> result = new ArrayList<>();
         for (var boundary : building.getBoundaries()) {
@@ -285,17 +270,12 @@ public final class CityGmlUtils {
         return result;
     }
 
-    /**
-     * Sammelt alle WallSurface-Objekte eines Gebaeudes oder BuildingParts.
-     */
+    /** Sammelt alle WallSurface-Objekte eines Gebaeudes oder BuildingParts. */
     public static List<WallSurface> collectWallSurfaces(AbstractBuilding building) {
         return collectBoundariesByType(building, WallSurface.class);
     }
 
-    /**
-     * Gibt alle Verarbeitungsziele eines Buildings zurueck (BuildingParts + Building selbst).
-     * Parts kommen zuerst, dann das Building (falls es eigene Boundaries hat).
-     */
+    /** Verarbeitungsziele eines Buildings: BuildingParts (zuerst), dann das Building selbst. */
     public static List<AbstractBuilding> getBuildingTargets(Building building) {
         List<AbstractBuilding> targets = new ArrayList<>();
         if (building.getBuildingParts() != null) {
@@ -309,61 +289,34 @@ public final class CityGmlUtils {
         return targets;
     }
 
-    /**
-     * Sammelt alle GroundSurface-Polygone eines Gebäudes oder BuildingParts.
-     * Sucht zuerst in lod3MultiSurface, dann lod2MultiSurface.
-     */
+    /** Sammelt alle lod3MultiSurface-Polygone der BoundarySurfaces eines bestimmten Typs. */
+    public static <T extends AbstractThematicSurface> List<Polygon> collectLod3Polygons(
+            AbstractBuilding building, Class<T> surfaceType) {
+        List<Polygon> polygons = new ArrayList<>();
+        for (var boundary : building.getBoundaries()) {
+            if (!surfaceType.isInstance(boundary.getObject())) continue;
+            MultiSurfaceProperty msp = surfaceType.cast(boundary.getObject()).getMultiSurface(3);
+            if (msp == null || msp.getObject() == null) continue;
+            for (var member : msp.getObject().getSurfaceMember()) {
+                if (member.getObject() instanceof Polygon poly) {
+                    polygons.add(poly);
+                }
+            }
+        }
+        return polygons;
+    }
+
+    /** Sammelt alle GroundSurface-Polygone eines Gebaeudes oder BuildingParts. */
     public static List<Polygon> collectGroundPolygons(AbstractBuilding building) {
-        List<Polygon> polygons = new ArrayList<>();
-        for (var boundary : building.getBoundaries()) {
-            if (boundary.getObject() instanceof GroundSurface gs) {
-                MultiSurfaceProperty msp = gs.getLod3MultiSurface();
-                if (msp == null || msp.getObject() == null) continue;
-                for (var member : msp.getObject().getSurfaceMember()) {
-                    if (member.getObject() instanceof Polygon poly) {
-                        polygons.add(poly);
-                    }
-                }
-            }
-        }
-        return polygons;
+        return collectLod3Polygons(building, GroundSurface.class);
     }
 
-    /**
-     * Sammelt alle RoofSurface-Polygone eines Gebaeuedes oder BuildingParts.
-     */
+    /** Sammelt alle RoofSurface-Polygone eines Gebaeudes oder BuildingParts. */
     public static List<Polygon> collectRoofPolygons(AbstractBuilding building) {
-        List<Polygon> polygons = new ArrayList<>();
-        for (var boundary : building.getBoundaries()) {
-            if (boundary.getObject() instanceof RoofSurface rs) {
-                MultiSurfaceProperty msp = rs.getLod3MultiSurface();
-                if (msp == null || msp.getObject() == null) continue;
-                for (var member : msp.getObject().getSurfaceMember()) {
-                    if (member.getObject() instanceof Polygon poly) {
-                        polygons.add(poly);
-                    }
-                }
-            }
-        }
-        return polygons;
+        return collectLod3Polygons(building, RoofSurface.class);
     }
 
-    /**
-     * Ermittelt Traufe (Z_MIN) und First (Z_MAX) der RoofSurface-Polygone.
-     *
-     * Als traufeZ wird das Z_MIN der flaechengroessten RoofSurface verwendet,
-     * da kleine Nebenflaechen (z.B. Attika-Absaetze) nicht die Geschosshoehe
-     * bestimmen sollen. Falls kein FACEAREA-Attribut vorhanden ist, wird das
-     * globale Z_MIN verwendet (Fallback).
-     *
-     * Mischdach-Sonderfall: Falls das Gebaeude sowohl flache (DachTyp_LOD2=1000)
-     * als auch geneigte Dachflaechen hat, wird die Traufe aus den geneigten
-     * Flaechen bestimmt. Flache Teilflaechen (z.B. Innenhof, Anbau) koennen
-     * eine groessere Flaeche haben als einzelne geneigte Dachflaechen und
-     * wuerden sonst faelschlicherweise die Traufe nach unten ziehen.
-     *
-     * @return double[]{traufeZ, firstZ, rawMinZ} oder null wenn keine RoofSurface vorhanden
-     */
+    /** Traufe/First der RoofSurface-Polygone, aus der flaechengroessten Dachflaeche (Mischdach: geneigte bevorzugt). */
     public static double[] getRoofZRange(AbstractBuilding building) {
         double minZ = Double.MAX_VALUE;
         double maxZ = -Double.MAX_VALUE;
@@ -430,9 +383,7 @@ public final class CityGmlUtils {
         return new double[]{traufeZ, maxZ, minZ, slopedRawMinZ};
     }
 
-    /**
-     * Liest das erste Polygon aus einer WallSurface (LoD3).
-     */
+    /** Liest das erste Polygon aus einer WallSurface (LoD3). */
     public static Polygon getWallPolygon(WallSurface wall) {
         MultiSurfaceProperty msp = wall.getLod3MultiSurface();
         if (msp == null || msp.getObject() == null) return null;
@@ -443,39 +394,7 @@ public final class CityGmlUtils {
 
     // ==================== Wand-Schnitt (Sutherland-Hodgman) ====================
 
-    /**
-     * Schneidet ein Wand-Polygon horizontal bei einer gegebenen Z-Hoehe
-     * mittels Sutherland-Hodgman-Algorithmus.
-     *
-     * Funktioniert fuer beliebige Polygon-Formen:
-     * - Dreiecke (3 Punkte) - Giebelspitzen
-     * - Rechtecke (4 Punkte) - Standard-Waende
-     * - Fuenfecke (5 Punkte) - Giebelwaende
-     * - Sechsecke (6 Punkte) - Walmdach-Waende
-     * - Beliebig komplexe Formen (7+ Punkte) - Gauben, Erker, L-Form, etc.
-     *
-     * Algorithmus:
-     * Jeder Polygon-Eckpunkt wird als "unterhalb", "auf" oder "oberhalb" der
-     * Schnittebene z=zCut klassifiziert. Fuer jede Kante, die die Schnittebene
-     * kreuzt, wird ein Schnittpunkt per linearer Interpolation berechnet.
-     * Die Punkte werden den beiden Ergebnis-Polygonen (unten/oben) zugeordnet.
-     * Punkte exakt auf der Schnittebene gehören zu BEIDEN Haelften.
-     *
-     * Ergebnis: [untererTeil, obererTeil] oder null wenn Schnitt nicht moeglich.
-     *
-     * Geometrie-Beispiele:
-     *
-     *   Rechteck (4P):        Fuenfeck/Giebel (5P):     Sechseck/Walm (6P):
-     *   D ─── C                    C                     D ─── C
-     *   │     │    →           D ╱   ╲ B    →           ╱       ╲
-     *   │     │              E ╱       ╲ A            E           B
-     *   A ─── B                                       F ───────── A
-     *
-     * @param wallPoly Das zu schneidende Wand-Polygon (3+ Eckpunkte)
-     * @param zCut Die Z-Hoehe an der geschnitten wird
-     * @param tolerance Mindestabstand von zCut zu den Polygon-Kanten (verhindert Fitzelchen)
-     * @return [lowerPoly, upperPoly] oder null
-     */
+    /** Schneidet ein Wand-Polygon horizontal bei zCut (Sutherland-Hodgman), liefert [untererTeil, obererTeil]. */
     public static Polygon[] cutWallPolygonAtZ(Polygon wallPoly, double zCut, double tolerance) {
         List<Point3D> pts = toPoints(wallPoly);
         List<Point3D> open = removeClosingPoint(pts);
@@ -542,89 +461,143 @@ public final class CityGmlUtils {
             return null;
         }
 
-        // Post-Processing: Zwischenpunkte der Unterkante in upperPoly bewahren.
-        // Bei Waenden mit mehreren kollinearen Punkten auf Gelaendeniveau (z ≈ minZ)
-        // verwirft der Standard-S-H die Zwischenpunkte und erzeugt eine gerade
-        // Unterkante in upperPoly. Das zerstoert die topologische Ausrichtung mit
-        // den BA-Wand-Oberkanten aus dem BasementGenerator.
-        // Nur anwenden wenn der Schnitt dicht ueber dem Wandfuss liegt (≤ 2.0 m),
-        // d.h. beim Schnitt auf Hoehe egFloorZ (= H_DGM + heightGr ≈ 0.3..1.0 m).
-        if (zRounded - minZ <= 2.0) {
-            final double floorTol = 0.05; // 5 cm: Punkte innerhalb von minZ gelten als "Sohlpunkte"
-
-            int entryEdgeIdx = -1; // Kante oben→Sohle
-            int exitEdgeIdx  = -1; // Kante Sohle→oben
-            for (int i = 0; i < n; i++) {
-                Point3D p = open.get(i);
-                Point3D q = open.get((i + 1) % n);
-                boolean pFloor = p.z < zRounded - eps && Math.abs(p.z - minZ) < floorTol;
-                boolean qFloor = q.z < zRounded - eps && Math.abs(q.z - minZ) < floorTol;
-                boolean pAbv   = p.z > zRounded + eps;
-                boolean qAbv   = q.z > zRounded + eps;
-                if (pAbv && qFloor && entryEdgeIdx < 0) {
-                    entryEdgeIdx = i;
-                }
-                if (pFloor && qAbv) {
-                    exitEdgeIdx = i;
-                }
-            }
-
-            if (entryEdgeIdx >= 0 && exitEdgeIdx >= 0 && entryEdgeIdx != exitEdgeIdx) {
-                // Zwischenpunkte sammeln: vom zweiten Sohlpunkt bis zum vorletzten
-                // (erster und letzter Sohlpunkt decken sich XY-nah mit den
-                // Schnittpunkten der entry-/exit-Kanten und werden nicht nochmal eingefuegt)
-                List<Point3D> intermediates = new ArrayList<>();
-                int cur = (entryEdgeIdx + 2) % n; // zweiter Sohlpunkt
-                while (cur != exitEdgeIdx) {
-                    intermediates.add(open.get(cur));
-                    cur = (cur + 1) % n;
-                }
-
-                if (!intermediates.isEmpty()) {
-                    // Schnittpunkte der entry- und exit-Kante berechnen
-                    Point3D pE = open.get(entryEdgeIdx);
-                    Point3D qE = open.get((entryEdgeIdx + 1) % n);
-                    double tE = (zRounded - pE.z) / (qE.z - pE.z);
-                    double entryX = pE.x + tE * (qE.x - pE.x);
-                    double entryY = pE.y + tE * (qE.y - pE.y);
-
-                    Point3D pX = open.get(exitEdgeIdx);
-                    Point3D qX = open.get((exitEdgeIdx + 1) % n);
-                    double tX = (zRounded - pX.z) / (qX.z - pX.z);
-                    double exitX = pX.x + tX * (qX.x - pX.x);
-                    double exitY = pX.y + tX * (qX.y - pX.y);
-
-                    // Aufeinanderfolgendes Paar (entryIntersect, exitIntersect) in upperPoly suchen
-                    final double posTol = 0.02; // 2 cm Lagetoleranz
-                    int sz = upperPoly.size();
-                    for (int i = 0; i < sz; i++) {
-                        int j = (i + 1) % sz;
-                        Point3D pi = upperPoly.get(i);
-                        Point3D pj = upperPoly.get(j);
-                        if (Math.abs(pi.z - zRounded) < eps
-                                && Math.abs(pj.z - zRounded) < eps
-                                && Math.hypot(pi.x - entryX, pi.y - entryY) < posTol
-                                && Math.hypot(pj.x - exitX, pj.y - exitY) < posTol) {
-                            // Zwischenpunkte auf Schnitthoehe in upperPoly einfuegen
-                            int insertIdx = i + 1;
-                            for (int k = 0; k < intermediates.size(); k++) {
-                                Point3D fv = intermediates.get(k);
-                                upperPoly.add(insertIdx + k, new Point3D(fv.x, fv.y, zRounded));
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
         return new Polygon[]{createPolygon(lowerPoly), createPolygon(upperPoly)};
     }
 
-    /**
-     * Projiziert einen Grundriss (Liste von 3D-Punkten) auf eine neue Z-Höhe.
-     * Behält X und Y bei, setzt Z auf den neuen Wert.
-     */
+    /** Prueft, ob der Ring in seiner dominanten Projektionsebene selbstschneidend ist (Bowtie/Pinch). */
+    public static boolean ringSelfIntersects(List<Point3D> ring) {
+        List<Point3D> p = removeClosingPoint(ring);
+        int n = p.size();
+        if (n < 4) return false;
+
+        // Pinch: nicht benachbarte, zusammenfallende Vertices
+        double tol2 = POINT_MERGE_TOL * POINT_MERGE_TOL;
+        for (int i = 0; i < n; i++) {
+            Point3D pi = p.get(i);
+            for (int j = i + 1; j < n; j++) {
+                if (j == i + 1 || (i == 0 && j == n - 1)) continue;
+                Point3D pj = p.get(j);
+                double dx = pi.x - pj.x, dy = pi.y - pj.y, dz = pi.z - pj.z;
+                if (dx * dx + dy * dy + dz * dz < tol2) return true;
+            }
+        }
+
+        // Auf dominante Ebene projizieren (Newell-Normale)
+        double nx = 0, ny = 0, nz = 0;
+        for (int i = 0; i < n; i++) {
+            Point3D a = p.get(i), b = p.get((i + 1) % n);
+            nx += (a.y - b.y) * (a.z + b.z);
+            ny += (a.z - b.z) * (a.x + b.x);
+            nz += (a.x - b.x) * (a.y + b.y);
+        }
+        double ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+        double[][] q = new double[n][2];
+        for (int i = 0; i < n; i++) {
+            Point3D v = p.get(i);
+            if (az >= ax && az >= ay)      { q[i][0] = v.x; q[i][1] = v.y; } // Z verwerfen
+            else if (ay >= ax && ay >= az) { q[i][0] = v.x; q[i][1] = v.z; } // Y verwerfen
+            else                           { q[i][0] = v.y; q[i][1] = v.z; } // X verwerfen
+        }
+
+        // Nicht benachbarte Kanten auf echten Schnitt ODER kollineare Ueberlappung testen.
+        for (int i = 0; i < n; i++) {
+            double[] a = q[i], b = q[(i + 1) % n];
+            for (int k = i + 1; k < n; k++) {
+                if (Math.abs(i - k) <= 1 || (i == 0 && k == n - 1)) continue;
+                double[] c = q[k], d = q[(k + 1) % n];
+                if (segmentsProperlyIntersect(a, b, c, d)) return true;
+                if (segmentsCollinearOverlap(a, b, c, d)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean segmentsProperlyIntersect(double[] a, double[] b, double[] c, double[] d) {
+        double d1 = orient2D(c, d, a), d2 = orient2D(c, d, b);
+        double d3 = orient2D(a, b, c), d4 = orient2D(a, b, d);
+        return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0));
+    }
+
+    /** True, wenn ab und cd kollinear sind und sich in mehr als einem Punkt ueberlappen. */
+    private static boolean segmentsCollinearOverlap(double[] a, double[] b, double[] c, double[] d) {
+        double eps = 1e-6;
+        // Alle vier Punkte kollinear? (c und d auf Gerade ab)
+        if (Math.abs(orient2D(a, b, c)) > eps || Math.abs(orient2D(a, b, d)) > eps) return false;
+        // Auf die dominante Achse von ab projizieren und 1D-Ueberlappung pruefen
+        double dx = b[0] - a[0], dy = b[1] - a[1];
+        boolean useX = Math.abs(dx) >= Math.abs(dy);
+        double ta = useX ? a[0] : a[1], tb = useX ? b[0] : b[1];
+        double tc = useX ? c[0] : c[1], td = useX ? d[0] : d[1];
+        double loAB = Math.min(ta, tb), hiAB = Math.max(ta, tb);
+        double loCD = Math.min(tc, td), hiCD = Math.max(tc, td);
+        double overlap = Math.min(hiAB, hiCD) - Math.max(loAB, loCD);
+        return overlap > POINT_MERGE_TOL; // mehr als nur Punkt-Beruehrung
+    }
+
+    private static double orient2D(double[] p, double[] q, double[] r) {
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    }
+
+    /** Ergebnis eines horizontalen Wand-Schnitts: die zusammenhaengenden Stuecke unten und oben. */
+    public record WallCut(List<List<Point3D>> lower, List<List<Point3D>> upper) {}
+
+    /** Schneidet ein Wand-Polygon horizontal bei zCut in echte, getrennte Einzelstuecke (nicht self-touching). */
+    public static WallCut splitWallByZ(List<Point3D> open, double zCut, double eps) {
+        // Ring augmentieren: Schnittpunkte an kreuzenden Kanten einfuegen, On-Punkte auf zCut snappen
+        List<Point3D> aug = new ArrayList<>();
+        int n = open.size();
+        for (int i = 0; i < n; i++) {
+            Point3D p = open.get(i), q = open.get((i + 1) % n);
+            aug.add(Math.abs(p.z - zCut) <= eps ? new Point3D(p.x, p.y, zCut) : p);
+            boolean pBelow = p.z < zCut - eps, pAbove = p.z > zCut + eps;
+            boolean qBelow = q.z < zCut - eps, qAbove = q.z > zCut + eps;
+            if ((pBelow && qAbove) || (pAbove && qBelow)) {
+                double t = (zCut - p.z) / (q.z - p.z);
+                aug.add(new Point3D(p.x + t * (q.x - p.x), p.y + t * (q.y - p.y), zCut));
+            }
+        }
+        return new WallCut(extractZRuns(aug, zCut, eps, true), extractZRuns(aug, zCut, eps, false));
+    }
+
+    /** Extrahiert aus einem an zCut augmentierten Ring die zusammenhaengenden Stuecke einer Seite. */
+    private static List<List<Point3D>> extractZRuns(List<Point3D> aug, double zCut, double eps, boolean lower) {
+        int m = aug.size();
+        List<List<Point3D>> pieces = new ArrayList<>();
+        int start = -1;
+        for (int i = 0; i < m; i++) {
+            if (!isInside(aug.get(i), zCut, eps, lower)) { start = i; break; }
+        }
+        if (start == -1) { // alles inSide → ganzer Ring ist ein Stueck
+            if (m >= 3) pieces.add(new ArrayList<>(aug));
+            return pieces;
+        }
+        List<Point3D> cur = null;
+        for (int k = 1; k <= m; k++) {
+            Point3D pt = aug.get((start + k) % m);
+            if (isInside(pt, zCut, eps, lower)) {
+                if (cur == null) cur = new ArrayList<>();
+                cur.add(pt);
+            } else if (cur != null) {
+                if (isRealPiece(cur, zCut, eps)) pieces.add(cur);
+                cur = null;
+            }
+        }
+        if (cur != null && isRealPiece(cur, zCut, eps)) pieces.add(cur);
+        return pieces;
+    }
+
+    private static boolean isInside(Point3D p, double zCut, double eps, boolean lower) {
+        return lower ? p.z <= zCut + eps : p.z >= zCut - eps;
+    }
+
+    /** Ein gueltiges Stueck hat >= 3 Punkte und liegt nicht komplett auf der Schnittlinie. */
+    private static boolean isRealPiece(List<Point3D> piece, double zCut, double eps) {
+        if (piece.size() < 3) return false;
+        for (Point3D p : piece) if (Math.abs(p.z - zCut) > eps) return true;
+        return false;
+    }
+
+    /** Projiziert einen Grundriss auf eine neue Z-Hoehe (X/Y bleiben, Z wird ersetzt). */
     public static List<Point3D> projectToZ(List<Point3D> points, double newZ) {
         List<Point3D> projected = new ArrayList<>(points.size());
         for (Point3D p : points) {
@@ -633,10 +606,7 @@ public final class CityGmlUtils {
         return projected;
     }
 
-    /**
-     * Erstellt eine MultiSurfaceProperty mit SRS-Information.
-     * Setzt srsName und srsDimension auf dem MultiSurface-Element.
-     */
+    /** Erstellt eine MultiSurfaceProperty mit srsName/srsDimension. */
     private static MultiSurfaceProperty createMultiSurfacePropertyWithSrs(Polygon polygon,
             String srsName, int srsDimension) {
         MultiSurface ms = new MultiSurface();
@@ -646,28 +616,16 @@ public final class CityGmlUtils {
         return new MultiSurfaceProperty(ms);
     }
 
-    /**
-     * Standard-SRS für das Projekt.
-     */
+    /** Standard-SRS fuer das Projekt. */
     public static final String SRS_NAME = "urn:adv:crs:ETRS89_UTM33*DE_DHHN2016_NH";
     public static final int SRS_DIMENSION = 3;
 
-    /**
-     * Erstellt eine MultiSurfaceProperty mit Standard-SRS (ETRS89_UTM33*DE_DHHN2016_NH, 3D).
-     */
+    /** Erstellt eine MultiSurfaceProperty mit Standard-SRS. */
     public static MultiSurfaceProperty createMultiSurfacePropertyWithDefaultSrs(Polygon polygon) {
         return createMultiSurfacePropertyWithSrs(polygon, SRS_NAME, SRS_DIMENSION);
     }
 
-    /**
-     * Erstellt eine MultiSurfaceProperty mit XLink-Referenz auf ein bestehendes Polygon.
-     * Das referenzierte Polygon muss eine gml:id haben und im selben Dokument existieren.
-     *
-     * Erzeugt: {@code <gml:surfaceMember xlink:href="#polygonId"/>}
-     *
-     * @param polygonGmlId Die gml:id des referenzierten Polygons (ohne '#'-Praefix)
-     * @return MultiSurfaceProperty mit XLink-Referenz
-     */
+    /** Erstellt eine MultiSurfaceProperty mit XLink-Referenz auf ein bestehendes Polygon. */
     public static MultiSurfaceProperty createXLinkMultiSurfaceProperty(String polygonGmlId) {
         MultiSurface ms = new MultiSurface();
         ms.setSrsName(SRS_NAME);
@@ -678,40 +636,92 @@ public final class CityGmlUtils {
 
     // ==================== Wand-Attribute berechnen ====================
 
-    /**
-     * Berechnet Z_MIN und Z_MAX aus einer Liste von Wandpunkten.
-     * @return double[] { minZ, maxZ }
-     */
+    /** Z_MIN und Z_MAX aus einer Liste von Wandpunkten. */
     public static double[] getZRange(List<Point3D> points) {
         double minZ = points.stream().mapToDouble(p -> p.z).min().orElse(0);
         double maxZ = points.stream().mapToDouble(p -> p.z).max().orElse(0);
         return new double[] { minZ, maxZ };
     }
 
+    /** Unterkante eines Wand-Polygons (Kante auf zMin), ihre 2D-Laenge und der Z-Bereich. */
+    public record BottomEdge(
+            Point3D start,     // Startpunkt der Unterkante
+            Point3D end,       // Endpunkt der Unterkante
+            double wallLength, // 2D-Laenge der Unterkante [m]
+            double zMin,       // unterster Z-Wert des Polygons
+            double zMax        // hoechster Z-Wert des Polygons
+    ) {}
+
     /**
-     * Berechnet die Flaeche eines beliebigen 3D-Polygons (Newell's Method).
+     * Ermittelt die Unterkante eines Wand-Polygons: das Punktepaar auf zMin mit
+     * dem groessten 2D-Abstand (= die volle Wandbreite am Fuss).
      *
-     * Funktioniert fuer alle planaren Polygon-Formen (Dreiecke, Rechtecke,
-     * Fuenfecke, Sechsecke, etc.) im dreidimensionalen Raum.
+     * <p>Das ist robuster als "die erste Kante bei zMin", wenn mehrere Punkte auf
+     * zMin liegen — etwa nach Geschoss-Schnitten mit Zwischenpunkten auf der Sohle
+     * oder bei L-/Stufen-Grundrissen. Die volle Spannweite liefert die korrekte
+     * Wandlaenge und Richtung als Bezug fuer Tuer-/Fensterplatzierung.
      *
-     * Algorithmus (Newell's Method):
-     *   Flaechennormale N = Summe(P_i x P_{i+1})  (Kreuzprodukt-Summe)
-     *   Flaeche A = 0.5 * |N|
-     *
-     * Detailliert:
-     *   N.x = Summe( (y_i - y_{i+1}) * (z_i + z_{i+1}) )
-     *   N.y = Summe( (z_i - z_{i+1}) * (x_i + x_{i+1}) )
-     *   N.z = Summe( (x_i - x_{i+1}) * (y_i + y_{i+1}) )
-     *   A = 0.5 * sqrt(N.x^2 + N.y^2 + N.z^2)
-     *
-     * @param wallPoints Punkte des Polygons (offen oder geschlossen)
-     * @return Flaeche in m^2
+     * @param open offener Polygonring (ohne Schliessungspunkt)
+     * @return BottomEdge, oder null wenn weniger als 2 Punkte auf zMin liegen
      */
+    public static BottomEdge findBottomEdge(List<Point3D> open) {
+        if (open == null || open.size() < 2) return null;
+        double[] zRange = getZRange(open);
+        double zMin = zRange[0];
+        double zMax = zRange[1];
+        double zTol = 0.01;
+
+        List<Integer> bottomIndices = new ArrayList<>();
+        for (int i = 0; i < open.size(); i++) {
+            if (Math.abs(open.get(i).z - zMin) < zTol) bottomIndices.add(i);
+        }
+        if (bottomIndices.size() < 2) return null;
+
+        // Paar mit maximalem 2D-Abstand waehlen (= volle Wandbreite, nicht das erste Teilstueck)
+        int startIdx = bottomIndices.get(0);
+        int endIdx = bottomIndices.get(1);
+        double maxDist2D = 0;
+        for (int i = 0; i < bottomIndices.size(); i++) {
+            for (int j = i + 1; j < bottomIndices.size(); j++) {
+                double d = calculateEdgeLength2D(
+                        open.get(bottomIndices.get(i)), open.get(bottomIndices.get(j)));
+                if (d > maxDist2D) {
+                    maxDist2D = d;
+                    startIdx = bottomIndices.get(i);
+                    endIdx = bottomIndices.get(j);
+                }
+            }
+        }
+        return new BottomEdge(open.get(startIdx), open.get(endIdx), maxDist2D, zMin, zMax);
+    }
+
+    /** String-Key fuer den 2D-Mittelpunkt der untersten Wandkante, zur Dedup-Erkennung geteilter BuildingPart-Waende. */
+    public static String wallBottomMidKey(WallSurface wall) {
+        Polygon poly = getWallPolygon(wall);
+        if (poly == null) return null;
+        List<Point3D> pts = toPoints(poly);
+        List<Point3D> open = removeClosingPoint(pts);
+        if (open.size() < 2) return null;
+        double[] zRange = getZRange(open);
+        double zBotMin = zRange[0];
+        double zTol = 0.01;
+        double sumX = 0, sumY = 0;
+        int cnt = 0;
+        for (Point3D p : open) {
+            if (Math.abs(p.z - zBotMin) < zTol) { sumX += p.x; sumY += p.y; cnt++; }
+        }
+        if (cnt < 2) return null;
+        long gx = Math.round((sumX / cnt) * 10);
+        long gy = Math.round((sumY / cnt) * 10);
+        long gz = Math.round(zBotMin * 10);
+        return gx + "," + gy + "," + gz;
+    }
+
+    /** Flaeche eines beliebigen planaren 3D-Polygons (Newell's Method). */
     public static double calculateWallArea(List<Point3D> wallPoints) {
         List<Point3D> open = removeClosingPoint(wallPoints);
         if (open.size() < 3) return 0;
 
-        // Newell's Method: Flaechennormale durch Kreuzprodukt-Summe
         double nx = 0, ny = 0, nz = 0;
         int n = open.size();
         for (int i = 0; i < n; i++) {
@@ -722,31 +732,17 @@ public final class CityGmlUtils {
             nz += (curr.x - next.x) * (curr.y + next.y);
         }
 
-        // Flaeche = halbe Laenge des Normalenvektors
         return 0.5 * Math.sqrt(nx * nx + ny * ny + nz * nz);
     }
 
-    /**
-     * Berechnet den Azimut der Wandnormalen aus einem beliebigen Wand-Polygon.
-     *
-     * Strategie:
-     * 1. Suche zwei aufeinanderfolgende Punkte am unteren Rand (minZ) des Polygons.
-     *    Dies funktioniert fuer alle gaengigen Wandformen (Rechtecke, Giebel, Walm, etc.)
-     * 2. Fallback: Verwende die laengste horizontale Kante.
-     * 3. Letzter Fallback: Verwende die erste Kante des Polygons.
-     *
-     * @param wallPoints Punkte des Wand-Polygons (3+ Punkte)
-     * @return Azimut in Grad (0=Nord, 90=Ost, 180=Sued, 270=West)
-     */
+    /** Azimut der Wandnormalen aus einem beliebigen Wand-Polygon (Unterkante, sonst laengste/erste Kante als Fallback). */
     private static double calculateWallNormalAzimuthFromPolygon(List<Point3D> wallPoints) {
         List<Point3D> open = removeClosingPoint(wallPoints);
         if (open.size() < 3) return 0;
-        
-        // Finde die untere Kante (zwei aufeinanderfolgende Punkte bei minZ)
+
         double minZ = open.stream().mapToDouble(p -> p.z).min().orElse(0);
         double tolerance = 0.01;
-        
-        // Suche zwei aufeinanderfolgende Punkte bei minZ
+
         for (int i = 0; i < open.size(); i++) {
             int next = (i + 1) % open.size();
             if (Math.abs(open.get(i).z - minZ) < tolerance && 
@@ -778,22 +774,11 @@ public final class CityGmlUtils {
         return calculateWallNormalAzimuth(open.get(0), open.get(1));
     }
 
-    /**
-     * Fügt alle Standard-Wand-Attribute zu einer WallSurface hinzu.
-     *
-     * @param wall Die WallSurface
-     * @param wallPoints Punkte des Wand-Polygons
-     * @param faceId BldgFaceID
-     * @param hDgm Geländehöhe (für relative Z-Werte), kann null sein
-     * @param geschoss Geschoss-Tag (KG, EG, 1.OG, ...)
-     * @param lage Lage-Tag (belowGround, unterirdisch, oder null)
-     * @param struktur Struktur-Beschreibung
-     * @param ursprungspolygonId gml:id des Original-Polygons vor Schnitt (oder null)
-     */
+    /** Fuegt alle Standard-Wand-Attribute (FACEAREA, NORMAL_AZI, Z_MIN/MAX, ...) zu einer WallSurface hinzu. */
     public static void addWallAttributes(WallSurface wall, List<Point3D> wallPoints,
             String faceId, Double hDgm, String geschoss, String lage, String struktur,
             String ursprungspolygonId) {
-        
+
         double[] zRange = getZRange(wallPoints);
         double wallMinZ = zRange[0];
         double wallMaxZ = zRange[1];
@@ -821,16 +806,7 @@ public final class CityGmlUtils {
         }
     }
 
-    /**
-     * Fügt Standard-Attribute zu einer FloorSurface oder CeilingSurface hinzu.
-     *
-     * @param surface Die Surface (Floor oder Ceiling)
-     * @param faceId BldgFaceID
-     * @param z Z-Koordinate der Fläche
-     * @param hDgm Geländehöhe (für relativen Z-Wert), kann null sein
-     * @param area Fläche in m²
-     * @param geschoss Geschoss-Tag (KG, EG, 1.OG, ...)
-     */
+    /** Fuegt Standard-Attribute (FACEAREA, Z_MIN_ASL, ...) zu einer FloorSurface oder CeilingSurface hinzu. */
     public static void addHorizontalSurfaceAttributes(AbstractCityObject surface,
             String faceId, double z, Double hDgm, double area, String geschoss) {
         addStringAttribute(surface, "BldgFaceID", faceId);
@@ -842,9 +818,7 @@ public final class CityGmlUtils {
         addStringAttribute(surface, "Geschoss", geschoss);
     }
 
-    /**
-     * Einfache 3D-Punkt-Klasse.
-     */
+    /** Einfache 3D-Punkt-Klasse. */
     public static class Point3D {
         public final double x;
         public final double y;
@@ -871,38 +845,13 @@ public final class CityGmlUtils {
 
     // ==================== TerrainIntersectionCurve ====================
 
-    /**
-     * Erzeugt eine lod3TerrainIntersectionCurve (TIC) als MultiCurveProperty.
-     *
-     * <p>Einfacher Modus (ohne DGM): Alle Punkte werden auf eine konstante
-     * Gelaendehoehe (hDgm) projiziert. Das ergibt einen flachen Ring bei Z = hDgm.
-     *
-     * @param groundPolygons GroundSurface-Polygone (Footprint-Polygone)
-     * @param hDgm konstante Gelaendehoehe
-     * @return MultiCurveProperty mit geschlossenen 3D-Ringen
-     */
+    /** Erzeugt eine flache lod3TerrainIntersectionCurve bei Z=hDgm (ohne DGM). */
     public static MultiCurveProperty createTerrainIntersectionCurve(
             List<Polygon> groundPolygons, double hDgm) {
         return createTerrainIntersectionCurve(groundPolygons, hDgm, null);
     }
 
-    /**
-     * Erzeugt eine lod3TerrainIntersectionCurve (TIC) als MultiCurveProperty.
-     *
-     * <p>Wenn ein DGM vorhanden ist, wird die Gelaendehoehe pro Vertex per
-     * bilinearer Interpolation aus dem DGM abgefragt. Falls das DGM fuer einen
-     * Vertex kein Ergebnis liefert (ausserhalb oder NODATA), wird hDgm als
-     * Fallback verwendet.
-     *
-     * <p>Jedes GroundSurface-Polygon erzeugt einen geschlossenen Ring (LineString)
-     * in der MultiCurve. Bei Gebaeuden mit Innenhoefen (mehrere GroundSurface-
-     * Polygone) enthaelt die MultiCurve entsprechend mehrere Ringe.
-     *
-     * @param groundPolygons GroundSurface-Polygone (Footprint-Polygone)
-     * @param hDgm Fallback-Gelaendehoehe (konstant, wenn kein DGM)
-     * @param dgm optionaler DGM-Provider fuer detaillierte Gelaendehoehen (kann null sein)
-     * @return MultiCurveProperty mit geschlossenen 3D-Ringen, oder null wenn keine Polygone
-     */
+    /** Erzeugt eine lod3TerrainIntersectionCurve; mit DGM bilinear interpoliert, sonst Fallback auf hDgm. */
     public static MultiCurveProperty createTerrainIntersectionCurve(
             List<Polygon> groundPolygons, double hDgm, DgmProvider dgm) {
 
@@ -963,18 +912,7 @@ public final class CityGmlUtils {
 
     // ==================== Solid-Shell-Rebuild ====================
 
-    /**
-     * Bestimmt ob der Aussenring eines Wand-Polygons im lokalen 2D-Koordinatensystem
-     * (Horizontalachse = Wandunterkante, Vertikalachse = Z) gegen den Uhrzeigersinn (CCW) laeuft.
-     *
-     * Sachsen LoD2-Waende: CW (Normale zeigt nach innen).
-     * Generierte Kellerwaende (BA): CCW (Normale zeigt nach aussen, Standard GML).
-     *
-     * @param open       Offener Ring (ohne Schliessungspunkt) der Wand
-     * @param edgeStart  Startpunkt der Unterkante (= Ursprung des lokalen KS)
-     * @param dirX       X-Komponente des Einheitsvektors der Unterkante
-     * @param dirY       Y-Komponente des Einheitsvektors der Unterkante
-     */
+    /** True, wenn der Aussenring eines Wand-Polygons im lokalen 2D-KS (Wandunterkante, Z) CCW laeuft. */
     public static boolean isExteriorRingCCW(List<Point3D> open, Point3D edgeStart,
             double dirX, double dirY) {
         double area2 = 0;
@@ -989,26 +927,13 @@ public final class CityGmlUtils {
         return area2 > 0;
     }
 
-    /**
-     * Baut die lod3Solid-Shell eines Gebaeudes/BuildingParts komplett neu auf.
-     *
-     * Sammelt alle Polygon-gml:ids aus allen BoundarySurfaces (nur inline-Polygone,
-     * keine XLink-Referenzen) und ersetzt die surfaceMembers der Shell mit neuen
-     * xlink:href-Eintraegen.
-     *
-     * Weist Polygonen ohne gml:id automatisch eine "Poly_"-basierte ID zu,
-     * abgeleitet aus der gml:id der uebergeordneten BoundarySurface.
-     *
-     * Hintergrund: Die Pipeline (Promoter → BasementGenerator → StoreyGenerator)
-     * kopiert den lod2Solid als lod3Solid, aber die xlink:href-Referenzen in der
-     * Shell werden nicht aktualisiert, wenn Wandflaechen geschnitten und neue
-     * Flaechen (Keller, Geschosse, Boeden, Decken) hinzugefuegt werden.
-     * Dadurch entstehen dangling references auf nicht mehr existierende Polygone,
-     * und neue Polygone fehlen im Solid.
-     *
-     * @param target Das AbstractBuilding (Building oder BuildingPart)
-     * @return Anzahl der Polygon-Referenzen in der neuen Shell (0 wenn kein Solid)
-     */
+    /** True, wenn die Flaeche per STRUKTUR-Attribut als Balkon-Deck oder -Bruestung markiert ist. */
+    private static boolean isBalconySurface(AbstractThematicSurface surface) {
+        String struktur = getStringAttribute(surface, "STRUKTUR");
+        return STRUKTUR_BALCONY_DECK.equals(struktur) || STRUKTUR_BALCONY_RAILING.equals(struktur);
+    }
+
+    /** Baut die lod3Solid-Shell eines Gebaeudes/BuildingParts komplett aus seinen BoundarySurfaces neu auf. */
     public static int rebuildSolidShell(AbstractBuilding target) {
         SolidProperty solidProp = target.getSolid(3);
         if (solidProp == null || solidProp.getObject() == null) return 0;
@@ -1027,23 +952,16 @@ public final class CityGmlUtils {
             var surface = boundary.getObject();
             if (!(surface instanceof AbstractThematicSurface ats)) continue;
 
-            // FloorSurface und CeilingSurface sind innere Geschoss-Trennflaechen
-            // und gehoeren NICHT zum aeusseren Solid-Hull:
-            // Ihre Kanten an Geschossgrenzen wuerden von 3 Faces geteilt
-            // (unteres Wandsegment + oberes Wandsegment + Floor/Ceiling)
-            // → GE_S_NON_MANIFOLD_EDGE. Sie bleiben als semantische BoundarySurfaces
-            // erhalten, werden aber nicht in die Solid-Shell aufgenommen.
+            // Floor/Ceiling gehoeren nicht zur aeusseren Solid-Hull (sonst GE_S_NON_MANIFOLD_EDGE).
             if (surface instanceof FloorSurface || surface instanceof CeilingSurface) continue;
+            if (isBalconySurface(ats)) continue;
 
             MultiSurfaceProperty msp = ats.getMultiSurface(3);
             if (msp == null || msp.getObject() == null) continue;
 
             for (SurfaceProperty member : msp.getObject().getSurfaceMember()) {
-                // Nur inline-Polygone zaehlen (keine XLink-Referenzen)
-                // XLink-Floors referenzieren ein Ceiling-Polygon, das bereits
-                // ueber die CeilingSurface gezaehlt wird.
+                // Nur inline-Polygone zaehlen, keine XLink-Referenzen.
                 if (member.getObject() instanceof Polygon poly) {
-                    // Falls kein gml:id vorhanden → automatisch zuweisen
                     if (poly.getId() == null || poly.getId().isBlank()) {
                         String surfaceId = ats.getId();
                         String baseId;
@@ -1060,10 +978,7 @@ public final class CityGmlUtils {
                 }
             }
 
-            // FillingSurfaces (WindowSurface, DoorSurface) in die Shell aufnehmen:
-            // Die Wand hat Innenringe (Loecher) fuer Fenster/Tueren. Ohne das
-            // Fenster-/Tuerpolygon im Solid sind die Lochkanten nur in 1 Face
-            // → GE_S_NOT_CLOSED. Die FillingSurface schliesst das Loch.
+            // FillingSurfaces (Fenster/Tueren) in die Shell aufnehmen, sonst GE_S_NOT_CLOSED am Lochrand.
             if (surface instanceof WallSurface wall) {
                 for (AbstractFillingSurfaceProperty fillProp : wall.getFillingSurfaces()) {
                     var fill = fillProp.getObject();
@@ -1073,17 +988,13 @@ public final class CityGmlUtils {
                     for (SurfaceProperty fmember : fmsp.getObject().getSurfaceMember()) {
                         if (fmember.getObject() instanceof Polygon fpoly) {
                             if (fpoly.getId() == null || fpoly.getId().isBlank()) {
-                                // Eindeutige ID aus der FillingSurface-ID ableiten.
-                                // fill.getId() ist z.B. "Face_XYZ_Win_1" oder "Face_XYZ_Door_1"
-                                // → daraus wird "Poly_XYZ_Win_1" bzw. "Poly_XYZ_Door_1".
-                                // So sind die IDs global eindeutig (kein autoIdCounter-Reset-Problem).
+                                // ID aus der FillingSurface-ID ableiten (global eindeutig).
                                 String fillId = fill.getId();
                                 if (fillId != null && !fillId.isBlank()) {
                                     String base = fillId.startsWith("Face_")
                                             ? fillId.substring(5) : fillId;
                                     fpoly.setId("Poly_" + base);
                                 } else {
-                                    // Fallback: Wall-ID + autoIdCounter (selten)
                                     fpoly.setId("Poly_Fill_" + ats.getId()
                                             + "_" + (++autoIdCounter));
                                 }
@@ -1104,17 +1015,121 @@ public final class CityGmlUtils {
         return polygonIds.size();
     }
 
+    // ==================== Junction-Conforming (T-Nähte) ====================
+
+    private static double dist3(double[] a, double[] b) {
+        double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /** Fuegt fehlende T-Naht-Vertices auf bestehende Kanten ein (formneutral, siehe Doku.md Schritt 7). */
+    public static int conformJunctions(Building building, double tol) {
+        List<LinearRing> rings = new ArrayList<>();
+        for (AbstractBuilding t : getBuildingTargets(building)) collectShellExteriorRings(t, rings);
+        if (rings.size() < 2) return 0;
+
+        // alle Vertices der Huellen-Ringe als Einfuege-Kandidaten sammeln
+        List<double[]> verts = new ArrayList<>();
+        for (LinearRing r : rings) {
+            List<Double> v = ringValues(r);
+            if (v == null) continue;
+            int m = v.size() / 3;
+            for (int i = 0; i < m - 1; i++) {
+                verts.add(new double[]{v.get(3 * i), v.get(3 * i + 1), v.get(3 * i + 2)});
+            }
+        }
+
+        int inserted = 0;
+        for (LinearRing r : rings) {
+            List<Double> v = ringValues(r);
+            if (v == null) continue;
+            int m = v.size() / 3;
+            if (m < 4) continue;
+            List<double[]> pts = new ArrayList<>(m - 1);
+            for (int i = 0; i < m - 1; i++) {
+                pts.add(new double[]{v.get(3 * i), v.get(3 * i + 1), v.get(3 * i + 2)});
+            }
+
+            List<double[]> out = new ArrayList<>();
+            int nn = pts.size();
+            boolean changed = false;
+            for (int i = 0; i < nn; i++) {
+                double[] a = pts.get(i), b = pts.get((i + 1) % nn);
+                out.add(a);
+                // Kandidaten, die auf der Kante a-b liegen (Innen, nicht Endpunkt)
+                List<double[]> ins = new ArrayList<>();
+                double abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
+                double len2 = abx * abx + aby * aby + abz * abz;
+                if (len2 < 1e-18) continue;
+                for (double[] cand : verts) {
+                    double tpar = ((cand[0] - a[0]) * abx + (cand[1] - a[1]) * aby + (cand[2] - a[2]) * abz) / len2;
+                    if (tpar <= 1e-6 || tpar >= 1 - 1e-6) continue;
+                    if (dist3(cand, a) < tol || dist3(cand, b) < tol) continue;
+                    double cx = a[0] + tpar * abx, cy = a[1] + tpar * aby, cz = a[2] + tpar * abz;
+                    double ex = cand[0] - cx, ey = cand[1] - cy, ez = cand[2] - cz;
+                    if (ex * ex + ey * ey + ez * ez < tol * tol) {
+                        ins.add(new double[]{tpar, cand[0], cand[1], cand[2]});
+                    }
+                }
+                if (!ins.isEmpty()) {
+                    ins.sort((x, y2) -> Double.compare(x[0], y2[0]));
+                    double lastT = -1;
+                    for (double[] c : ins) {
+                        if (c[0] - lastT < 1e-6) continue; // doppeltes t
+                        out.add(new double[]{c[1], c[2], c[3]});
+                        lastT = c[0];
+                        inserted++;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed) {
+                List<Double> nv = new ArrayList<>((out.size() + 1) * 3);
+                for (double[] c : out) { nv.add(c[0]); nv.add(c[1]); nv.add(c[2]); }
+                nv.add(out.get(0)[0]); nv.add(out.get(0)[1]); nv.add(out.get(0)[2]);
+                r.getControlPoints().getPosList().setValue(nv);
+            }
+        }
+        return inserted;
+    }
+
+    private static List<Double> ringValues(LinearRing r) {
+        if (r.getControlPoints() == null || r.getControlPoints().getPosList() == null) return null;
+        return r.getControlPoints().getPosList().getValue();
+    }
+
+    /** Sammelt die Aussenring-LinearRings aller Huellen-Polygone (wie {@link #rebuildSolidShell}). */
+    private static void collectShellExteriorRings(AbstractBuilding target, List<LinearRing> out) {
+        for (var boundary : target.getBoundaries()) {
+            var surface = boundary.getObject();
+            if (!(surface instanceof AbstractThematicSurface ats)) continue;
+            if (surface instanceof FloorSurface || surface instanceof CeilingSurface) continue;
+            if (isBalconySurface(ats)) continue;
+            addExteriorRings(ats.getMultiSurface(3), out);
+            if (surface instanceof WallSurface wall) {
+                for (AbstractFillingSurfaceProperty fp : wall.getFillingSurfaces()) {
+                    var fill = fp.getObject();
+                    if (fill != null) addExteriorRings(fill.getMultiSurface(3), out);
+                }
+            }
+        }
+    }
+
+    private static void addExteriorRings(MultiSurfaceProperty msp, List<LinearRing> out) {
+        if (msp == null || msp.getObject() == null) return;
+        for (SurfaceProperty m : msp.getObject().getSurfaceMember()) {
+            if (m.getObject() instanceof Polygon poly
+                    && poly.getExterior() != null
+                    && poly.getExterior().getObject() instanceof LinearRing r) {
+                out.add(r);
+            }
+        }
+    }
+
     // ==================== GML-Datei-Verarbeitung ====================
 
-    /**
-     * Verarbeitet eine CityGML-Datei: Liest alle Features, wendet einen
-     * Building-Processor an und schreibt das Ergebnis.
-     * Uebernimmt das BoundedBy-Envelope aus dem Header.
-     *
-     * @param input     Eingabe-GML-Datei
-     * @param output    Ausgabe-GML-Datei
-     * @param processor Funktion die auf jedes Building angewendet wird
-     */
+    /** Liest alle Features einer CityGML-Datei, wendet processor auf jedes Building an, schreibt das Ergebnis. */
     public static void processGmlFile(Path input, Path output,
             Consumer<Building> processor) throws Exception {
 
@@ -1141,6 +1156,7 @@ public final class CityGmlUtils {
             writer.withIndent("\t").withDefaultPrefixes();
             if (originalBoundedBy != null) {
                 writer.getCityModelInfo().setBoundedBy(originalBoundedBy);
+                log.info("BoundedBy-Envelope uebernommen");
             }
 
             while (reader.hasNext()) {
@@ -1153,15 +1169,7 @@ public final class CityGmlUtils {
         }
     }
 
-    /**
-     * Erstellt den Ausgabe-Pfad basierend auf dem Eingabe-Pfad und einem Suffix.
-     * Wenn explicitOutput nicht null ist, wird dieser verwendet.
-     *
-     * @param inputPath      Eingabe-Datei
-     * @param suffix         Suffix fuer den Dateinamen (z.B. "_storeys")
-     * @param explicitOutput Expliziter Ausgabe-Pfad (optional, kann null sein)
-     * @return Ausgabe-Pfad
-     */
+    /** Erstellt den Ausgabe-Pfad aus Eingabe-Pfad + Suffix, oder verwendet explicitOutput falls gesetzt. */
     public static Path resolveOutputPath(Path inputPath, String suffix, Path explicitOutput) {
         if (explicitOutput != null) return explicitOutput;
         String baseName = inputPath.getFileName().toString();
@@ -1176,21 +1184,18 @@ public final class CityGmlUtils {
 
     // ==================== Weitere Geometrie-Hilfsmethoden ====================
 
-    /**
-     * Erzeugt einen geschlossenen LinearRing aus einer Punktliste.
-     * Die Punktliste wird automatisch geschlossen (letzter Punkt = erster Punkt).
-     * Verwendet fuer innere Ringe (z.B. Fenster-/Tuerausschnitte).
-     */
+    /** Erzeugt einen geschlossenen LinearRing aus einer Punktliste (z.B. fuer Fenster-/Tuerausschnitte). */
     public static LinearRing createLinearRing(List<Point3D> pts) {
-        List<Double> coords = new ArrayList<>(pts.size() * 3 + 3);
-        for (Point3D p : pts) {
+        List<Point3D> open = dedupConsecutive(pts, POINT_MERGE_TOL);
+        List<Double> coords = new ArrayList<>(open.size() * 3 + 3);
+        for (Point3D p : open) {
             coords.add(p.x);
             coords.add(p.y);
             coords.add(p.z);
         }
-        coords.add(pts.get(0).x);
-        coords.add(pts.get(0).y);
-        coords.add(pts.get(0).z);
+        coords.add(open.get(0).x);
+        coords.add(open.get(0).y);
+        coords.add(open.get(0).z);
 
         DirectPositionList posList = new DirectPositionList(coords);
         posList.setSrsDimension(3);
@@ -1200,15 +1205,7 @@ public final class CityGmlUtils {
         return ring;
     }
 
-    /**
-     * Ray-Casting-Algorithmus: prueft ob ein Punkt (px, py) innerhalb eines
-     * 2D-Polygons liegt. Verwendet horizontalen Strahl nach rechts.
-     *
-     * @param px   X-Koordinate des Testpunktes
-     * @param py   Y-Koordinate des Testpunktes
-     * @param poly Polygon als Array von [x, y]-Paaren (nicht geschlossen)
-     * @return true wenn der Punkt innerhalb liegt
-     */
+    /** Ray-Casting: prueft ob ein Punkt (px, py) innerhalb eines 2D-Polygons liegt. */
     public static boolean pointInPolygon2D(double px, double py, double[][] poly) {
         int n = poly.length;
         boolean inside = false;
@@ -1226,4 +1223,118 @@ public final class CityGmlUtils {
         }
         return inside;
     }
+
+    // ==================== Oeffnungen (Fenster/Tueren) ====================
+
+    /** Projiziert einen offenen Wand-Ring in die 2D-Wandebene (u=entlang Unterkante, v=z-zMin). */
+    public static double[][] projectWallTo2D(List<Point3D> open, Point3D edgeStart,
+            double dirX, double dirY, double zMin) {
+        double[][] poly2D = new double[open.size()][2];
+        for (int i = 0; i < open.size(); i++) {
+            Point3D p = open.get(i);
+            poly2D[i][0] = (p.x - edgeStart.x) * dirX + (p.y - edgeStart.y) * dirY;
+            poly2D[i][1] = p.z - zMin;
+        }
+        return poly2D;
+    }
+
+    /** Prueft, ob ein Oeffnungs-Rechteck (alle 4 Ecken) vollstaendig im Wandpolygon liegt. */
+    public static boolean openingInsideWall2D(double uLeft, double uRight,
+            double vBottom, double vTop, double[][] wallPoly2D) {
+        return pointInPolygon2D(uLeft,  vBottom, wallPoly2D)
+            && pointInPolygon2D(uRight, vBottom, wallPoly2D)
+            && pointInPolygon2D(uRight, vTop,    wallPoly2D)
+            && pointInPolygon2D(uLeft,  vTop,    wallPoly2D);
+    }
+
+    /** Fuegt eine rechteckige Oeffnung in ein Wand-Polygon ein, liefert das FillingSurface-Polygon dazu. */
+    public static Polygon addOpeningToWall(Polygon wallPoly, Point3D bl, Point3D br,
+            Point3D tr, Point3D tl, boolean extCCW) {
+        List<Point3D> innerRing = extCCW
+                ? List.of(bl, tl, tr, br)   // exterior CCW → interior CW
+                : List.of(bl, br, tr, tl);  // exterior CW  → interior CCW
+        wallPoly.getInterior().add(new AbstractRingProperty(createLinearRing(innerRing)));
+
+        List<Point3D> fillingPoints = extCCW
+                ? List.of(bl, br, tr, tl)   // CCW (Standard)
+                : List.of(bl, tl, tr, br);  // CW  (Sachsen LoD2)
+        return createPolygon(fillingPoints);
+    }
+
+    /** Liest die Punkte eines beliebigen LinearRing (nicht nur des Aussenrings eines Polygons). */
+    private static List<Point3D> pointsOfRing(LinearRing ring) {
+        if (ring.getControlPoints() == null || ring.getControlPoints().getPosList() == null) {
+            return Collections.emptyList();
+        }
+        List<Double> coords = ring.getControlPoints().getPosList().getValue();
+        if (coords == null || coords.isEmpty()) return Collections.emptyList();
+        List<Point3D> pts = new ArrayList<>();
+        for (int i = 0; i + 2 < coords.size(); i += 3) {
+            pts.add(new Point3D(coords.get(i), coords.get(i + 1), coords.get(i + 2)));
+        }
+        return pts;
+    }
+
+    /** True, wenn jeder Punkt aus {@code a} einen (nicht doppelt genutzten) Partner in {@code b} hat. */
+    private static boolean pointSetsMatch(List<Point3D> a, List<Point3D> b, double tol) {
+        if (a.size() != b.size()) return false;
+        boolean[] used = new boolean[b.size()];
+        double tol2 = tol * tol;
+        for (Point3D pa : a) {
+            boolean found = false;
+            for (int j = 0; j < b.size(); j++) {
+                if (used[j]) continue;
+                Point3D pb = b.get(j);
+                double dx = pa.x - pb.x, dy = pa.y - pb.y, dz = pa.z - pb.z;
+                if (dx * dx + dy * dy + dz * dz < tol2) {
+                    used[j] = true;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return false;
+        }
+        return true;
+    }
+
+    /** Entfernt den Innenring eines Wand-Polygons, dessen Punkte mit openingPoints uebereinstimmen. */
+    public static boolean removeMatchingInteriorRing(Polygon wallPoly, List<Point3D> openingPoints) {
+        List<Point3D> target = removeClosingPoint(dedupConsecutive(openingPoints, POINT_MERGE_TOL));
+        var it = wallPoly.getInterior().iterator();
+        while (it.hasNext()) {
+            AbstractRingProperty ringProp = it.next();
+            if (!(ringProp.getObject() instanceof LinearRing ring)) continue;
+            List<Point3D> ringPts = removeClosingPoint(dedupConsecutive(pointsOfRing(ring), POINT_MERGE_TOL));
+            if (pointSetsMatch(ringPts, target, POINT_MERGE_TOL)) {
+                it.remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Min. 2D-Abstand des Punktes (px,py) zur Kante {@code (ax,ay)-(bx,by)}. */
+    private static double distPointToSegmentXY(double px, double py,
+            double ax, double ay, double bx, double by) {
+        double dx = bx - ax, dy = by - ay;
+        double len2 = dx * dx + dy * dy;
+        double t = (len2 < 1e-18) ? 0 : ((px - ax) * dx + (py - ay) * dy) / len2;
+        t = Math.max(0, Math.min(1, t));
+        double cx = ax + t * dx, cy = ay + t * dy;
+        return Math.hypot(px - cx, py - cy);
+    }
+
+    /** Min. 2D-Abstand des Punktes (px,py) zur Aussenkante eines Polygonrings. */
+    public static double distPointToRingXY(double px, double py, List<Point3D> ring) {
+        List<Point3D> open = removeClosingPoint(ring);
+        int n = open.size();
+        if (n < 2) return Double.MAX_VALUE;
+        double best = Double.MAX_VALUE;
+        for (int i = 0; i < n; i++) {
+            Point3D a = open.get(i), b = open.get((i + 1) % n);
+            best = Math.min(best, distPointToSegmentXY(px, py, a.x, a.y, b.x, b.y));
+        }
+        return best;
+    }
+
 }

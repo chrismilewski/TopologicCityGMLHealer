@@ -1,6 +1,7 @@
 package de.mpsc.lod2tolod3;
 
 import de.mpsc.lod2tolod3.model.ModuleParameters;
+import de.mpsc.lod2tolod3.model.WindowPreference;
 import de.mpsc.lod2tolod3.util.CityGmlUtils;
 import de.mpsc.lod2tolod3.util.CityGmlUtils.Point3D;
 import de.mpsc.lod2tolod3.util.ModuleParametersLoader;
@@ -11,137 +12,61 @@ import org.citygml4j.core.model.construction.AbstractFillingSurfaceProperty;
 import org.citygml4j.core.model.construction.DoorSurface;
 import org.citygml4j.core.model.construction.WallSurface;
 import org.citygml4j.core.model.construction.WindowSurface;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.xmlobjects.gml.model.geometry.primitives.AbstractRingProperty;
 import org.xmlobjects.gml.model.geometry.primitives.Polygon;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 /**
- * Schritt 5: Fenster-Generator.
- *
- * Erzeugt Fenster (WindowSurface) an Aussenwand-Segmenten aller Geschosse (GF, UF, BA).
- * Im Gegensatz zum DoorGenerator, der den aeusseren Polygon-Ring modifiziert
- * (Tuer-Ausschnitte), werden Fenster als innere Polygon-Ringe (Loecher) in das
- * Wand-Polygon eingefuegt. Der aeussere Ring bleibt unveraendert.
- *
- * Fenster-Parameter aus JSON (pro Geschoss: GF.window, UF.window, BA.window):
- * - WiLen:          Fensterbreite
- * - WiHe:           Fensterhoehe
- * - HDistWaWi:      Horizontaler Abstand Wandecke → erstes Fenster
- * - HDistWiWi:      Lichter Abstand (edge-to-edge) zwischen Fenstern
- * - HDistMinWaWi:   Mindestabstand Wandecke → Fensterkante
- * - VDistFlWi:      Bruestungshoehe (Boden → Fensterunterkante)
- * - HDistDoWi:      Abstand Tuer → naechstes Fenster (nur GF)
- *
- * Positionierung:
- * - Fensteranzahl wird berechnet (nicht aus Attribut gelesen wie bei Tueren)
- * - Mehrere Fensterreihen moeglich wenn Wandhoehe ausreicht
- * - GF-Waende: Links/Rechts-Aufspaltung um vorhandene Tueren
- * - BA-Waende: Nur oberirdischer Anteil (Z_Max > 0)
- * - Giebelwaende: Point-in-Polygon-Check fuer alle 4 Fenster-Ecken
- *
- * Geometrie:
- * - Fenster werden als innere Polygon-Ringe (CW) im Wand-Polygon erzeugt
- * - Separate WindowSurface mit Fenster-Rechteck als lod3MultiSurface
- * - WindowSurface wird als FillingSurface an der WallSurface verankert
- *
- * Erwartet als Input den Output des DoorGenerators (Schritt 4).
+ * Schritt 5: Fenster-Generator. Platziert Fenster als innere Polygon-Ringe auf den
+ * Aussenwand-Segmenten aller Geschosse (siehe Doku.md, Abschnitt "Schritt 5").
  *
  * Usage:
  *   java -cp lod2-zu-lod3.jar de.mpsc.lod2tolod3.WindowGenerator input.gml jsonDir [output.gml]
  */
-public class WindowGenerator {
-
-    private static final Logger log = LoggerFactory.getLogger(WindowGenerator.class);
+public class WindowGenerator extends AbstractGenerator<WindowGenerator.GenerationStats> {
 
     /** Maximaler Window-to-Wall Ratio (60 %). */
     private static final double MAX_WWR = 0.60;
 
     public static void main(String[] args) {
+        WindowGenerator gen = new WindowGenerator();
         try {
-            if (args.length < 2) {
-                System.err.println("Usage: WindowGenerator <input.gml> <jsonDir> [output.gml]");
-                System.exit(1);
-            }
-
-            Path inputPath = Paths.get(args[0]);
-            Path jsonDir = Paths.get(args[1]);
-            Path outputPath = CityGmlUtils.resolveOutputPath(inputPath, "_windows",
-                    args.length >= 3 ? Paths.get(args[2]) : null);
-
-            Files.createDirectories(outputPath.getParent());
-
-            log.info("=== Fenster-Generator ===");
-            log.info("Input:  {}", inputPath);
-            log.info("JSON:   {}", jsonDir);
-            log.info("Output: {}", outputPath);
-
-            WindowGenerator generator = new WindowGenerator();
-            ModuleParametersLoader paramLoader = new ModuleParametersLoader(jsonDir);
-            GenerationStats stats = generator.addWindows(inputPath, outputPath, paramLoader);
-
-            log.info("=== Fertig ===");
-            log.info("Gebaeude verarbeitet: {}", stats.buildingsProcessed);
-            log.info("Fenster erzeugt: {}", stats.windowsCreated);
-            log.info("Waende mit Fenstern: {}", stats.wallsWithWindows);
-            log.info("Waende uebersprungen: {}", stats.wallsSkipped);
-            log.info("Giebel-Fenster verworfen: {}", stats.gableWindowsDropped);
-            log.info("WWR-Warnungen: {}", stats.wwrWarnings);
-            log.info(stats.toSummary());
-
+            gen.runCli(args);
         } catch (Exception e) {
-            log.error("Fehler: {}", e.getMessage(), e);
+            gen.log.error("Fehler: {}", e.getMessage(), e);
             System.exit(1);
         }
     }
 
-    // ==================== Standalone-Verarbeitung ====================
+    @Override protected String outputSuffix() { return "_windows"; }
+    @Override protected String displayName()  { return "Fenster-Generator"; }
+    @Override protected GenerationStats newStats() { return new GenerationStats(); }
 
-    /**
-     * Fuegt Fenster zu allen passenden Waenden hinzu (Standalone-Modus).
-     */
-    public GenerationStats addWindows(Path inputFile, Path outputFile,
-            ModuleParametersLoader paramLoader) throws Exception {
-        GenerationStats stats = new GenerationStats();
-
-        CityGmlUtils.processGmlFile(inputFile, outputFile, building -> {
-            stats.buildingsProcessed++;
-            processBuilding(building, paramLoader, stats);
-        });
-
-        return stats;
+    @Override
+    protected void logResult(GenerationStats stats) {
+        log.info("Fenster erzeugt: {}", stats.windowsCreated);
+        log.info("Waende mit Fenstern: {}", stats.wallsWithWindows);
+        log.info("Waende uebersprungen: {}", stats.wallsSkipped);
+        log.info("Giebel-Fenster verworfen: {}", stats.gableWindowsDropped);
+        log.info("WWR-Warnungen: {}", stats.wwrWarnings);
+        log.info(stats.toSummary());
     }
 
-    // ==================== Pipeline-Integration ====================
+    // ==================== Gebaeude-Verarbeitung ====================
 
-    /**
-     * Verarbeitet ein einzelnes Gebaeude (Pipeline- und Standalone-Modus).
-     * Liest Building-level Attribute (sst) und delegiert die Verarbeitung
-     * an processAbstractBuilding() fuer das Building selbst und/oder seine BuildingParts.
-     */
-    void processBuilding(Building building, ModuleParametersLoader paramLoader,
+    /** Verarbeitet ein Gebaeude: delegiert an processAbstractBuilding fuer Building und BuildingParts. */
+    @Override
+    protected void processBuilding(Building building, ModuleParametersLoader paramLoader,
             GenerationStats stats) {
 
-        String sst = CityGmlUtils.getStringAttribute(building, "sst");
-        if (sst == null || sst.isBlank()) return;
+        BuildingParams bp = resolveParams(building, paramLoader).orElse(null);
+        if (bp == null) return;
+        ModuleParameters params = bp.params();
 
-        Optional<ModuleParameters> paramsOpt = paramLoader.getParameters(sst);
-        if (paramsOpt.isEmpty()) return;
-        ModuleParameters params = paramsOpt.get();
-
-        // processedWallMids: kumulatives Set aller bereits verarbeiteten Wand-Mittelpunkte.
-        // Wenn zwei BuildingParts eine gemeinsame Wand teilen (identische Geometrie),
-        // bekommt der erste Part die Fenster; der zweite Part ueberspringt diese Wand
-        // (Mittelpunkt bereits im Set).
+        // Verhindert doppelte Fenster auf einer von zwei BuildingParts geteilten Wand.
         Set<String> processedWallMids = new HashSet<>();
 
         for (var target : CityGmlUtils.getBuildingTargets(building)) {
@@ -150,48 +75,15 @@ public class WindowGenerator {
         }
     }
 
-    /**
-     * Berechnet einen String-Key fuer den 2D-Mittelpunkt der untersten Wandkante.
-     * Aufloesung 0.1m (ausreichend, da deckungsgleiche Waende exakt gleiche Koordinaten haben).
-     * Gibt null zurueck wenn das Polygon nicht ausgewertet werden kann.
-     */
-    private static String wallBottomMidKey(WallSurface wall) {
-        Polygon poly = CityGmlUtils.getWallPolygon(wall);
-        if (poly == null) return null;
-        List<Point3D> pts = CityGmlUtils.toPoints(poly);
-        List<Point3D> open = CityGmlUtils.removeClosingPoint(pts);
-        if (open.size() < 2) return null;
-        double[] zRange = CityGmlUtils.getZRange(open);
-        double zBotMin = zRange[0];
-        double zTol = 0.01;
-        double sumX = 0, sumY = 0;
-        int cnt = 0;
-        for (Point3D p : open) {
-            if (Math.abs(p.z - zBotMin) < zTol) { sumX += p.x; sumY += p.y; cnt++; }
-        }
-        if (cnt < 2) return null;
-        long gx = Math.round((sumX / cnt) * 10);
-        long gy = Math.round((sumY / cnt) * 10);
-        long gz = Math.round(zBotMin * 10);
-        return gx + "," + gy + "," + gz;
-    }
-
     // ==================== Gate-Check Chain ====================
 
-    /**
-     * Einzelner Gate-Check: prueft eine Wand und zaehlt bei Misserfolg in stats.
-     * Gibt true zurueck wenn die Wand den Check besteht (verarbeitung fortsetzen),
-     * false wenn sie uebersprungen werden soll.
-     */
+    /** Ein Gate-Check: true = Wand besteht, false = uebersprungen (Grund landet in stats). */
     @FunctionalInterface
     private interface WallCheck {
         boolean test(WallSurface wall, String geschoss, GenerationStats stats);
     }
 
-    /**
-     * Erstellt die Kette von Gate-Checks fuer processAbstractBuilding.
-     * Reihenfolge ist relevant: guenstige Checks (billig, oft feuern) zuerst.
-     */
+    /** Baut die Kette der Gate-Checks fuer processAbstractBuilding. */
     private List<WallCheck> buildGateChecks(Set<String> processedWallMids, ModuleParameters params) {
         List<WallCheck> checks = new ArrayList<>();
 
@@ -204,35 +96,34 @@ public class WindowGenerator {
 
         // [2] Doppelte Wand zwischen BuildingParts
         checks.add((wall, geschoss, stats) -> {
-            String midKey = wallBottomMidKey(wall);
+            String midKey = CityGmlUtils.wallBottomMidKey(wall);
             if (midKey != null && !processedWallMids.add(midKey)) {
-                stats.wallsSkipped++;
-                stats.skipCoveredByPart++;
+                stats.skip(SkipReason.COVERED_BY_PART);
                 return false;
             }
             return true;
         });
 
-        // [3] WindowPreference muss gesetzt und != "0" sein;
-        //     bei "2" muss Z_Differenz > 0 (Wand ueberragt die Nachbarwand)
+        // [3] WindowPreference muss gesetzt und != NONE sein;
+        //     bei ABOVE_NEIGHBOR muss Z_Differenz > 0 (Wand ueberragt die Nachbarwand)
         checks.add((wall, geschoss, stats) -> {
-            String windowPref = CityGmlUtils.getStringAttribute(wall, "WindowPreference");
-            if (windowPref == null || "0".equals(windowPref)) {
-                stats.wallsSkipped++;
-                stats.skipNoWindowPref++;
+            WindowPreference pref = WindowPreference.parse(
+                    CityGmlUtils.getStringAttribute(wall, "WindowPreference"));
+            if (pref == WindowPreference.NONE) {
+                stats.skip(SkipReason.NO_WINDOW_PREF);
                 return false;
             }
-            if (!"2".equals(windowPref)) return true;
+            if (pref != WindowPreference.ABOVE_NEIGHBOR) return true;
             String zDiffStr = CityGmlUtils.getStringAttribute(wall, "Z_Differenz");
             if (zDiffStr == null) {
-                stats.wallsSkipped++; stats.skipNoWindowPref++; return false;
+                stats.skip(SkipReason.NO_WINDOW_PREF); return false;
             }
             try {
                 if (Double.parseDouble(zDiffStr) <= 0) {
-                    stats.wallsSkipped++; stats.skipNoWindowPref++; return false;
+                    stats.skip(SkipReason.NO_WINDOW_PREF); return false;
                 }
             } catch (NumberFormatException e) {
-                stats.wallsSkipped++; stats.skipNoWindowPref++; return false;
+                stats.skip(SkipReason.NO_WINDOW_PREF); return false;
             }
             return true;
         });
@@ -241,13 +132,12 @@ public class WindowGenerator {
         checks.add((wall, geschoss, stats) -> {
             if (!"BA".equals(geschoss)) return true;
             String zMaxStr = CityGmlUtils.getStringAttribute(wall, "Z_Max");
-            if (zMaxStr == null) { stats.wallsSkipped++; stats.skipBaNoZMax++; return false; }
+            if (zMaxStr == null) { stats.skip(SkipReason.BA_NO_ZMAX); return false; }
             try {
                 double zMax = Double.parseDouble(zMaxStr);
-                if (zMax <= 0) { stats.wallsSkipped++; stats.skipBaNoZMax++; return false; }
+                if (zMax <= 0) { stats.skip(SkipReason.BA_NO_ZMAX); return false; }
             } catch (NumberFormatException e) {
-                stats.wallsSkipped++;
-                stats.skipBaNoZMax++;
+                stats.skip(SkipReason.BA_NO_ZMAX);
                 return false;
             }
             return true;
@@ -256,14 +146,7 @@ public class WindowGenerator {
         return checks;
     }
 
-    /**
-     * Verarbeitet ein AbstractBuilding (Building oder BuildingPart).
-     * Sucht alle WallSurfaces und fuegt Fenster ein wo die Vorbedingungen erfuellt sind.
-     *
-     * @param processedWallMids kumulatives Set aller bisher verarbeiteten Wand-Mittelpunkte;
-     *                          bereits enthaltene Waende werden uebersprungen (Duplikat zwischen
-     *                          zwei BuildingParts), neue Mittelpunkte werden hinzugefuegt.
-     */
+    /** Prueft alle WallSurfaces eines AbstractBuilding gegen die Gate-Checks und platziert Fenster. */
     private void processAbstractBuilding(AbstractBuilding target,
             ModuleParameters params, GenerationStats stats,
             Set<String> processedWallMids) {
@@ -284,8 +167,7 @@ public class WindowGenerator {
             // Fenster-Parameter fuer dieses Geschoss holen
             ModuleParameters.WindowParams wp = params.getWindowParamsForGeschoss(geschoss);
             if (wp == null || !wp.isValid()) {
-                stats.wallsSkipped++;
-                stats.skipNoParams++;
+                stats.skip(SkipReason.NO_PARAMS);
                 continue;
             }
 
@@ -295,30 +177,15 @@ public class WindowGenerator {
 
     // ==================== Storey Strategy ====================
 
-    /**
-     * Kapselt die geschoss-spezifische Geometrie-Logik fuer die Fensterplatzierung.
-     * Jedes Geschoss (GF/UF vs. BA) hat unterschiedliche Regeln fuer
-     * - Nutzbare Hoehe (usableHeight)
-     * - Gelaendeniveau (terrainZ, nur BA)
-     * - Wandabschnitte (sections: GF teilt um Tueren, UF/BA nimmt ganze Wand)
-     */
+    /** Geschoss-spezifische Geometrie-Logik fuer die Fensterplatzierung (GF/UF vs. BA). */
     private interface StoreyWindowStrategy {
-        /**
-         * Berechnet die nutzbare Wandhoehe (Obergrenze fuer Fenster-Reihen).
-         * BA: wallHeight + 0.10 cm Toleranz; GF/UF: min(wallHeight, GeschossDeckeZ - zMin).
-         */
+        /** Nutzbare Wandhoehe (Obergrenze fuer Fenster-Reihen). */
         double usableHeight(WallSurface wall, double wallHeight, double zMin);
 
-        /**
-         * Gibt die Gelaendehoehe (TIC) zurueck, unterhalb derer BA-Reihen uebersprungen werden.
-         * BA: zMaxAsl - zMaxRel; GF/UF: NaN (kein Filter).
-         */
+        /** Gelaendehoehe (TIC), unterhalb derer BA-Reihen uebersprungen werden; NaN fuer GF/UF. */
         double terrainZ(WallSurface wall);
 
-        /**
-         * Bestimmt die horizontal verfuegbaren Wandabschnitte.
-         * GF: freie Abschnitte um Tueren herum; UF/BA: gesamte Wand.
-         */
+        /** Horizontal verfuegbare Wandabschnitte (GF: um Tueren herum; UF/BA: ganze Wand). */
         List<double[]> sections(WallSurface wall, Point3D edgeStart,
                 double dirX, double dirY, double wallLength,
                 ModuleParameters.WindowParams wp);
@@ -380,11 +247,7 @@ public class WindowGenerator {
 
     // ==================== WallContext ====================
 
-    /**
-     * Buendelt alle geometrischen Kontextdaten einer Wand fuer die Fensterplatzierung.
-     * Wird von processWall() zusammengestellt und an Unter-Methoden weitergegeben,
-     * um lange Parameterlisten zu vermeiden.
-     */
+    /** Buendelt die geometrischen Kontextdaten einer Wand fuer die Fensterplatzierung. */
     private record WallContext(
             WallSurface wall,
             String geschoss,
@@ -403,15 +266,6 @@ public class WindowGenerator {
 
     // ==================== Wand-Verarbeitung (Intermediate Records) ====================
 
-    /** Ergebnis der Unterkanten-Ermittlung. */
-    private record BottomEdge(
-            Point3D start,     // linker Startpunkt der Unterkante
-            Point3D end,       // rechter Endpunkt der Unterkante
-            double wallLength, // 2D-Laenge [m]
-            double zMin,       // unterster Z-Wert des Polygons
-            double zMax        // hoechster Z-Wert des Polygons
-    ) {}
-
     /** Horizontale Fenster-Offsets fuer alle Wandabschnitte einer Reihe. */
     private record HorizResult(
             List<double[]> sectionOffsets, // absolute Offsets von edgeStart pro Abschnitt
@@ -420,22 +274,19 @@ public class WindowGenerator {
 
     // ==================== Wand-Verarbeitung ====================
 
-    /**
-     * Orchestrator: analysiert eine Wand und platziert Fenster.
-     * Delegiert alle Teilschritte an spezialisierte Hilfsmethoden.
-     */
+    /** Analysiert eine Wand und platziert Fenster (delegiert an Hilfsmethoden). */
     private void processWall(WallSurface wall, String geschoss,
             ModuleParameters.WindowParams wp, GenerationStats stats) {
 
         // 1. Polygon lesen
         Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
-        if (wallPoly == null) { stats.wallsSkipped++; stats.skipNoPoly++; return; }
+        if (wallPoly == null) { stats.skip(SkipReason.NO_POLY); return; }
         List<Point3D> allPoints = CityGmlUtils.toPoints(wallPoly);
         List<Point3D> open = CityGmlUtils.removeClosingPoint(allPoints);
-        if (open.size() < 3) { stats.wallsSkipped++; stats.skipNoPoly++; return; }
+        if (open.size() < 3) { stats.skip(SkipReason.NO_POLY); return; }
 
         // 2. Unterkante ermitteln
-        BottomEdge edge = resolveBottomEdge(wall, open, stats);
+        CityGmlUtils.BottomEdge edge = resolveBottomEdge(wall, open, stats);
         if (edge == null) return;
         double dx = edge.end().x - edge.start().x;
         double dy = edge.end().y - edge.start().y;
@@ -446,23 +297,23 @@ public class WindowGenerator {
         StoreyWindowStrategy strategy = strategyFor(geschoss);
         if ("BA".equals(geschoss)) {
             String zMaxAslStr = CityGmlUtils.getStringAttribute(wall, "Z_MAX_ASL");
-            if (zMaxAslStr == null) { stats.wallsSkipped++; stats.skipBaNoZMaxAsl++; return; }
+            if (zMaxAslStr == null) { stats.skip(SkipReason.BA_NO_ZMAX_ASL); return; }
         }
         double usableHeight = strategy.usableHeight(wall, edge.zMax() - edge.zMin(), edge.zMin());
         double terrainZ = strategy.terrainZ(wall);
 
-        // WP=2: Fenster nur oberhalb Z_Fenster_ASL (Hoehe der Nachbarwand).
-        // effectiveFloorZ ist der unterste Z-Wert ab dem Fenster platziert werden duerfen.
+        // ABOVE_NEIGHBOR: Fenster nur oberhalb Z_Fenster_ASL.
         double effectiveFloorZ = edge.zMin();
-        String windowPref = CityGmlUtils.getStringAttribute(wall, "WindowPreference");
-        if ("2".equals(windowPref)) {
+        WindowPreference pref = WindowPreference.parse(
+                CityGmlUtils.getStringAttribute(wall, "WindowPreference"));
+        if (pref == WindowPreference.ABOVE_NEIGHBOR) {
             String zFensterAslStr = CityGmlUtils.getStringAttribute(wall, "Z_Fenster_ASL");
             if (zFensterAslStr != null) {
                 try {
                     double zFensterAsl = Double.parseDouble(zFensterAslStr);
                     if (zFensterAsl >= edge.zMax()) {
                         // Segment komplett durch Nachbarwand verdeckt
-                        stats.wallsSkipped++; stats.skipNoWindowPref++; return;
+                        stats.skip(SkipReason.NO_WINDOW_PREF); return;
                     }
                     if (zFensterAsl > edge.zMin()) {
                         usableHeight -= (zFensterAsl - edge.zMin());
@@ -475,11 +326,11 @@ public class WindowGenerator {
         // 4. Groessen-Checks
         double vDist = ModuleParameters.WindowParams.safeValue(wp.vDistFloorWindow);
         if (usableHeight < vDist + wp.windowHeight) {
-            stats.wallsSkipped++; stats.skipTooLow++; return;
+            stats.skip(SkipReason.TOO_LOW); return;
         }
         double hDistMin = ModuleParameters.WindowParams.safeValue(wp.hDistMinWallWindow);
         if (edge.wallLength() < 2 * hDistMin + wp.windowWidth) {
-            stats.wallsSkipped++; stats.skipTooShort++; return;
+            stats.skip(SkipReason.TOO_SHORT); return;
         }
 
         // 5. WallContext zusammenstellen
@@ -501,7 +352,7 @@ public class WindowGenerator {
 
         // 9. PiP-Check: Fenster muessen vollstaendig im Wandpolygon liegen
         List<double[]> validWindows = collectValidWindows(ctx, rows, horiz, stats);
-        if (validWindows.isEmpty()) { stats.wallsSkipped++; stats.skipPipFail++; return; }
+        if (validWindows.isEmpty()) { stats.skip(SkipReason.PIP_FAIL); return; }
 
         // 10. Innere Ringe + WindowSurface erzeugen
         placeWindowSurfaces(ctx, wallPoly, validWindows, wallArea, rows.size(), stats);
@@ -509,51 +360,18 @@ public class WindowGenerator {
 
     // ==================== Wand-Verarbeitung Hilfsmethoden ====================
 
-    /**
-     * Ermittelt Start- und Endpunkt der Unterkante (laengste Kante bei Z_min).
-     * Gibt null zurueck wenn weniger als 2 Punkte auf der Unterkante liegen.
-     */
-    private static BottomEdge resolveBottomEdge(WallSurface wall, List<Point3D> open,
+    /** Ermittelt die Unterkante der Wand, zaehlt bei Misserfolg in die Statistik. */
+    private CityGmlUtils.BottomEdge resolveBottomEdge(WallSurface wall, List<Point3D> open,
             GenerationStats stats) {
-        double[] zRange = CityGmlUtils.getZRange(open);
-        double zMin = zRange[0];
-        double zMax = zRange[1];
-        double zTol = 0.01;
-
-        List<Integer> bottomIndices = new ArrayList<>();
-        for (int i = 0; i < open.size(); i++) {
-            if (Math.abs(open.get(i).z - zMin) < zTol) bottomIndices.add(i);
-        }
-
-        if (bottomIndices.size() < 2) {
+        CityGmlUtils.BottomEdge edge = CityGmlUtils.findBottomEdge(open);
+        if (edge == null) {
             log.warn("Weniger als 2 Punkte an Unterkante fuer Wand {}", wall.getId());
-            stats.wallsSkipped++;
-            stats.skipNoBottomEdge++;
-            return null;
+            stats.skip(SkipReason.NO_BOTTOM_EDGE);
         }
-
-        // Paar mit maximalem 2D-Abstand waehlen
-        int startIdx = bottomIndices.get(0);
-        int endIdx = bottomIndices.get(1);
-        double maxDist2D = 0;
-        for (int i = 0; i < bottomIndices.size(); i++) {
-            for (int j = i + 1; j < bottomIndices.size(); j++) {
-                double d = CityGmlUtils.calculateEdgeLength2D(
-                        open.get(bottomIndices.get(i)), open.get(bottomIndices.get(j)));
-                if (d > maxDist2D) {
-                    maxDist2D = d;
-                    startIdx = bottomIndices.get(i);
-                    endIdx = bottomIndices.get(j);
-                }
-            }
-        }
-        return new BottomEdge(open.get(startIdx), open.get(endIdx), maxDist2D, zMin, zMax);
+        return edge;
     }
 
-    /**
-     * Berechnet horizontale Fenster-Offsets fuer alle Wandabschnitte.
-     * Gibt null zurueck wenn kein einziges Fenster in eine Reihe passt.
-     */
+    /** Berechnet horizontale Fenster-Offsets fuer alle Wandabschnitte; null wenn keins passt. */
     private static HorizResult computeHorizontalOffsets(WallContext ctx, GenerationStats stats) {
         List<double[]> sectionOffsets = new ArrayList<>();
         int windowsPerRow = 0;
@@ -572,16 +390,13 @@ public class WindowGenerator {
         }
 
         if (windowsPerRow < 1) {
-            stats.wallsSkipped++;
-            stats.skipNoFit++;
+            stats.skip(SkipReason.NO_FIT);
             return null;
         }
         return new HorizResult(sectionOffsets, windowsPerRow);
     }
 
-    /**
-     * Liest die Wandflaeche aus FACEAREA oder berechnet sie als Fallback aus dem Polygon.
-     */
+    /** Liest die Wandflaeche aus FACEAREA oder berechnet sie als Fallback aus dem Polygon. */
     private static double resolveWallArea(WallContext ctx) {
         String faceAreaStr = CityGmlUtils.getStringAttribute(ctx.wall(), "FACEAREA");
         if (faceAreaStr != null) {
@@ -590,21 +405,14 @@ public class WindowGenerator {
         return CityGmlUtils.calculateWallArea(ctx.open());
     }
 
-    /**
-     * Berechnet die Z-Positionen aller Fensterreihen und trimmt sie auf den WWR-Grenzwert.
-     * Gibt eine leere Liste zurueck wenn keine Reihe den Terrain-Filter besteht (BA)
-     * oder keine vertikal passt.
-     */
+    /** Berechnet die Z-Positionen aller Fensterreihen und trimmt sie auf den WWR-Grenzwert. */
     private List<double[]> computeRowPositions(WallContext ctx, HorizResult horiz,
             double wallArea, GenerationStats stats) {
         double vDist = ModuleParameters.WindowParams.safeValue(ctx.wp().vDistFloorWindow);
         double wallTopZ = ctx.floorZ() + ctx.usableHeight();
 
         List<double[]> rows = new ArrayList<>();
-        // BA: Fensterreihen ab Gelaendeoberflaehe (TIC) + Bruestungshoehe starten.
-        // Verhindert (a) Fenster unterhalb der Oberflaeche und
-        // (b) unnoetige Iteration durch den unterirdischen Wandbereich.
-        // GF/UF: kein terrainZ (NaN) → Start wie bisher ab Fussboden.
+        // BA startet ab Gelaendeoberflaeche (TIC), GF/UF ab Fussboden.
         double rowStartZ = !Double.isNaN(ctx.terrainZ()) ? ctx.terrainZ() : ctx.floorZ();
         double rowBottomZ = CityGmlUtils.roundZ(rowStartZ + vDist);
         double rowTopZ = CityGmlUtils.roundZ(rowBottomZ + ctx.wp().windowHeight);
@@ -616,23 +424,23 @@ public class WindowGenerator {
         }
 
         if (rows.isEmpty()) {
-            stats.wallsSkipped++;
-            stats.skipTooLow++;
+            stats.skip(SkipReason.TOO_LOW);
             return rows;
         }
 
-        // WWR-Check: ueberzaehlige Reihen von oben entfernen
+        // WWR-Check: ueberzaehlige Reihen von oben entfernen.
         if (wallArea > 0) {
             int numRows = rows.size();
             double winW = ctx.wp().windowWidth;
             double winH = ctx.wp().windowHeight;
             double windowArea = numRows * horiz.windowsPerRow() * winW * winH;
             double wwr = windowArea / wallArea;
+            boolean capped = false;
 
             while (wwr > MAX_WWR && numRows > 1) {
                 numRows--;
                 wwr = numRows * horiz.windowsPerRow() * winW * winH / wallArea;
-                stats.wwrWarnings++;
+                capped = true;
             }
 
             if (wwr > MAX_WWR) {
@@ -640,28 +448,19 @@ public class WindowGenerator {
                         CityGmlUtils.formatNum(wwr), CityGmlUtils.formatNum(MAX_WWR),
                         ctx.wall().getId(), ctx.geschoss(),
                         numRows * horiz.windowsPerRow(), CityGmlUtils.formatNum(wallArea));
-                stats.wwrWarnings++;
+                capped = true;
             }
+            if (capped) stats.wwrWarnings++;
             rows = rows.subList(0, numRows);
         }
         return rows;
     }
 
-    /**
-     * Fuehrt den Point-in-Polygon-Check fuer alle Fenster-Kandidaten durch.
-     * Fenster, deren mindestens eine Ecke ausserhalb liegt (Giebelwaende),
-     * werden verworfen und in stats.gableWindowsDropped gezaehlt.
-     */
+    /** Point-in-Polygon-Check je Fenster-Kandidat; Treffer ausserhalb (Giebel) werden verworfen. */
     private static List<double[]> collectValidWindows(WallContext ctx,
             List<double[]> rowZPositions, HorizResult horiz, GenerationStats stats) {
-        // 2D-Projektion der Wandpunkte: u entlang Unterkante, v = z - zMin
-        double[][] wallPoly2D = new double[ctx.open().size()][2];
-        for (int i = 0; i < ctx.open().size(); i++) {
-            Point3D p = ctx.open().get(i);
-            wallPoly2D[i][0] = (p.x - ctx.edgeStart().x) * ctx.dirX()
-                             + (p.y - ctx.edgeStart().y) * ctx.dirY();
-            wallPoly2D[i][1] = p.z - ctx.zMin();
-        }
+        double[][] wallPoly2D = CityGmlUtils.projectWallTo2D(
+                ctx.open(), ctx.edgeStart(), ctx.dirX(), ctx.dirY(), ctx.zMin());
 
         List<double[]> validWindows = new ArrayList<>();
         for (double[] rowZ : rowZPositions) {
@@ -672,12 +471,8 @@ public class WindowGenerator {
 
             for (double[] offsets : horiz.sectionOffsets()) {
                 for (double hOffset : offsets) {
-                    double uLeft  = hOffset;
-                    double uRight = hOffset + ctx.wp().windowWidth;
-                    if (CityGmlUtils.pointInPolygon2D(uLeft,  vBottom, wallPoly2D)
-                     && CityGmlUtils.pointInPolygon2D(uRight, vBottom, wallPoly2D)
-                     && CityGmlUtils.pointInPolygon2D(uRight, vTop,    wallPoly2D)
-                     && CityGmlUtils.pointInPolygon2D(uLeft,  vTop,    wallPoly2D)) {
+                    if (CityGmlUtils.openingInsideWall2D(hOffset,
+                            hOffset + ctx.wp().windowWidth, vBottom, vTop, wallPoly2D)) {
                         validWindows.add(new double[]{hOffset, wBottomZ, wTopZ});
                     } else {
                         stats.gableWindowsDropped++;
@@ -688,45 +483,15 @@ public class WindowGenerator {
         return validWindows;
     }
 
-    /**
-     * Prueft ob der Aussen-Ring eines Wandpolygons CCW orientiert ist.
-     * Projiziert die Punkte auf die 2D-Wandflaeche
-     * (u = horizontal entlang Unterkante, v = Z) und berechnet das Vorzeichen
-     * der Flaeche via Shoelace-Formel. Positives Vorzeichen = CCW.
-     *
-     * Saechsische LoD2-Daten (GF/UF-Waende): CW (Normale zeigt nach innen).
-     * Generierte Kellerwaende (BA): CCW (Normale zeigt nach aussen, Standard GML).
-     */
-    private static boolean isExteriorRingCCW(List<Point3D> open, Point3D edgeStart,
-            double dirX, double dirY) {
-        double area2 = 0;
-        int n = open.size();
-        for (int i = 0; i < n; i++) {
-            Point3D a = open.get(i);
-            Point3D b = open.get((i + 1) % n);
-            double ua = (a.x - edgeStart.x) * dirX + (a.y - edgeStart.y) * dirY;
-            double ub = (b.x - edgeStart.x) * dirX + (b.y - edgeStart.y) * dirY;
-            area2 += (ua * b.z - ub * a.z);
-        }
-        return area2 > 0;
-    }
-
-    /**
-     * Erzeugt innere Polygon-Ringe und WindowSurface-Objekte fuer alle validen Fenster.
-     * Der innere Ring wird entgegengesetzt zum Aussen-Ring orientiert (GML-Pflicht).
-     * Aktualisiert die FACEAREA der Wand (Wandflaeche minus Fensterflaechen).
-     */
-    private static void placeWindowSurfaces(WallContext ctx, Polygon wallPoly,
+    /** Erzeugt innere Polygon-Ringe und WindowSurface-Objekte fuer alle validen Fenster. */
+    private void placeWindowSurfaces(WallContext ctx, Polygon wallPoly,
             List<double[]> validWindows, double wallArea, int numRows, GenerationStats stats) {
         String wallFaceId = CityGmlUtils.getStringAttribute(ctx.wall(), "BldgFaceID");
         if (wallFaceId == null) {
             wallFaceId = ctx.wall().getId() != null ? ctx.wall().getId() : "unknown";
         }
 
-        // Orientierung des Aussen-Rings einmalig bestimmen; Innen-Ring muss entgegengesetzt sein.
-        // Saechsische LoD2-Daten (GF/UF): CW-Aussen-Ring → Innen-Ring CCW (BL->BR->TR->TL)
-        // Generierte Kellerwaende  (BA):   CCW-Aussen-Ring → Innen-Ring CW  (BL->TL->TR->BR)
-        boolean extCCW = isExteriorRingCCW(ctx.open(), ctx.edgeStart(), ctx.dirX(), ctx.dirY());
+        boolean extCCW = CityGmlUtils.isExteriorRingCCW(ctx.open(), ctx.edgeStart(), ctx.dirX(), ctx.dirY());
 
         int windowIdx = 0;
         for (double[] win : validWindows) {
@@ -744,27 +509,14 @@ public class WindowGenerator {
             Point3D tl = new Point3D(ctx.edgeStart().x + hOffset                        * ctx.dirX(),
                                      ctx.edgeStart().y + hOffset                        * ctx.dirY(), wTopZ);
 
-            // Innerer Ring: entgegengesetzt zum Aussen-Ring orientieren (GML-Pflicht)
-            List<Point3D> innerRing = extCCW
-                    ? List.of(bl, tl, tr, br)   // exterior CCW → interior CW  (BL->TL->TR->BR)
-                    : List.of(bl, br, tr, tl);  // exterior CW  → interior CCW (BL->BR->TR->TL)
-            wallPoly.getInterior().add(new AbstractRingProperty(
-                    CityGmlUtils.createLinearRing(innerRing)));
+            Polygon winPoly = CityGmlUtils.addOpeningToWall(wallPoly, bl, br, tr, tl, extCCW);
 
-            // WindowSurface: Orientierung GLEICH wie Aussenring (= ENTGEGEN dem Innenring)
-            // extCCW → WindowSurface CCW (BL->BR->TR->TL)
-            // extCW  → WindowSurface CW  (BL->TL->TR->BR)
-            // Nur so werden die Kanten des Innenrings im Solid genau einmal in
-            // entgegengesetzter Richtung vom Fenster-Polygon abgedeckt → manifold.
-            List<Point3D> winSurfacePoints = extCCW
-                    ? List.of(bl, br, tr, tl)   // CCW (Standard)
-                    : List.of(bl, tl, tr, br);  // CW  (Sachsen LoD2)
             String windowId = wallFaceId + "_Win_" + windowIdx;
             WindowSurface windowSurface = new WindowSurface();
             windowSurface.setId("Face_" + windowId);
             CityGmlUtils.setGmlName(windowSurface, "LOD3_Window");
-            windowSurface.setLod3MultiSurface(CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(
-                    CityGmlUtils.createPolygon(winSurfacePoints)));
+            windowSurface.setLod3MultiSurface(
+                    CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(winPoly));
             CityGmlUtils.addStringAttribute(windowSurface, "BldgFaceID", windowId);
             CityGmlUtils.addStringAttribute(windowSurface, "FACEAREA",
                     CityGmlUtils.formatNum(ctx.wp().windowWidth * ctx.wp().windowHeight));
@@ -791,16 +543,7 @@ public class WindowGenerator {
 
     // ==================== GF Tuer-Aufspaltung ====================
 
-    /**
-     * Extrahiert freie Wandabschnitte auf einer GF-Wand unter Beruecksichtigung
-     * vorhandener Tueren (DoorSurface als FillingSurface).
-     *
-     * Fuer jede Tuer wird deren horizontale Ausdehnung (Projektion auf die Unterkante)
-     * ermittelt und ein Pufferbereich (HDistDoWi) links und rechts freigehalten.
-     * Die verbleibenden Abschnitte stehen fuer Fenster zur Verfuegung.
-     *
-     * @return Liste von [sectionStart, sectionEnd] relativ zum edgeStart
-     */
+    /** Freie Wandabschnitte einer GF-Wand ausserhalb vorhandener Tueren plus HDistDoWi-Puffer. */
     private List<double[]> extractFreeSections(WallSurface wall, Point3D edgeStart,
             double dirX, double dirY, double wallLength,
             ModuleParameters.WindowParams wp) {
@@ -878,12 +621,7 @@ public class WindowGenerator {
 
     // ==================== Fenster-Berechnung ====================
 
-    /**
-     * Berechnet die maximale Fensteranzahl fuer einen Wandabschnitt.
-     *
-     * Formel: n_max = floor((length - 2 * HDistMinWaWi + HDistWiWi) / (WiLen + HDistWiWi))
-     * Optional begrenzt durch MaxWiPerRow.
-     */
+    /** Maximale Fensteranzahl fuer einen Wandabschnitt (siehe Doku.md, "Fensteranzahl berechnen"). */
     static int calculateWindowCount(double availableLength, ModuleParameters.WindowParams wp) {
         double wiLen = wp.windowWidth;
         double hDistMin = ModuleParameters.WindowParams.safeValue(wp.hDistMinWallWindow);
@@ -905,41 +643,13 @@ public class WindowGenerator {
         return n;
     }
 
-    /**
-     * Berechnet die horizontalen Offsets (Abstand Wandanfang → linke Fensterkante)
-     * fuer n Fenster auf einem Wandabschnitt.
-     *
-     * Verwendung: HDistWaWi als Startabstand, HDistWiWi zwischen Fenstern.
-     * Pruefung: letzte Fensterkante + HDistMinWaWi <= Abschnittlaenge.
-     */
+    /** Horizontale Fenster-Offsets, immer zentriert auf den Wandabschnitt (siehe Doku.md "Fensterpositionen"). */
     static double[] calculateWindowOffsets(int count, double sectionLength,
             ModuleParameters.WindowParams wp) {
         double wiLen = wp.windowWidth;
-        double hDistWaWi = ModuleParameters.WindowParams.safeValue(wp.hDistWallWindow);
         double hDistWiWi = ModuleParameters.WindowParams.safeValue(wp.hDistWindowWindow);
         double hDistMin = ModuleParameters.WindowParams.safeValue(wp.hDistMinWallWindow);
 
-        // --- Primaer: Platzierung ab hDistWaWi ---
-        double[] offsets = new double[count];
-        for (int k = 0; k < count; k++) {
-            offsets[k] = hDistWaWi + k * (wiLen + hDistWiWi);
-        }
-
-        // Pruefung: passt das letzte Fenster + Mindestabstand?
-        int fittingCount = count;
-        while (fittingCount > 0) {
-            double lastRight = offsets[fittingCount - 1] + wiLen;
-            if (lastRight + hDistMin <= sectionLength + 0.001) break;
-            fittingCount--;
-        }
-
-        if (fittingCount == count) {
-            return offsets; // Alle Fenster passen bei bevorzugtem Offset
-        }
-
-        // --- Fallback: Fenster zentriert platzieren ---
-        // Wenn hDistWaWi-Platzierung nicht passt, Fensterblock zentrieren
-        // (Randabstand wird dann symmetrisch >= hDistMin)
         for (int n = count; n >= 1; n--) {
             double totalWidth = n * wiLen + Math.max(0, n - 1) * hDistWiWi;
             double startOffset = (sectionLength - totalWidth) / 2.0;
@@ -958,10 +668,7 @@ public class WindowGenerator {
 
     // ==================== Geschoss-/Parameter-Logik ====================
 
-    /**
-     * Prueft ob ein Geschoss fuer Fenster in Frage kommt.
-     * Ausgeschlossen: 1000 (Dach), 2000 (Boden), null/leer.
-     */
+    /** Prueft ob ein Geschoss fuer Fenster in Frage kommt (ausgeschlossen: Dach, Boden, leer). */
     private static boolean isWindowEligibleGeschoss(String geschoss) {
         if (geschoss == null || geschoss.isBlank()) return false;
         if ("1000".equals(geschoss)) return false;
@@ -973,26 +680,40 @@ public class WindowGenerator {
 
     // ==================== Statistiken ====================
 
-    public static class GenerationStats {
-        public int buildingsProcessed = 0;
+    /** Skip-Gruende fuer uebersprungene Waende (Label = Kuerzel in der Log-Zusammenfassung). */
+    public enum SkipReason {
+        NO_WINDOW_PREF("WP0/null"),       // WindowPreference fehlt oder "0"
+        COVERED_BY_PART("coveredByPart"), // Wand geometrisch von BuildingPart ueberdeckt
+        BA_NO_ZMAX("BA_noZMax"),          // BA ohne Z_Max oder Z_Max <= 0
+        NO_PARAMS("noParams"),            // Keine oder ungueltige WindowParams
+        NO_POLY("noPoly"),                // Kein Polygon oder < 3 Punkte
+        NO_BOTTOM_EDGE("noBottom"),       // Keine Unterkante gefunden
+        TOO_SHORT("tooShort"),            // Wand zu kurz fuer Fenster
+        TOO_LOW("tooLow"),                // Wand zu niedrig fuer Fenster
+        NO_FIT("noFit"),                  // Kein Fenster passt (inkl. Section-Fit)
+        BA_NO_ZMAX_ASL("BA_noZMaxAsl"),   // BA ohne Z_MAX_ASL
+        PIP_FAIL("pipFail");              // Alle Fenster PiP-Fail (Giebel/Kontur)
+
+        final String label;
+        SkipReason(String label) { this.label = label; }
+    }
+
+    public static class GenerationStats extends AbstractGenerator.BaseStats {
         public int windowsCreated = 0;
         public int wallsWithWindows = 0;
         public int wallsSkipped = 0;
         public int gableWindowsDropped = 0;
         public int wwrWarnings = 0;
 
-        // Detaillierte Skip-Gruende
-        public int skipNoWindowPref = 0;   // WindowPreference null oder "0"
-        public int skipCoveredByPart = 0;  // Hauptgebaeude-Wand geometrisch vom BuildingPart ueberdeckt
-        public int skipBaNoZMax = 0;       // BA ohne Z_Max oder Z_Max <= 0
-        public int skipNoParams = 0;       // Keine oder ungueltige WindowParams
-        public int skipNoPoly = 0;         // Kein Polygon oder < 3 Punkte
-        public int skipNoBottomEdge = 0;   // Keine Unterkante gefunden
-        public int skipTooShort = 0;       // Wand zu kurz fuer Fenster
-        public int skipTooLow = 0;         // Wand zu niedrig fuer Fenster
-        public int skipNoFit = 0;          // Kein Fenster passt (incl. Section-Fit)
-        public int skipBaNoZMaxAsl = 0;    // BA ohne Z_MAX_ASL
-        public int skipPipFail = 0;        // Alle Fenster PiP-Fail (Giebel)
+        /** Detaillierte Skip-Gruende (ein Zaehler je {@link SkipReason}). */
+        public final java.util.EnumMap<SkipReason, Integer> skips =
+                new java.util.EnumMap<>(SkipReason.class);
+
+        /** Zaehlt eine uebersprungene Wand samt Grund. */
+        public void skip(SkipReason reason) {
+            wallsSkipped++;
+            skips.merge(reason, 1, Integer::sum);
+        }
 
         // Per-Geschoss Fenster-Zaehler
         public final java.util.Map<String, int[]> perGeschoss = new java.util.TreeMap<>();
@@ -1010,13 +731,12 @@ public class WindowGenerator {
         }
 
         public String toSummary() {
-            return String.format(
-                "Skip-Gruende: WP0/null=%d, coveredByPart=%d, BA_noZMax=%d, noParams=%d, " +
-                "noPoly=%d, noBottom=%d, tooShort=%d, tooLow=%d, noFit=%d, " +
-                "BA_noZMaxAsl=%d, pipFail=%d",
-                skipNoWindowPref, skipCoveredByPart, skipBaNoZMax, skipNoParams,
-                skipNoPoly, skipNoBottomEdge, skipTooShort, skipTooLow, skipNoFit,
-                skipBaNoZMaxAsl, skipPipFail);
+            StringBuilder sb = new StringBuilder("Skip-Gruende: ");
+            for (SkipReason r : SkipReason.values()) {
+                if (sb.length() > "Skip-Gruende: ".length()) sb.append(", ");
+                sb.append(r.label).append('=').append(skips.getOrDefault(r, 0));
+            }
+            return sb.toString();
         }
 
         public String toGeschossSummary() {

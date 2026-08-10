@@ -1,22 +1,13 @@
 package de.mpsc.lod2tolod3;
 
+import de.mpsc.lod2tolod3.util.CityGmlUtils;
 import de.mpsc.lod2tolod3.util.DgmLoader;
 import de.mpsc.lod2tolod3.util.DgmProvider;
 import de.mpsc.lod2tolod3.util.ModuleParametersLoader;
-import org.citygml4j.core.model.CityGMLVersion;
 import org.citygml4j.core.model.building.Building;
-import org.citygml4j.core.model.core.AbstractFeature;
-import org.citygml4j.xml.CityGMLContext;
-import org.citygml4j.xml.reader.CityGMLInputFactory;
-import org.citygml4j.xml.reader.CityGMLReader;
-import org.citygml4j.xml.reader.ChunkOptions;
-import org.citygml4j.xml.writer.CityGMLChunkWriter;
-import org.citygml4j.xml.writer.CityGMLOutputFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.xmlobjects.gml.model.feature.BoundingShape;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,7 +27,8 @@ import java.util.function.Consumer;
  *   3. Geschosse unterteilen (BuildingStorey)
  *   4. Türen hinzufügen (DoorGenerator)
  *   5. Fenster hinzufügen (WindowGenerator)
- *   6. (TODO) Balkone hinzufügen
+ *   6. Balkone hinzufügen (BalconyGenerator) — ersetzt gezielt Fenster-Slots aus Schritt 5
+ *   7. Junction-Conforming (T-Naht-Vertices, formneutral)
  * 
  * Usage:
  *   java -jar lod2-zu-lod3.jar <input.gml> [jsonDir] [outputDir] [dgmPath]
@@ -47,6 +39,7 @@ import java.util.function.Consumer;
  *   java -cp lod2-zu-lod3.jar de.mpsc.lod2tolod3.StoreyGenerator <input.gml> <jsonDir> [output.gml]
  *   java -cp lod2-zu-lod3.jar de.mpsc.lod2tolod3.DoorGenerator <input.gml> <jsonDir> [output.gml]
  *   java -cp lod2-zu-lod3.jar de.mpsc.lod2tolod3.WindowGenerator <input.gml> <jsonDir> [output.gml]
+ *   java -cp lod2-zu-lod3.jar de.mpsc.lod2tolod3.BalconyGenerator <input.gml> <jsonDir> [output.gml]
  */
 public class Lod2ToLod3Pipeline {
     private static final Logger log = LoggerFactory.getLogger(Lod2ToLod3Pipeline.class);
@@ -106,74 +99,60 @@ public class Lod2ToLod3Pipeline {
 
             WindowGenerator windowGen = new WindowGenerator();
 
+            BalconyGenerator balconyGen = new BalconyGenerator();
+
             // Statistik-Objekte
             Lod2ToLod3Promoter.PromotionStats promStats = new Lod2ToLod3Promoter.PromotionStats();
             BasementGenerator.GenerationStats basementStats = new BasementGenerator.GenerationStats();
             StoreyGenerator.GenerationStats storeyStats = new StoreyGenerator.GenerationStats();
             DoorGenerator.GenerationStats doorStats = new DoorGenerator.GenerationStats();
             WindowGenerator.GenerationStats windowStats = new WindowGenerator.GenerationStats();
+            BalconyGenerator.GenerationStats balconyStats = new BalconyGenerator.GenerationStats();
 
-            // Generator-Schritte registrieren (Schritte 2–5)
+            // Generator-Schritte registrieren (Schritte 2–6). Balkone laufen bewusst NACH
+            // Fenster: BalconyGenerator ersetzt gezielt bereits vom WindowGenerator platzierte
+            // Fenster-Slots gemaess GaPa-Muster (siehe BalconyGenerator-Javadoc).
             record PipelineStep(String label, Consumer<Building> action) {}
             List<PipelineStep> buildingSteps = List.of(
                 new PipelineStep("Keller",    b -> { basementStats.buildingsProcessed++; basementGen.processBuilding(b, paramLoader, basementStats); }),
                 new PipelineStep("Geschosse", b -> { storeyStats.buildingsProcessed++;   storeyGen.processBuilding(b, paramLoader, storeyStats); }),
                 new PipelineStep("Tueren",    b -> { doorStats.buildingsProcessed++;     doorGen.processBuilding(b, paramLoader, doorStats); }),
-                new PipelineStep("Fenster",   b -> { windowStats.buildingsProcessed++;   windowGen.processBuilding(b, paramLoader, windowStats); })
+                new PipelineStep("Fenster",   b -> { windowStats.buildingsProcessed++;   windowGen.processBuilding(b, paramLoader, windowStats); }),
+                new PipelineStep("Balkone",   b -> { balconyStats.buildingsProcessed++;  balconyGen.processBuilding(b, paramLoader, balconyStats); })
             );
 
             // ==================== Single-Pass Verarbeitung ====================
+            // Lese-/Schreib-Zyklus (Header-Envelope, Chunk-Reader/-Writer) kommt aus der
+            // gemeinsamen CityGmlUtils.processGmlFile() — identisch zu allen Standalone-
+            // Generatoren, keine zweite Kopie dieses Boilerplates mehr.
             long startTime = System.currentTimeMillis();
 
-            CityGMLContext context = CityGMLContext.newInstance();
-            CityGMLInputFactory in = context.createCityGMLInputFactory()
-                    .withChunking(ChunkOptions.defaults());
-            CityGMLOutputFactory out = context.createCityGMLOutputFactory(CityGMLVersion.v1_0);
+            CityGmlUtils.processGmlFile(inputPath, outputFile, building -> {
+                // Schritt 1: LoD2 -> LoD3 Hochstufung
+                promStats.buildingsProcessed++;
+                var promResult = promoter.promoteBuildingToLod3(building);
+                promStats.geometriesPromoted += promResult.promotedCount;
+                promStats.promotedTypes.addAll(promResult.promotedTypes);
+                promStats.namesRenamed += promoter.renameLod2NamesToLod3(building);
+                promoter.addPromotionMetadata(building, promResult);
 
-            // Envelope aus Header lesen
-            BoundingShape originalBoundedBy = null;
-            try (CityGMLReader headerReader = context.createCityGMLInputFactory()
-                    .createCityGMLReader(inputPath.toFile())) {
-                if (headerReader.hasNext()) {
-                    var firstFeature = headerReader.next();
-                    if (firstFeature instanceof org.citygml4j.core.model.core.CityModel cm) {
-                        originalBoundedBy = cm.getBoundedBy();
-                    }
-                }
-            }
-
-            try (CityGMLReader reader = in.createCityGMLReader(inputPath.toFile());
-                 CityGMLChunkWriter writer = out.createCityGMLChunkWriter(outputFile,
-                         StandardCharsets.UTF_8.name())) {
-
-                writer.withIndent("\t").withDefaultPrefixes();
-
-                if (originalBoundedBy != null) {
-                    writer.getCityModelInfo().setBoundedBy(originalBoundedBy);
-                    log.info("BoundedBy-Envelope uebernommen");
+                // Schritte 2–6: registrierte Generator-Schritte
+                for (var step : buildingSteps) {
+                    step.action().accept(building);
                 }
 
-                while (reader.hasNext()) {
-                    AbstractFeature feature = reader.next();
-
-                    if (feature instanceof Building building) {
-                        // Schritt 1: LoD2 -> LoD3 Hochstufung
-                        promStats.buildingsProcessed++;
-                        var promResult = promoter.promoteBuildingToLod3(building);
-                        promStats.geometriesPromoted += promResult.promotedCount;
-                        promStats.promotedTypes.addAll(promResult.promotedTypes);
-                        promStats.namesRenamed += promoter.renameLod2NamesToLod3(building);
-                        promoter.addPromotionMetadata(building, promResult);
-
-                        // Schritte 2–5: registrierte Generator-Schritte
-                        for (var step : buildingSteps) {
-                            step.action().accept(building);
-                        }
-                    }
-
-                    writer.writeMember(feature);
-                }
-            }
+                // Schritt 7: Junction-Conforming — fuegt fehlende T-Naht-Vertices auf
+                // Huellenkanten ein. STRENG formneutral (an echter Geometrie gemessen: kein
+                // bestehender Vertex wird bewegt; es werden nur Punkte auf bestehende Kanten
+                // eingefuegt). Naeht ausschliesslich UNSERE eigenen, unabhaengig erzeugten
+                // Zusatzflaechen (Geschosse, Keller, Boden-/Deckenslabs) an den Naehten zusammen
+                // → gegen GE_S_NOT_CLOSED / NON_MANIFOLD.
+                //
+                // Vertex-Welding wurde bewusst ENTFERNT: es verschob ~0,3% der Vertices um bis
+                // zu 5 mm (echtes Geometrie-Reshaping). Das Schliessen solcher mm-Naehte
+                // uebernimmt der nachgelagerte Healer, nicht dieses LoD3-Update.
+                CityGmlUtils.conformJunctions(building, 0.005);
+            });
 
             long elapsed = System.currentTimeMillis() - startTime;
 
@@ -201,6 +180,9 @@ public class Lod2ToLod3Pipeline {
                     windowStats.wwrWarnings);
             log.info("Schritt 5 — {}", windowStats.toSummary());
             log.info("Schritt 5 — {}", windowStats.toGeschossSummary());
+            log.info("Schritt 6 — Balkone:    {} Balkone, {} Waende, {} Fenster ersetzt, {} uebersprungen",
+                    balconyStats.balconiesCreated, balconyStats.wallsWithBalconies,
+                    balconyStats.windowsRemovedForBalcony, balconyStats.wallsSkipped);
 
         } catch (Exception e) {
             log.error("Fehler in der Pipeline: {}", e.getMessage(), e);

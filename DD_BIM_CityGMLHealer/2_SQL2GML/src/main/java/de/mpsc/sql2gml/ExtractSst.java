@@ -1,7 +1,6 @@
 package de.mpsc.sql2gml;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -91,48 +90,11 @@ public class ExtractSst {
     }
 
     private static void processFile(Path inputPath, Path outputPath) throws IOException {
-        int totalBuildings = 0;
-        int sstBuildings = 0;
+        GmlMemberFilter.Result result = GmlMemberFilter.filter(
+                inputPath, outputPath, block -> block.contains("name=\"sst\""));
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-                new FileInputStream(inputPath.toFile()), StandardCharsets.UTF_8));
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
-                new FileOutputStream(outputPath.toFile()), StandardCharsets.UTF_8))) {
-
-            String line;
-            StringBuilder memberBlock = null;
-            boolean inMember = false;
-
-            while ((line = reader.readLine()) != null) {
-                if (line.contains("<core:cityObjectMember>")) {
-                    inMember = true;
-                    memberBlock = new StringBuilder();
-                    memberBlock.append(line).append("\n");
-                } else if (inMember && line.contains("</core:cityObjectMember>")) {
-                    memberBlock.append(line).append("\n");
-                    totalBuildings++;
-
-                    if (memberBlock.toString().contains("name=\"sst\"")) {
-                        writer.write(memberBlock.toString());
-                        sstBuildings++;
-                    }
-
-                    inMember = false;
-                    memberBlock = null;
-                } else if (inMember) {
-                    memberBlock.append(line).append("\n");
-                } else if (line.contains("</core:CityModel>")) {
-                    writer.write(line);
-                    writer.newLine();
-                } else {
-                    writer.write(line);
-                    writer.newLine();
-                }
-            }
-        }
-
-        System.out.println("  Total buildings: " + totalBuildings);
-        System.out.println("  SST buildings:   " + sstBuildings);
+        System.out.println("  Total buildings: " + result.totalMembers());
+        System.out.println("  SST buildings:   " + result.writtenMembers());
         System.out.println("  Output: " + outputPath);
     }
 }

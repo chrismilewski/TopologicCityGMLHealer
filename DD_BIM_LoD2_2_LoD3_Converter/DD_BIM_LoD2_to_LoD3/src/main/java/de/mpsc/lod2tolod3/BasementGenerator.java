@@ -12,8 +12,6 @@ import org.citygml4j.core.model.construction.CeilingSurface;
 import org.citygml4j.core.model.construction.GroundSurface;
 import org.citygml4j.core.model.construction.WallSurface;
 import org.citygml4j.core.model.core.AbstractSpaceBoundaryProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.xmlobjects.gml.model.geometry.aggregates.MultiCurveProperty;
 import org.xmlobjects.gml.model.geometry.aggregates.MultiSurfaceProperty;
 import org.xmlobjects.gml.model.geometry.primitives.Polygon;
@@ -24,51 +22,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Schritt 2: Keller-Generator.
- * 
- * Erzeugt fuer Gebaeude mit Keller (BA=true, BA.height > 0):
- * - Kellerwaende (Footprint-Extrusion von H_DGM + heightGr nach unten)
- *   Oberkante = H_DGM + heightGr (oberirdischer Anteil des Kellers)
- *   Unterkante = H_DGM + heightGr - (BA.height + BA.CeHe)
- * - Kellerboden als GroundSurface (bei Unterkante = physische Bodenplatte)
- * - Kellerdecke (CeilingSurface bei H_DGM + heightGr = Unterkante GF)
- * - Original-GroundSurface (H_DGM-Ebene) wird entfernt
- * - lod3TerrainIntersectionCurve (TIC) wird erzeugt
- * 
- * GroundSurface-Behandlung:
- *   Die urspruengliche GroundSurface (bei H_DGM, aus LoD2) wird entfernt.
- *   Der Kellerboden wird als neue GroundSurface erzeugt — das ist die physische
- *   Bodenplatte des Gebaeudes. Die Gelaendeschnittlinie (TIC) dokumentiert,
- *   wo die Gebaeudehuelle das Gelaende (DGM) schneidet.
+ * Schritt 2: Keller-Generator. Erzeugt Kellerwaende, -boden, -decke und TIC fuer Gebaeude
+ * mit Keller (siehe Doku.md, Abschnitt "Schritt 2").
  *
- * TerrainIntersectionCurve (TIC):
- *   - Ohne DGM: Flacher Ring bei Z = H_DGM (Fallback)
- *   - Mit DGM:  Bilinear interpolierte Hoehen pro Footprint-Vertex aus dem DGM
- *   Die TIC wird auf dem Building/BuildingPart verankert (lod3TerrainIntersectionCurve).
- * 
- * heightGr = oberirdischer Anteil des Kellers (GF.heightAboveGround).
- * Der Keller reicht also von heightGr ueber Gelaende bis
- * (BA.height + BA.CeHe - heightGr) unter Gelaende.
- * 
- * Alle neuen Flaechen erhalten:
- * - Geschoss-Tag (BA)
- * - Lage-Tag (belowGround)
- * - Geometrische Attribute (Z_MAX_ASL, Z_MIN_ASL, FACEAREA, NORMAL_AZI, etc.)
- * - WindowPreference (uebernommen von zugehoerigen Original-Waenden)
- * 
- * Benennung: Face_{targetId}_BA_{Typ}_{LaufendeNummer}
- * Typ: Ground, Wall, Ceiling
- * 
- * Erwartet als Input eine LoD3-hochgestufte CityGML-Datei (von Lod2ToLod3Promoter).
- * 
  * Usage:
  *   java -cp lod2-zu-lod3.jar de.mpsc.lod2tolod3.BasementGenerator input.gml jsonDir [output.gml] [dgm.asc]
  */
-public class BasementGenerator {
-    private static final Logger log = LoggerFactory.getLogger(BasementGenerator.class);
+public class BasementGenerator extends AbstractGenerator<BasementGenerator.GenerationStats> {
     private static final String BASEMENT_MARKER = "LoD3_Basement";
 
     /** Toleranz fuer WindowPreference-Zuordnung Kellerwand ↔ Original-Wand (50cm). */
@@ -78,118 +40,70 @@ public class BasementGenerator {
     private DgmProvider dgm;
 
     public static void main(String[] args) {
+        BasementGenerator gen = new BasementGenerator();
         try {
-            if (args.length < 2) {
-                System.err.println("Usage: BasementGenerator <input.gml> <jsonDir> [output.gml] [dgm.asc]");
-                System.exit(1);
-            }
-
-            Path inputPath = Paths.get(args[0]);
-            Path jsonDir = Paths.get(args[1]);
-            Path outputPath = CityGmlUtils.resolveOutputPath(inputPath, "_basement",
-                    args.length >= 3 ? Paths.get(args[2]) : null);
-
-            // Optionales DGM laden (Datei, ZIP oder Verzeichnis)
-            DgmProvider dgm = null;
-            if (args.length >= 4) {
-                Path dgmPath = Paths.get(args[3]);
-                if (Files.exists(dgmPath)) {
-                    dgm = DgmLoader.load(dgmPath);
-                } else {
-                    log.warn("DGM-Pfad nicht gefunden: {} — verwende Flat-TIC", dgmPath);
-                }
-            }
-
-            Files.createDirectories(outputPath.getParent());
-
-            log.info("=== Keller-Generator ===");
-            log.info("Input:  {}", inputPath);
-            log.info("JSON:   {}", jsonDir);
-            log.info("Output: {}", outputPath);
-            log.info("DGM:    {}", dgm != null ? dgm.describe() : "nicht vorhanden (Flat-TIC)");
-
-            BasementGenerator generator = new BasementGenerator();
-            generator.setDgm(dgm);
-            ModuleParametersLoader paramLoader = new ModuleParametersLoader(jsonDir);
-            GenerationStats stats = generator.addBasements(inputPath, outputPath, paramLoader);
-
-            log.info("=== Fertig ===");
-            log.info("Gebaeude verarbeitet: {}", stats.buildingsProcessed);
-            log.info("Keller hinzugefuegt: {}", stats.basementsAdded);
-            log.info("GroundSurfaces ersetzt: {}", stats.groundSurfacesReplaced);
-            log.info("TICs erzeugt: {}", stats.ticsCreated);
-
+            gen.runCli(args);
         } catch (Exception e) {
-            log.error("Fehler: {}", e.getMessage(), e);
+            gen.log.error("Fehler: {}", e.getMessage(), e);
             System.exit(1);
         }
     }
 
-    /**
-     * Setzt den optionalen DGM-Provider fuer detaillierte TIC-Hoehen.
-     * Wenn null, wird ein Flat-TIC bei H_DGM erzeugt.
-     */
+    @Override protected String outputSuffix() { return "_basement"; }
+    @Override protected String displayName()  { return "Keller-Generator"; }
+    @Override protected GenerationStats newStats() { return new GenerationStats(); }
+
+    /** Laedt das optionale DGM aus args[3]; ohne DGM wird eine flache TIC bei H_DGM erzeugt. */
+    @Override
+    protected void onConfigure(String[] args) {
+        if (args.length < 4) {
+            log.info("DGM:    nicht vorhanden (Flat-TIC)");
+            return;
+        }
+        Path dgmPath = Paths.get(args[3]);
+        if (!Files.exists(dgmPath)) {
+            log.warn("DGM-Pfad nicht gefunden: {} — verwende Flat-TIC", dgmPath);
+            return;
+        }
+        try {
+            setDgm(DgmLoader.load(dgmPath));
+            log.info("DGM:    {}", dgm.describe());
+        } catch (IOException e) {
+            log.warn("DGM laden fehlgeschlagen ({}): {} — verwende Flat-TIC", dgmPath, e.getMessage());
+        }
+    }
+
+    @Override
+    protected void logResult(GenerationStats stats) {
+        log.info("Keller hinzugefuegt: {}", stats.basementsAdded);
+        log.info("GroundSurfaces ersetzt: {}", stats.groundSurfacesReplaced);
+        log.info("TICs erzeugt: {}", stats.ticsCreated);
+    }
+
+    /** Setzt den optionalen DGM-Provider fuer detaillierte TIC-Hoehen (null = Flat-TIC). */
     public void setDgm(DgmProvider dgm) {
         this.dgm = dgm;
     }
 
-    // ==================== Hauptverarbeitung ====================
-
-    /**
-     * Fuegt Keller zu allen passenden Gebaeuden hinzu.
-     */
-    public GenerationStats addBasements(Path inputFile, Path outputFile,
-            ModuleParametersLoader paramLoader) throws Exception {
-        GenerationStats stats = new GenerationStats();
-
-        CityGmlUtils.processGmlFile(inputFile, outputFile, building -> {
-            stats.buildingsProcessed++;
-            processBuilding(building, paramLoader, stats);
-        });
-
-        return stats;
-    }
-
     // ==================== Gebaeude-Verarbeitung ====================
 
-    /**
-     * Verarbeitet ein einzelnes Gebaeude.
-     * Liest Building-level Attribute (sst, H_DGM) und delegiert die Verarbeitung
-     * an processAbstractBuilding() fuer das Building selbst und/oder seine BuildingParts.
-     */
-    void processBuilding(Building building, ModuleParametersLoader paramLoader,
+    /** Verarbeitet ein Gebaeude: delegiert an processAbstractBuilding fuer Building und BuildingParts. */
+    @Override
+    protected void processBuilding(Building building, ModuleParametersLoader paramLoader,
             GenerationStats stats) {
 
-        // --- Building-level Parameter ermitteln ---
-        String sst = CityGmlUtils.getStringAttribute(building, "sst");
-        if (sst == null || sst.isBlank()) return;
-
-        Optional<ModuleParameters> paramsOpt = paramLoader.getParameters(sst);
-        if (paramsOpt.isEmpty()) return;
-        ModuleParameters params = paramsOpt.get();
+        BuildingParams bp = resolveParams(building, paramLoader).orElse(null);
+        if (bp == null) return;
 
         Double hDgm = CityGmlUtils.parseDoubleAttribute(building, "H_DGM");
         if (hDgm == null) return;
 
         for (var target : CityGmlUtils.getBuildingTargets(building)) {
-            processAbstractBuilding(target, sst, hDgm, params, stats);
+            processAbstractBuilding(target, bp.sst(), hDgm, bp.params(), stats);
         }
     }
 
-    /**
-     * Verarbeitet ein AbstractBuilding (Building oder BuildingPart).
-     * 
-     * Parameter sst und hDgm werden vom Parent-Building geerbt,
-     * da diese Attribute nur auf Building-Ebene vorhanden sind.
-     * 
-     * Ablauf:
-     * 1. Keller-Parameter aus ModuleParameters ableiten (BA.height + BA.CeHe)
-     * 2. Original-GroundSurface sammeln (Footprint), dann entfernen
-     * 3. Kellerwaende aus Footprint extrudieren (Oberkante = H_DGM + heightGr)
-     * 4. Kellerboden als GroundSurface (statt FloorSurface) erzeugen
-     * 5. Kellerdecke (CeilingSurface) erzeugen
-     * 6. TerrainIntersectionCurve (TIC) aus Footprint + DGM/H_DGM erzeugen
-     */
+    /** Erzeugt Kellerwaende, -boden, -decke und TIC fuer ein AbstractBuilding (siehe Doku.md Schritt 2). */
     private void processAbstractBuilding(AbstractBuilding target, String sst, double hDgm,
             ModuleParameters params, GenerationStats stats) {
 
@@ -207,10 +121,7 @@ public class BasementGenerator {
         // heightGr = oberirdischer Anteil des Kellers (GF.heightAboveGround)
         double heightGr = params.getHeightGr();
 
-        // GroundSurface-Polygone nach Terrain-Niveau filtern:
-        // Polygone knapp ueber H_DGM (innerhalb 0.5m) gehoeren zum Kellerfussabdruck.
-        // Erhöhte Polygone (> H_DGM + 0.5m) sind erhoehte Sockelflächen oder Verbindungsabschnitte
-        // ohne eigenen Keller — sie bleiben unveraendert erhalten und werden NICHT entfernt.
+        // Nur GroundSurface-Polygone nahe H_DGM gehoeren zum Kellerfussabdruck.
         final double ELEVATED_THRESHOLD = 0.50;
         List<Polygon> groundPolygons = new ArrayList<>();
         List<AbstractSpaceBoundaryProperty> gsToRemove = new ArrayList<>();
@@ -242,7 +153,6 @@ public class BasementGenerator {
         String targetId = target.getId() != null ? target.getId() : "unknown";
 
         // === Nur terrain-nahe Original-GroundSurfaces entfernen ===
-        // Erhoehte Polygone (> H_DGM + 0.5m) bleiben als GroundSurface erhalten.
         target.getBoundaries().removeAll(gsToRemove);
         stats.groundSurfacesReplaced += gsToRemove.size();
 
@@ -263,9 +173,15 @@ public class BasementGenerator {
         int floorCount = 0;
         int wallCount = 0;
 
+        // Kellerdecken werden pro Footprint mit erzeugt, aber erst NACH allen
+        // Boeden/Waenden an die Boundaries gehaengt (stabile Element-Reihenfolge im GML).
+        List<AbstractSpaceBoundaryProperty> ceilings = new ArrayList<>();
+
         for (Polygon groundPoly : groundPolygons) {
-            List<Point3D> groundPoints = CityGmlUtils.toPoints(groundPoly);
-            if (groundPoints.size() < 4) continue;
+            // Nur entduplizieren, KEIN kollineares Mergen (desynchronisiert sonst geteilte Kanten zu GF-Waenden).
+            List<Point3D> groundPoints =
+                    CityGmlUtils.dedupConsecutive(CityGmlUtils.toPoints(groundPoly), CityGmlUtils.POINT_MERGE_TOL);
+            if (groundPoints.size() < 3) continue;
 
             floorCount++;
 
@@ -288,9 +204,7 @@ public class BasementGenerator {
 
             target.getBoundaries().add(new AbstractSpaceBoundaryProperty(ground));
 
-            // ── Kellerwaende (WallSurface pro Kante) ──
-            // Oberkante bei basementTopZ (= H_DGM + heightGr)
-            // Unterkante bei basementFloorZ (= basementTopZ - basementTotalHeight)
+            // ── Kellerwaende (WallSurface pro Kante), Oberkante basementTopZ, Unterkante basementFloorZ ──
             List<Point3D> topProjected = CityGmlUtils.projectToZ(groundPoints, basementTopZ);
             List<Point3D> topNoClose = CityGmlUtils.removeClosingPoint(topProjected);
             for (int i = 0; i < topNoClose.size(); i++) {
@@ -322,27 +236,17 @@ public class BasementGenerator {
 
                 target.getBoundaries().add(new AbstractSpaceBoundaryProperty(wall));
             }
-        }
 
-        // ── Kellerdecke (CeilingSurface) ──
-        // Z = basementTopZ (= H_DGM + heightGr = Unterkante EG)
-        // Das Polygon bekommt eine gml:id (Slab_...), damit der StoreyGenerator
-        // den GF-Floor per XLink referenzieren kann ("Geometry once, semantics twice").
-        int ceilingCount = 0;
-        for (Polygon groundPoly : groundPolygons) {
-            List<Point3D> top = CityGmlUtils.toPoints(groundPoly);
-            if (top.size() < 4) continue;
-            ceilingCount++;
-
-            List<Point3D> ceilingPoints = CityGmlUtils.projectToZ(top, basementTopZ);
+            // ── Kellerdecke (CeilingSurface), Z=basementTopZ, gml:id fuer XLink vom GF-Floor ──
+            List<Point3D> ceilingPoints = CityGmlUtils.projectToZ(groundPoints, basementTopZ);
             Polygon ceilingPoly = CityGmlUtils.createPolygon(ceilingPoints);
 
             // gml:id auf dem Polygon setzen (fuer XLink-Referenz vom GF-Floor)
-            String slabGmlId = "Slab_" + targetId + "_BA_" + ceilingCount;
+            String slabGmlId = "Slab_" + targetId + "_BA_" + floorCount;
             ceilingPoly.setId(slabGmlId);
 
             CeilingSurface ceiling = new CeilingSurface();
-            String ceilingFaceId = targetId + "_BA_Ceiling_" + ceilingCount;
+            String ceilingFaceId = targetId + "_BA_Ceiling_" + floorCount;
             ceiling.setId("Face_" + ceilingFaceId);
             CityGmlUtils.setGmlName(ceiling, "LOD3_Ceiling");
             ceiling.setLod3MultiSurface(
@@ -352,15 +256,15 @@ public class BasementGenerator {
             CityGmlUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
                     basementTopZ, hDgm, ceilingArea, "BA");
 
-            target.getBoundaries().add(new AbstractSpaceBoundaryProperty(ceiling));
+            ceilings.add(new AbstractSpaceBoundaryProperty(ceiling));
         }
+        int ceilingCount = ceilings.size();
+        target.getBoundaries().addAll(ceilings);
 
         // storeysBelowGround als natives CityGML-Element
         target.setStoreysBelowGround(1);
 
-        // === TerrainIntersectionCurve (TIC) ===
-        // Dokumentiert wo das Gebaeude das Gelaende schneidet.
-        // Ohne DGM: flacher Ring bei H_DGM. Mit DGM: bilinear interpolierte Hoehen.
+        // === TerrainIntersectionCurve (TIC): ohne DGM flacher Ring, mit DGM bilinear interpoliert ===
         MultiCurveProperty tic = CityGmlUtils.createTerrainIntersectionCurve(
                 groundPolygons, hDgm, dgm);
         if (tic != null) {
@@ -379,9 +283,9 @@ public class BasementGenerator {
     // ==================== Hilfsmethoden ====================
 
     /**
-     * Sucht die WindowPreference des Original-Walls, dessen Grundkante der
-     * gegebenen Kante (a→b) in XY entspricht.
-     * Vergleicht den XY-Mittelpunkt der Kante mit den bestehenden Waenden.
+     * Sucht die WindowPreference derjenigen Original-Wand, auf deren Grundkante die gegebene
+     * Kellerwand-Kante (a→b) liegt (Kollinearitaets-, nicht Mittelpunkt-Check — erkennt auch
+     * Teilsegmente einer zerschnittenen Original-Wand, siehe Doku.md Schritt 2).
      *
      * @param walls Bestehende WallSurfaces des Gebaeudes
      * @param a Startpunkt der Kellerwand-Kante
@@ -393,7 +297,7 @@ public class BasementGenerator {
         double edgeMidY = (a.y + b.y) / 2.0;
 
         String bestPref = null;
-        double bestDist = Double.MAX_VALUE;
+        double bestPerpDist = Double.MAX_VALUE;
 
         for (WallSurface wall : walls) {
             String pref = CityGmlUtils.getStringAttribute(wall, "WindowPreference");
@@ -402,17 +306,25 @@ public class BasementGenerator {
             Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
             if (wallPoly == null) continue;
 
-            List<Point3D> pts = CityGmlUtils.toPoints(wallPoly);
-            if (pts.size() < 3) continue;
+            List<Point3D> pts = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(wallPoly));
+            CityGmlUtils.BottomEdge edge = CityGmlUtils.findBottomEdge(pts);
+            if (edge == null) continue;
 
-            // Wandmittelpunkt in XY berechnen
-            double wallMidX = pts.stream().mapToDouble(p -> p.x).average().orElse(0);
-            double wallMidY = pts.stream().mapToDouble(p -> p.y).average().orElse(0);
+            double wsx = edge.start().x, wsy = edge.start().y;
+            double wex = edge.end().x, wey = edge.end().y;
+            double wlen = edge.wallLength();
+            if (wlen < 1e-6) continue;
+            double dirX = (wex - wsx) / wlen, dirY = (wey - wsy) / wlen;
 
-            double dist = Math.sqrt(Math.pow(edgeMidX - wallMidX, 2)
-                    + Math.pow(edgeMidY - wallMidY, 2));
-            if (dist < bestDist && dist < WINDOW_PREFERENCE_TOLERANCE) {
-                bestDist = dist;
+            double relX = edgeMidX - wsx, relY = edgeMidY - wsy;
+            double u = relX * dirX + relY * dirY;                        // Projektion entlang der Wand
+            double perpDist = Math.abs(relX * -dirY + relY * dirX);      // senkrechter Abstand zur Wandlinie
+
+            if (perpDist > WINDOW_PREFERENCE_TOLERANCE) continue;
+            if (u < -WINDOW_PREFERENCE_TOLERANCE || u > wlen + WINDOW_PREFERENCE_TOLERANCE) continue;
+
+            if (perpDist < bestPerpDist) {
+                bestPerpDist = perpDist;
                 bestPref = pref;
             }
         }
@@ -422,11 +334,8 @@ public class BasementGenerator {
 
     // ==================== Statistiken ====================
 
-    /**
-     * Statistiken der Generierung.
-     */
-    public static class GenerationStats {
-        public int buildingsProcessed = 0;
+    /** Statistiken der Generierung. */
+    public static class GenerationStats extends AbstractGenerator.BaseStats {
         public int basementsAdded = 0;
         public int groundSurfacesReplaced = 0;
         public int ticsCreated = 0;

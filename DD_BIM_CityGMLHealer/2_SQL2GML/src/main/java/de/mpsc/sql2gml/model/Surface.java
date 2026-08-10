@@ -1,26 +1,26 @@
 package de.mpsc.sql2gml.model;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
- * Represents a Surface from the SQLite database
+ * Represents a Surface from the SQLite database (new healer schema).
+ * Each Surface holds exactly ONE SurfaceGeometry (Polygon or TriangulatedSurface).
  */
 public class Surface {
     private long id;
     private String surfaceIdGml;
-    private Map<String, Object> attributes;  // JSON attributes
+    private int surfaceTypeId;
+    private Map<String, Object> attributes;
     private boolean valid;
     private String log;
-    private List<Polygon> polygons;
+    private SurfaceGeometry geometry;
 
-    public Surface(long id, String surfaceIdGml, boolean valid, String log) {
+    public Surface(long id, String surfaceIdGml, int surfaceTypeId, boolean valid, String log) {
         this.id = id;
         this.surfaceIdGml = surfaceIdGml;
+        this.surfaceTypeId = surfaceTypeId;
         this.valid = valid;
         this.log = log;
-        this.polygons = new ArrayList<>();
     }
 
     // Getters and Setters
@@ -30,6 +30,10 @@ public class Surface {
 
     public String getSurfaceIdGml() {
         return surfaceIdGml;
+    }
+
+    public int getSurfaceTypeId() {
+        return surfaceTypeId;
     }
 
     public Map<String, Object> getAttributes() {
@@ -48,12 +52,12 @@ public class Surface {
         return log;
     }
 
-    public List<Polygon> getPolygons() {
-        return polygons;
+    public SurfaceGeometry getGeometry() {
+        return geometry;
     }
 
-    public void addPolygon(Polygon polygon) {
-        this.polygons.add(polygon);
+    public void setGeometry(SurfaceGeometry geometry) {
+        this.geometry = geometry;
     }
 
     @Override
@@ -61,7 +65,8 @@ public class Surface {
         return "Surface{" +
                 "id=" + id +
                 ", surfaceIdGml='" + surfaceIdGml + '\'' +
-                ", polygons=" + polygons.size() +
+                ", surfaceTypeId=" + surfaceTypeId +
+                ", geometry=" + (geometry != null ? geometry.getGeometryIdGml() : "none") +
                 '}';
     }
 }

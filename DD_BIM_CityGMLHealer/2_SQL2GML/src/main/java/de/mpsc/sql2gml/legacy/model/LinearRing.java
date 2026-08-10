@@ -1,4 +1,4 @@
-package de.mpsc.sql2gml.model;
+package de.mpsc.sql2gml.legacy.model;
 
 /**
  * Represents a LinearRing from the SQLite database

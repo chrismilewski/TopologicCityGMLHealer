@@ -9,58 +9,18 @@ import org.citygml4j.core.model.building.Building;
 import org.citygml4j.core.model.construction.AbstractFillingSurfaceProperty;
 import org.citygml4j.core.model.construction.DoorSurface;
 import org.citygml4j.core.model.construction.WallSurface;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.xmlobjects.gml.model.geometry.primitives.AbstractRingProperty;
 import org.xmlobjects.gml.model.geometry.primitives.Polygon;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 
 /**
- * Schritt 4: Tuer-Generator.
- *
- * Erzeugt Tueren (DoorSurface) an den GF-Wandsegmenten, basierend auf dem
- * DoorCount-Attribut (gesetzt vom Lod2ToLod3Promoter aus den Building-Preferences)
- * und den Tuerparametern aus den Baukoerpermodul-JSON-Dateien.
- *
- * Tuer-Parameter aus JSON (GF.door):
- * - DoHe:       Tuerhoehe
- * - DoLen:      Tuerbreite
- * - HDistDoWa:  Horizontaler Abstand der ersten Tuer vom linken Wandrand
- *
- * Positionierung:
- * - Erste Tuer: HDistDoWa vom linken Wandrand (= Start der Unterkante im Polygon-Ring)
- * - Weitere Tueren: gleichmaessig im verbleibenden Wandbereich verteilt
- * - Tuersockel: 5 cm ueber Unterkante der Wand (keine kollinearen Punkte)
- *
- * DoorCount-Semantik:
- * - 0:  keine Tuer
- * - 1+: Anzahl Tueren
- * - -1: eine Hintertuer (wird als 1 Tuer behandelt + Attribut "Hintertuer=true")
- *
- * Geometrie:
- * - Tuer-Eckpunkte werden in den aeusseren Ring des Wandpolygons eingefuegt
- *   (Wandflaeche wird um Tueroeffnung reduziert)
- * - Separate DoorSurface mit Tuer-Rechteck als lod3MultiSurface
- * - DoorSurface wird als FillingSurface an der WallSurface verankert
- *
- * Attribute auf DoorSurface:
- * - BldgFaceID: {WandFaceID}_Door_{N}
- * - FACEAREA:   Tuerfläche in m²
- * - Geschoss:   GF
- * - Hintertuer:  true (nur bei DoorCount=-1)
- *
- * Erwartet als Input den Output des StoreyGenerators (Schritt 3).
+ * Schritt 4: Tuer-Generator. Erzeugt Tueren an GF-Wandsegmenten anhand des DoorCount-Attributs
+ * (siehe Doku.md, Abschnitt "Schritt 4").
  *
  * Usage:
  *   java -cp lod2-zu-lod3.jar de.mpsc.lod2tolod3.DoorGenerator input.gml jsonDir [output.gml]
  */
-public class DoorGenerator {
-
-    private static final Logger log = LoggerFactory.getLogger(DoorGenerator.class);
+public class DoorGenerator extends AbstractGenerator<DoorGenerator.GenerationStats> {
 
     /** Tuersockelhoehe: 5 cm ueber Wandunterkante. */
     private static final double DOOR_SILL_HEIGHT = 0.05;
@@ -68,92 +28,72 @@ public class DoorGenerator {
     /** Minimaler Abstand zwischen Tueren und zum Wandrand (10 cm). */
     private static final double MIN_SPACING = 0.10;
 
+    /** Toleranz fuer „Tuermitte liegt auf gemeinsamer Footprint-Kante" (Anbau-Verdeckung, 10 cm). */
+    private static final double FOOTPRINT_SHARE_TOL = 0.10;
+
     public static void main(String[] args) {
+        DoorGenerator gen = new DoorGenerator();
         try {
-            if (args.length < 2) {
-                System.err.println("Usage: DoorGenerator <input.gml> <jsonDir> [output.gml]");
-                System.exit(1);
-            }
-
-            Path inputPath = Paths.get(args[0]);
-            Path jsonDir = Paths.get(args[1]);
-            Path outputPath = CityGmlUtils.resolveOutputPath(inputPath, "_doors",
-                    args.length >= 3 ? Paths.get(args[2]) : null);
-
-            Files.createDirectories(outputPath.getParent());
-
-            log.info("=== Tuer-Generator ===");
-            log.info("Input:  {}", inputPath);
-            log.info("JSON:   {}", jsonDir);
-            log.info("Output: {}", outputPath);
-
-            DoorGenerator generator = new DoorGenerator();
-            ModuleParametersLoader paramLoader = new ModuleParametersLoader(jsonDir);
-            GenerationStats stats = generator.addDoors(inputPath, outputPath, paramLoader);
-
-            log.info("=== Fertig ===");
-            log.info("Gebaeude verarbeitet: {}", stats.buildingsProcessed);
-            log.info("Tueren erzeugt: {}", stats.doorsCreated);
-            log.info("Waende modifiziert: {}", stats.wallsModified);
-            log.info("Waende uebersprungen: {}", stats.wallsSkipped);
-
+            gen.runCli(args);
         } catch (Exception e) {
-            log.error("Fehler: {}", e.getMessage(), e);
+            gen.log.error("Fehler: {}", e.getMessage(), e);
             System.exit(1);
         }
     }
 
-    // ==================== Standalone-Verarbeitung ====================
+    @Override protected String outputSuffix() { return "_doors"; }
+    @Override protected String displayName()  { return "Tuer-Generator"; }
+    @Override protected GenerationStats newStats() { return new GenerationStats(); }
 
-    /**
-     * Fuegt Tueren zu allen passenden GF-Waenden hinzu (Standalone-Modus).
-     */
-    public GenerationStats addDoors(Path inputFile, Path outputFile,
-            ModuleParametersLoader paramLoader) throws Exception {
-        GenerationStats stats = new GenerationStats();
-
-        CityGmlUtils.processGmlFile(inputFile, outputFile, building -> {
-            stats.buildingsProcessed++;
-            processBuilding(building, paramLoader, stats);
-        });
-
-        return stats;
+    @Override
+    protected void logResult(GenerationStats stats) {
+        log.info("Tueren erzeugt: {}", stats.doorsCreated);
+        log.info("Waende modifiziert: {}", stats.wallsModified);
+        log.info("Waende uebersprungen: {}", stats.wallsSkipped);
+        log.info("Tueren hinter Anbau verworfen: {}", stats.doorsSkippedCovered);
+        log.info("Tueren ausserhalb Wandkontur verworfen: {}", stats.doorsSkippedOutside);
+        log.info("Waende uebersprungen (geteilt zwischen BuildingParts): {}", stats.wallsSkippedCoveredByPart);
     }
 
-    // ==================== Pipeline-Integration ====================
+    // ==================== Gebaeude-Verarbeitung ====================
 
-    /**
-     * Verarbeitet ein einzelnes Gebaeude (Pipeline- und Standalone-Modus).
-     * Liest Building-level Attribute (sst) und delegiert die Verarbeitung
-     * an processAbstractBuilding() fuer das Building selbst und/oder seine BuildingParts.
-     */
-    void processBuilding(Building building, ModuleParametersLoader paramLoader,
+    /** Verarbeitet ein Gebaeude: delegiert an processAbstractBuilding fuer Building und BuildingParts. */
+    @Override
+    protected void processBuilding(Building building, ModuleParametersLoader paramLoader,
             GenerationStats stats) {
 
-        String sst = CityGmlUtils.getStringAttribute(building, "sst");
-        if (sst == null || sst.isBlank()) return;
+        BuildingParams bp = resolveParams(building, paramLoader).orElse(null);
+        if (bp == null) return;
+        ModuleParameters params = bp.params();
 
-        Optional<ModuleParameters> paramsOpt = paramLoader.getParameters(sst);
-        if (paramsOpt.isEmpty()) return;
-        ModuleParameters params = paramsOpt.get();
-
-        // GF.door Parameter lesen
         if (params.getGroundFloor() == null) return;
         ModuleParameters.DoorParams doorParams = params.getGroundFloor().door;
         if (doorParams == null || !doorParams.isValid()) return;
 
-        for (var target : CityGmlUtils.getBuildingTargets(building)) {
-            processAbstractBuilding(target, doorParams, stats);
+        List<AbstractBuilding> targets = CityGmlUtils.getBuildingTargets(building);
+
+        // Footprints aller Targets fuer die Anbau-Verdeckungspruefung sammeln.
+        List<List<Point3D>> footprints = new ArrayList<>();
+        for (var t : targets) {
+            for (Polygon gp : CityGmlUtils.collectGroundPolygons(t)) {
+                List<Point3D> ring = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(gp));
+                if (ring.size() >= 3) footprints.add(ring);
+            }
+        }
+
+        // Verhindert doppelte Tueren auf einer von zwei BuildingParts geteilten Wand.
+        Set<String> processedWallMids = new HashSet<>();
+
+        for (var target : targets) {
+            processAbstractBuilding(target, doorParams, footprints, processedWallMids, stats);
             CityGmlUtils.rebuildSolidShell(target);
         }
     }
 
-    /**
-     * Verarbeitet ein AbstractBuilding (Building oder BuildingPart).
-     * Sucht alle GF-WallSurfaces mit DoorCount-Attribut und fuegt Tueren ein.
-     */
+    /** Sucht alle GF-WallSurfaces mit DoorCount-Attribut und fuegt Tueren ein. */
     private void processAbstractBuilding(AbstractBuilding target,
-            ModuleParameters.DoorParams doorParams, GenerationStats stats) {
+            ModuleParameters.DoorParams doorParams, List<List<Point3D>> footprints,
+            Set<String> processedWallMids, GenerationStats stats) {
 
         List<WallSurface> walls = CityGmlUtils.collectWallSurfaces(target);
 
@@ -170,34 +110,33 @@ public class DoorGenerator {
             } catch (NumberFormatException e) {
                 continue;
             }
+            if (doorCount < -1) continue; // ungueltig
+
+            // Doppelte Wand zwischen BuildingParts: nur der erste Part platziert Tueren
+            // (identische Geometrie an der gemeinsamen Grenze zweier Parts).
+            String midKey = CityGmlUtils.wallBottomMidKey(wall);
+            if (midKey != null && !processedWallMids.add(midKey)) {
+                stats.wallsSkippedCoveredByPart++;
+                continue;
+            }
 
             // 0 = keine Tuer; -1 = Hintertuer (1 Tuer mit Hintertuer-Attribut)
             if (doorCount == 0) continue;
-            if (doorCount < -1) continue; // ungueltig
 
             if (doorCount == -1) {
-                processWall(wall, 1, true, doorParams, stats);
+                processWall(wall, 1, true, doorParams, footprints, stats);
             } else {
-                processWall(wall, doorCount, false, doorParams, stats);
+                processWall(wall, doorCount, false, doorParams, footprints, stats);
             }
         }
     }
 
     // ==================== Wand-Verarbeitung ====================
 
-    /**
-     * Fuegt Tueren in eine einzelne GF-WallSurface ein.
-     *
-     * Algorithmus:
-     * 1. Unterkante der Wand finden (laengste Kante bei Z_min)
-     * 2. Tuer-Positionen berechnen (erste bei HDistDoWa, Rest gleichmaessig)
-     * 3. Tuer-Eckpunkte in Wandpolygon-Ring einfuegen (Tueroeffnungen ausschneiden)
-     * 4. DoorSurface pro Tuer erzeugen und als FillingSurface verankern
-     * 5. FACEAREA der Wand aktualisieren
-     * 6. Flaechenerhaltung pruefen (wallBefore ≈ wallAfter + doorAreas)
-     */
+    /** Fuegt doorCount Tueren in eine GF-WallSurface ein (siehe Doku.md Schritt 4). */
     private void processWall(WallSurface wall, int doorCount, boolean isHintertuer,
-            ModuleParameters.DoorParams doorParams, GenerationStats stats) {
+            ModuleParameters.DoorParams doorParams, List<List<Point3D>> footprints,
+            GenerationStats stats) {
 
         Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
         if (wallPoly == null) return;
@@ -210,11 +149,15 @@ public class DoorGenerator {
         double doorHeight = doorParams.doorHeight;
         double hDistDoorWall = (doorParams.hDistDoorWall != null) ? doorParams.hDistDoorWall : 0.5;
 
-        // --- Unterkante der Wand ermitteln ---
-        double[] zRange = CityGmlUtils.getZRange(open);
-        double zMin = zRange[0];
-        double zMax = zRange[1];
-        double wallHeight = zMax - zMin;
+        // --- Unterkante der Wand ermitteln (laengste Kante bei zMin) ---
+        CityGmlUtils.BottomEdge edge = CityGmlUtils.findBottomEdge(open);
+        if (edge == null) {
+            log.warn("Keine Unterkante gefunden fuer Wand {}", wall.getId());
+            stats.wallsSkipped++;
+            return;
+        }
+        double zMin = edge.zMin();
+        double wallHeight = edge.zMax() - edge.zMin();
 
         // Validierung: Tuerhoehe + Sockel muss in die Wand passen
         if (doorHeight + DOOR_SILL_HEIGHT > wallHeight) {
@@ -225,28 +168,9 @@ public class DoorGenerator {
             return;
         }
 
-        // --- Unterkante finden (zwei aufeinanderfolgende Punkte bei zMin) ---
-        double zTol = 0.01;
-        int edgeStartIdx = -1;
-        for (int i = 0; i < open.size(); i++) {
-            int next = (i + 1) % open.size();
-            if (Math.abs(open.get(i).z - zMin) < zTol
-                    && Math.abs(open.get(next).z - zMin) < zTol) {
-                edgeStartIdx = i;
-                break;
-            }
-        }
-
-        if (edgeStartIdx < 0) {
-            log.warn("Keine Unterkante gefunden fuer Wand {}", wall.getId());
-            stats.wallsSkipped++;
-            return;
-        }
-
-        int edgeEndIdx = (edgeStartIdx + 1) % open.size();
-        Point3D edgeStart = open.get(edgeStartIdx);
-        Point3D edgeEnd = open.get(edgeEndIdx);
-        double wallLength = CityGmlUtils.calculateEdgeLength2D(edgeStart, edgeEnd);
+        Point3D edgeStart = edge.start();
+        Point3D edgeEnd = edge.end();
+        double wallLength = edge.wallLength();
 
         // --- Tuer-Positionen berechnen ---
         double totalDoorWidth = doorCount * doorWidth;
@@ -318,11 +242,34 @@ public class DoorGenerator {
             wallFaceId = wall.getId() != null ? wall.getId() : "unknown";
         }
 
+        // --- 2D-Wandkontur fuer den Oeffnungs-Check (Tuer muss vollstaendig in der Wandflaeche liegen) ---
+        double[][] wallPoly2D = CityGmlUtils.projectWallTo2D(open, edgeStart, dirX, dirY, zMin);
+
         // --- Tuer-Geometrien berechnen und DoorSurfaces erzeugen ---
-        List<List<Point3D>> doorRectangles = new ArrayList<>();
+        int doorsPlaced = 0;
 
         for (int d = 0; d < doorCount; d++) {
             double offset = doorLeftOffsets[d];
+
+            // Anbau-Verdeckung: liegt die Tuermitte auf der gemeinsamen Kante zweier Footprints
+            // (eigenes Gebaeude + Anbau), wuerde die Tuer hinter dem Anbau liegen → ueberspringen.
+            double doorCx = edgeStart.x + (offset + doorWidth / 2.0) * dirX;
+            double doorCy = edgeStart.y + (offset + doorWidth / 2.0) * dirY;
+            int onBoundary = 0;
+            for (List<Point3D> fp : footprints) {
+                if (CityGmlUtils.distPointToRingXY(doorCx, doorCy, fp) < FOOTPRINT_SHARE_TOL) onBoundary++;
+            }
+            if (onBoundary >= 2) {
+                stats.doorsSkippedCovered++;
+                continue;
+            }
+
+            // Kontur-Check: alle 4 Tuer-Ecken muessen im Wandpolygon liegen
+            if (!CityGmlUtils.openingInsideWall2D(offset, offset + doorWidth,
+                    doorBottomZ - zMin, doorTopZ - zMin, wallPoly2D)) {
+                stats.doorsSkippedOutside++;
+                continue;
+            }
 
             // Tuer-Eckpunkte: BL, BR, TR, TL (von aussen gesehen)
             Point3D bl = new Point3D(
@@ -342,16 +289,9 @@ public class DoorGenerator {
                     edgeStart.y + offset * dirY,
                     doorTopZ);
 
-            doorRectangles.add(List.of(bl, br, tr, tl));
-
-            // DoorSurface erzeugen: Orientierung GLEICH wie Aussenring (= ENTGEGEN dem Innenring)
-            // extCCW → DoorSurface CCW (BL->BR->TR->TL)
-            // extCW  → DoorSurface CW  (BL->TL->TR->BR)
+            // Innenring in die Wand einfuegen + DoorSurface-Polygon konsistent orientiert erzeugen
             String doorId = wallFaceId + "_Door_" + (d + 1);
-            List<Point3D> doorSurfacePoints = extCCW
-                    ? List.of(bl, br, tr, tl)   // CCW (Standard)
-                    : List.of(bl, tl, tr, br);  // CW  (Sachsen LoD2)
-            Polygon doorPoly = CityGmlUtils.createPolygon(doorSurfacePoints);
+            Polygon doorPoly = CityGmlUtils.addOpeningToWall(wallPoly, bl, br, tr, tl, extCCW);
 
             DoorSurface doorSurface = new DoorSurface();
             doorSurface.setId("Face_" + doorId);
@@ -373,27 +313,16 @@ public class DoorGenerator {
             // Als FillingSurface an der WallSurface verankern
             wall.getFillingSurfaces().add(new AbstractFillingSurfaceProperty(doorSurface));
             stats.doorsCreated++;
+            doorsPlaced++;
         }
 
-        // --- Tueroeffnungen als innere Ringe einfuegen ---
-        // Innenring ENTGEGEN dem Aussenring orientieren (GML-Pflicht + Solid-Manifold).
-        // extCCW → Innenring CW  (BL->TL->TR->BR)
-        // extCW  → Innenring CCW (BL->BR->TR->TL)
-        for (int d = 0; d < doorCount; d++) {
-            List<Point3D> rect = doorRectangles.get(d);
-            Point3D bl = rect.get(0);
-            Point3D br = rect.get(1);
-            Point3D tr = rect.get(2);
-            Point3D tl = rect.get(3);
-            List<Point3D> innerRing = extCCW
-                    ? List.of(bl, tl, tr, br)  // CW  (Standard: entgegen CCW-Aussenring)
-                    : List.of(bl, br, tr, tl); // CCW (Sachsen: entgegen CW-Aussenring)
-            wallPoly.getInterior().add(new AbstractRingProperty(
-                    CityGmlUtils.createLinearRing(innerRing)));
+        // Alle Tueren verworfen (Anbau-Verdeckung/Kontur)? → Wand unveraendert lassen
+        if (doorsPlaced == 0) {
+            return;
         }
 
-        // FACEAREA der Wand aktualisieren (Wandflaeche minus Tueroeffnungen)
-        double totalDoorArea = doorCount * doorWidth * doorHeight;
+        // FACEAREA der Wand aktualisieren (Wandflaeche minus tatsaechlich erzeugte Tueroeffnungen)
+        double totalDoorArea = doorsPlaced * doorWidth * doorHeight;
         CityGmlUtils.setStringAttribute(wall, "FACEAREA",
                 CityGmlUtils.formatNum(Math.max(0, wallAreaBefore - totalDoorArea)));
 
@@ -402,10 +331,12 @@ public class DoorGenerator {
 
     // ==================== Statistiken ====================
 
-    public static class GenerationStats {
-        public int buildingsProcessed = 0;
+    public static class GenerationStats extends AbstractGenerator.BaseStats {
         public int doorsCreated = 0;
         public int wallsModified = 0;
         public int wallsSkipped = 0;
+        public int doorsSkippedCovered = 0; // Tueren hinter Anbau verworfen
+        public int doorsSkippedOutside = 0; // Tueren ausserhalb der Wandkontur verworfen
+        public int wallsSkippedCoveredByPart = 0; // Wand geometrisch von anderem BuildingPart geteilt
     }
 }

@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<!-- saved from url=(0253)https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/?__frame_t=hdGWAMG3sXwG7JL1QwgXw6Eu.496403f9-da42-4e0a-ba29-4c304a19d44f.3dd59578-8284-448b-9059-d35d4f789301.1783464421&__frame_v=manifest.bd9446110d1c7761.json -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><!-- frame-runtime --><!--<base href="/_f/1783460780-7a01/">--><base href="."><script>window.__FRAME_PREAMBLE={"capabilities":{"mcp":"mcp.BQqQVVN_.js"},"transforms":"_transforms.DYk1Ltlh.js"}</script><script>(function(){"use strict";const X="modulepreload",Y=function(e){return"/"+e},Z={},U=function(t,n,u){let o=Promise.resolve();function i(f){const a=new Event("vite:preloadError",{cancelable:!0});if(a.payload=f,window.dispatchEvent(a),!a.defaultPrevented)throw f}return o.then(f=>{for(const a of f||[])a.status==="rejected"&&i(a.reason);return t().catch(i)})},D=["light","dark","system"];function $(e){if(e==null||typeof e!="object")return!1;const t=e.__frame_init;return t!=null&&typeof t=="object"}function q(e){if(e==null||typeof e!="object")return!1;const t=e.__frame_theme;if(t==null||typeof t!="object")return!1;const n=t.theme;return typeof n=="string"&&D.includes(n)}function M(e){if(window===top||e.type==="auxclick"&&e.button!==1)return;const t=e.composedPath?e.composedPath():[e.target];let n=null;for(let f=0;f<t.length;f++){const a=t[f];if(a&&a.matches&&a.matches("a[href],area[href]")){n=a;break}}if(!n&&e.target&&e.target.closest&&(n=e.target.closest("a[href],area[href]")),!n)return;const u=n.getAttribute("href");if(!u)return;let o,i;try{o=new URL(u,document.baseURI),i=new URL(document.baseURI).origin}catch{return}(o.protocol==="http:"||o.protocol==="https:")&&o.origin!==i&&(e.preventDefault(),parent.postMessage({__frame_nav:!0,url:o.href},"*"))}const L={};function y(e){if(window===top)return;const t=Date.now();t-(L[e]||0)<500||(L[e]=t,parent.postMessage({__frame_engaged:!0,kind:e},"*"))}const F=2e3,T=["wheel","touchstart","touchmove","keydown","pointerdown"];let k=0;function B(e){e.isTrusted&&(k=Date.now())}function z(){addEventListener("click",M,!0),addEventListener("auxclick",M,!0)}function W(){for(let e=0;e<T.length;e++)addEventListener(T[e],B,{capture:!0,passive:!0});addEventListener("scroll",e=>{e.isTrusted&&Date.now()-k<F&&y("scroll")},{capture:!0,passive:!0}),addEventListener("pointermove",e=>{e.isTrusted&&y("pointer")},{capture:!0,passive:!0}),addEventListener("click",e=>{e.isTrusted&&y("click")},{capture:!0,passive:!0})}function x(e,t,n){const u=[...t.values()].filter(o=>o.targets.some(i=>i.startsWith(e+".")));return{wrap(o,i){const f=`${e}.${o}`,a=u.filter(s=>s.targets.includes(f));return a.length===0?(...s)=>{try{return i(...s)}catch(d){return Promise.reject(d)}}:(...s)=>{let d=s;for(const c of a){const l=c.module.parameters;if(l)try{d=l(d)}catch{return Promise.reject({code:"transform_error",id:c.id,scope:e,message:"parameters transform failed"})}}let m;try{m=i(...d)}catch(c){m=Promise.reject(c)}return m.then(c=>{for(let l=a.length-1;l>=0;l--){const h=a[l],p=h.module.returns;if(p)try{c=p(c)}catch{return n({id:h.id,scope:e,leg:"returns"}),c}}return c},c=>{for(let l=a.length-1;l>=0;l--){const h=a[l],p=h.module.throws;if(p)try{c=p(c)}catch{return n({id:h.id,scope:e,leg:"throws"}),Promise.reject(c)}}return Promise.reject(c)})}}}}function H(e,t,n,u=()=>{}){const o=new Set(e.changes??[]),i=new Map;for(const f of o){const a=t[f];a&&i.set(f,a)}return{contract:e.contract,changes:o,flags:new Set(e.flags??[]),capabilities:e.capabilities??{},transforms:i,shellOrigin:n.shellOrigin,mount:n.mount,pipe:f=>x(f,i,u)}}(function(){const e=Object.defineProperty,t=globalThis,n=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let u=0;for(let o=0;o<n.length;o++){const i=n[o];try{e(t,i,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[i]}catch{}try{e(t,i,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[i]=="function"&&u++}if(u&&window!==top)try{parent.postMessage({__frame_rtc_lockdown_failed:u},"*")}catch{}})();const K=1e4,G=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function J(e){for(const t of G)if(t.endsWith(":*"))try{const n=new URL(e);if(`${n.protocol}//${n.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}const w=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities??{}}),E=window.__FRAME_PREAMBLE?.transforms,C=/^[\w.-]+\.js$/,V=/^[a-z][a-z0-9_-]{0,63}$/;let A=null,g=null;function P(e,t,n){try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!0,enumerable:!0})}catch{}}}let R=!1;function N(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,R=!0):R&&(delete t.dataset.theme,t.style.colorScheme="",R=!1)}const _=new Map;function Q(e,t){const n=_.get(e);if(!n)return;Object.assign(n.impl,t),n.impl.__settled=()=>Promise.reject({code:"capability_removed",message:`${e}: method not in this runtime`});const u=n.queue;n.queue=[];for(const o of u){const i=t[o.method];i?i(...o.args).then(o.resolve,o.reject):o.reject({code:"capability_removed",message:`${e}.${o.method} is not in this runtime`})}}function O(e,t){const n=_.get(e);if(!n)return;n.impl.__settled=()=>Promise.reject(t);const u=n.queue;n.queue=[];for(const o of u)o.reject(t)}const j=Object.getOwnPropertyDescriptor(window,"claude");if(window!==top&&!(j&&j.writable===!1)){z(),W();const e=j?.value??{};P(window,"claude",e);const t=s=>{const d={impl:Object.create(null),queue:[]};_.set(s,d);const m=new Proxy(d.impl,{get:(c,l)=>{if(typeof l=="string"&&!(l==="then"||l==="toJSON"||l==="valueOf"))return l==="toString"?Object.prototype.toString:(...h)=>{const p=c[l]??c.__settled;return p?p(...h):new Promise((b,S)=>{d.queue.push({method:l,args:h,resolve:b,reject:S})})}},set:()=>!1});P(e,s,m)};for(const s of Object.keys(w)){if(e[s]!==void 0){P(e,s,e[s]);continue}t(s)}let n=null,u=null,o=0;const i=s=>{s.source!==parent||!J(s.origin)||$(s.data)&&(n=s.data.__frame_init,g=s.origin,removeEventListener("message",i),clearTimeout(o),u?.())};addEventListener("message",i),parent.postMessage({__frame_connect:!0},"*");const f=new Promise(s=>{u=s,o=setTimeout(()=>{removeEventListener("message",i),s()},K)}),a=document.readyState==="loading"?new Promise(s=>document.addEventListener("DOMContentLoaded",()=>s(),{once:!0})):Promise.resolve();f.then(async()=>{if(!n||!g){for(const r of _.keys())O(r,{code:"not_granted",message:"frame initialization did not arrive - capability unavailable"});return}N(n.theme);const s=g;addEventListener("message",r=>{r.source!==parent||r.origin!==s||q(r.data)&&N(r.data.__frame_theme.theme)});const d=r=>U(()=>import("/_runtime/"+r),void 0),m=Object.keys(n.capabilities??{});for(const r of m)Object.hasOwn(w,r)||V.test(r)&&e[r]===void 0&&(t(r),O(r,{code:"capability_disabled",message:"capability not in this runtime generation"}));const c=m.filter(r=>Object.hasOwn(w,r)).map(r=>[r,w[r]]).filter(r=>typeof r[1]=="string"&&C.test(r[1])),[l,...h]=await Promise.allSettled([E&&C.test(E)?d(E):Promise.resolve({}),...c.map(([,r])=>d(r))]),p=g;A=H(n,l.status==="fulfilled"&&l.value?.TRANSFORMS||{},{shellOrigin:p,mount:Q},r=>parent.postMessage({__frame_cap_telemetry:r},p));const b=r=>parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:r}},p),S=A;h.forEach((r,v)=>{const I=c[v][0];if(r.status!=="fulfilled"){b(I);return}try{r.value?.install?.(S)}catch{b(I)}});for(const[r,v]of _)v.queue.length===0&&Object.keys(v.impl).length>0||O(r,{code:m.includes(r)?"capability_disabled":"not_granted",message:"capability not available in this session"});await a,parent.postMessage({__frame_ready:!0},g)})}})();</script><!-- /frame-runtime --><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>CityGmlHealer — Das Heilungsverfahren</title>
+<style>
+  :root {
+    --paper: #f5f6f3;
+    --paper-panel: #eceee9;
+    --paper-panel-border: #d6d9d2;
+    --ink: #1c2530;
+    --ink-muted: #5b6672;
+    --line: #d7dbd6;
+    --accent: #2b6c8f;
+    --accent-soft: #2b6c8f22;
+    --accent-contrast: #f5f6f3;
+    --ground: #8a6a45;
+    --ground-soft: #8a6a4522;
+    --wall: #5c6b78;
+    --wall-soft: #5c6b7822;
+    --roof: #a44f34;
+    --roof-soft: #a44f3422;
+    --shadow: 0 1px 2px rgba(20, 26, 32, 0.06), 0 6px 20px rgba(20, 26, 32, 0.05);
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #10161c;
+      --paper-panel: #161e26;
+      --paper-panel-border: #26313b;
+      --ink: #dde3e8;
+      --ink-muted: #8fa2ad;
+      --line: #263039;
+      --accent: #74bde3;
+      --accent-soft: #74bde322;
+      --accent-contrast: #0d1116;
+      --ground: #c99a63;
+      --ground-soft: #c99a6322;
+      --wall: #9fb2c0;
+      --wall-soft: #9fb2c022;
+      --roof: #e08a63;
+      --roof-soft: #e08a6322;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10161c;
+    --paper-panel: #161e26;
+    --paper-panel-border: #26313b;
+    --ink: #dde3e8;
+    --ink-muted: #8fa2ad;
+    --line: #263039;
+    --accent: #74bde3;
+    --accent-soft: #74bde322;
+    --accent-contrast: #0d1116;
+    --ground: #c99a63;
+    --ground-soft: #c99a6322;
+    --wall: #9fb2c0;
+    --wall-soft: #9fb2c022;
+    --roof: #e08a63;
+    --roof-soft: #e08a6322;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+  :root[data-theme="light"] {
+    --paper: #f5f6f3;
+    --paper-panel: #eceee9;
+    --paper-panel-border: #d6d9d2;
+    --ink: #1c2530;
+    --ink-muted: #5b6672;
+    --line: #d7dbd6;
+    --accent: #2b6c8f;
+    --accent-soft: #2b6c8f22;
+    --accent-contrast: #f5f6f3;
+    --ground: #8a6a45;
+    --ground-soft: #8a6a4522;
+    --wall: #5c6b78;
+    --wall-soft: #5c6b7822;
+    --roof: #a44f34;
+    --roof-soft: #a44f3422;
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-soft); }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+
+  code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  code {
+    background: var(--paper-panel);
+    border: 1px solid var(--paper-panel-border);
+    border-radius: 4px;
+    padding: 0.05em 0.4em;
+    font-size: 0.86em;
+    color: var(--ink);
+  }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    padding: 4.5rem 1.5rem 3rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero-inner { max-width: 920px; margin: 0 auto; }
+  .eyebrow {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.76rem;
+    color: var(--accent);
+    font-weight: 700;
+    margin: 0 0 0.9rem;
+  }
+  .hero h1 {
+    font-size: clamp(1.9rem, 4vw, 2.7rem);
+    margin: 0 0 0.9rem;
+    letter-spacing: -0.01em;
+  }
+  .hero p.lede {
+    max-width: 66ch;
+    font-size: 1.12rem;
+    color: var(--ink-muted);
+    margin: 0 0 0.4rem;
+  }
+  .hero .meta {
+    margin-top: 1.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+  }
+  .hero .meta b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.6rem 1.5rem 6rem;
+    display: grid;
+    grid-template-columns: 216px minmax(0, 1fr);
+    gap: 3.2rem;
+    align-items: start;
+  }
+  nav.toc {
+    position: sticky;
+    top: 1.6rem;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+  }
+  nav.toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-left: 1px solid var(--line);
+  }
+  nav.toc li { margin: 0; }
+  nav.toc a {
+    display: block;
+    padding: 0.42rem 0 0.42rem 0.9rem;
+    margin-left: -1px;
+    border-left: 2px solid transparent;
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+  nav.toc a:hover { color: var(--ink); border-left-color: var(--line); }
+  nav.toc .toc-num { font-family: var(--font-mono); color: var(--accent); margin-right: 0.5em; }
+  details.toc-mobile { display: none; }
+
+  main { min-width: 0; }
+
+  section.stage {
+    padding-top: 1rem;
+    margin-bottom: 4.4rem;
+    scroll-margin-top: 1.4rem;
+  }
+  section.stage:first-of-type { padding-top: 0; }
+
+  .stage-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    margin-bottom: 0.3rem;
+  }
+  .stage-num {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    width: 2.1rem;
+    height: 2.1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .stage-head h2 { margin: 0; font-size: 1.5rem; }
+  .stage-sub {
+    margin: 0 0 1.6rem 3rem;
+    color: var(--ink-muted);
+    font-family: var(--font-display);
+    font-size: 0.92rem;
+  }
+
+  .prose { max-width: 68ch; }
+  .prose p { margin: 0 0 1.05em; }
+  .prose ul, .prose ol { margin: 0 0 1.05em; padding-left: 1.3em; }
+  .prose li { margin-bottom: 0.4em; }
+  .prose strong { color: var(--ink); }
+
+  .callout {
+    max-width: 68ch;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 0.85rem 1.1rem;
+    border-radius: 0 6px 6px 0;
+    font-family: var(--font-display);
+    font-size: 0.92rem;
+    margin: 1.4rem 0;
+  }
+  .callout b { color: var(--accent); }
+
+  /* ---------- Figures ---------- */
+  figure.plate {
+    margin: 1.8rem 0 2rem;
+    border: 1px solid var(--paper-panel-border);
+    background: var(--paper-panel);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  figure.plate .plate-body {
+    padding: 1.2rem 1.4rem 0.6rem;
+    overflow-x: auto;
+  }
+  figure.plate svg { width: 100%; height: auto; display: block; min-width: 480px; }
+  figure.plate figcaption {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    padding: 0.7rem 1.4rem 0.9rem;
+    border-top: 1px dashed var(--paper-panel-border);
+  }
+  figure.plate figcaption b { color: var(--ink); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; margin: 0.9rem 0 1.6rem; font-family: var(--font-display); font-size: 0.82rem; color: var(--ink-muted); }
+  .legend .swatch { display: inline-flex; align-items: center; gap: 0.4em; }
+  .legend .chip { width: 0.8em; height: 0.8em; border-radius: 2px; display: inline-block; }
+
+  .code-ref { font-family: var(--font-mono); font-size: 0.76rem; color: var(--ink-muted); }
+
+  /* ---------- Pipeline hero diagram ---------- */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    margin: 2.2rem 0 0.4rem;
+    max-width: 760px;
+  }
+  .pipe-stage {
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 0.9rem;
+    padding: 0.85rem 0;
+  }
+  .pipe-num {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: 0.95rem;
+    padding-top: 0.15rem;
+  }
+  .pipe-card {
+    border: 1px solid var(--paper-panel-border);
+    background: var(--paper-panel);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+  }
+  .pipe-card h3 {
+    margin: 0 0 0.2rem;
+    font-size: 0.98rem;
+    font-family: var(--font-display);
+  }
+  .pipe-card p { margin: 0; font-size: 0.87rem; color: var(--ink-muted); font-family: var(--font-display); }
+  .pipe-connector {
+    grid-column: 1;
+    display: flex;
+    justify-content: center;
+    color: var(--line);
+    font-size: 1rem;
+    height: 0.6rem;
+    align-items: center;
+  }
+
+  table.flags {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    margin: 1rem 0 1.8rem;
+  }
+  table.flags th, table.flags td {
+    text-align: left;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+  }
+  table.flags th { font-family: var(--font-display); color: var(--ink-muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  footer.doc-end {
+    max-width: 68ch;
+    margin-top: 3rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--line);
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+  }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc.desktop { display: none; }
+    details.toc-mobile {
+      display: block;
+      margin-bottom: 2rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.7rem 1rem;
+      font-family: var(--font-display);
+    }
+    details.toc-mobile summary { cursor: pointer; font-weight: 600; }
+    details.toc-mobile ol { margin: 0.7rem 0 0; padding-left: 1.2rem; font-size: 0.9rem; }
+    figure.plate svg { min-width: 0; }
+  }
+</style>
+
+<header class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">CityGmlHealer · Interne Dokumentation</p>
+    <h1>Wie aus fehlerhaften LOD2-Gebäuden wieder geschlossene Solids werden</h1>
+    <p class="lede">
+      <code>BuildingPartSolid.TryHeal</code> nimmt ein CityGML-1.0-Gebäudeteil mit Lücken, doppelten Punkten,
+      nicht-planaren Flächen und Selbstüberschneidungen entgegen und liefert — wenn möglich —
+      ein topologisch geschlossenes, garantiert planares Solid zurück. Dieses Dokument beschreibt die
+      sieben Phasen dieser Pipeline im Detail: Deduplizierung, Ebenenbildung, Polygonreparatur,
+      Triangulation, Solidbildung und den kombinatorischen Ansatz zur Planaritätsgarantie.
+    </p>
+    <div class="meta">
+      <span><b>Einstieg:</b> BuildingPartSolid.cs</span>
+      <span><b>2D-Kern:</b> Topology2D/Partition.*</span>
+      <span><b>Modell:</b> net10.0, x64, SIMD (Vector128/256)</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc desktop" aria-label="Inhalt">
+    <ol>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#uebersicht"><span class="toc-num">00</span>Pipelineübersicht</a></li>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#deduplizierung"><span class="toc-num">01</span>Deduplizierung</a></li>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#ebenenbildung"><span class="toc-num">02</span>Ebenenbildung</a></li>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#polygonreparatur"><span class="toc-num">03</span>Polygonreparatur</a></li>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#triangulation"><span class="toc-num">04</span>Triangulation</a></li>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#solidbildung"><span class="toc-num">05</span>Solidbildung</a></li>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#planaritaet"><span class="toc-num">06</span>Planarität</a></li>
+      <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#fehlerbehandlung"><span class="toc-num">07</span>Fehlerbehandlung</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <details class="toc-mobile">
+      <summary>Inhalt</summary>
+      <ol>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#uebersicht">Pipelineübersicht</a></li>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#deduplizierung">Deduplizierung</a></li>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#ebenenbildung">Ebenenbildung</a></li>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#polygonreparatur">Polygonreparatur</a></li>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#triangulation">Triangulation</a></li>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#solidbildung">Solidbildung</a></li>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#planaritaet">Planarität</a></li>
+        <li><a href="https://40680216-a4a0-4bc3-9b7e-d28dbb7e1169.frame.claudeusercontent.com/_f/1783460780-7a01/#fehlerbehandlung">Fehlerbehandlung</a></li>
+      </ol>
+    </details>
+
+    <!-- ================= 00 UEBERSICHT ================= -->
+    <section class="stage" id="uebersicht">
+      <div class="stage-head"><span class="stage-num">00</span><h2>Pipelineübersicht</h2></div>
+      <p class="stage-sub">Sieben Phasen, ein <code>try/catch</code>, kein Werfen von Exceptions im Normalfall.</p>
+
+      <div class="prose">
+        <p>
+          Jeder Heilungsversuch beginnt und endet in <code>BuildingPartSolid.TryHeal</code>. Die Methode arbeitet
+          strikt sequenziell und bricht bei jedem Fehlschlag sauber mit <code>false</code> ab — das
+          unveränderte Original-<code>BuildingPart</code> bleibt dann erhalten. Ein äußeres
+          <code>try/catch</code> fängt zusätzlich unerwartete Exceptions ab, damit ein einzelnes
+          defektes Gebäudeteil nie den gesamten Batch-Lauf abbricht.
+        </p>
+      </div>
+
+      <div class="pipeline">
+        <div class="pipe-stage">
+          <div class="pipe-num">1</div>
+          <div class="pipe-card">
+            <h3>Rohpunkte sammeln</h3>
+            <p>Alle Ring-Punkte aller Surfaces (auch fehlerhafter Polygone) landen in einem flachen Puffer; pro Surface wird ihr Start-Offset gemerkt.</p>
+          </div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+          <div class="pipe-num">2</div>
+          <div class="pipe-card">
+            <h3>Global deduplizieren <span class="code-ref">→ Kapitel 01</span></h3>
+            <p>Vertex-Welding über den kompletten BuildingPart. Liefert den <code>Anchor</code> (globales Minimum), auf den fortan alle Punkte relativ gespeichert werden.</p>
+          </div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+          <div class="pipe-num">3</div>
+          <div class="pipe-card">
+            <h3>Je Surface: Ebene + 2D-Topologie <span class="code-ref">→ Kapitel 02 &amp; 03</span></h3>
+            <p>Best-Fit-Ebene bestimmen, Ring lokal bereinigen, per constrained Delaunay + Winding-Number zu einer sauberen Randkontur zusammensetzen.</p>
+          </div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+          <div class="pipe-num">4</div>
+          <div class="pipe-card">
+            <h3>Flächen verschmelzen <span class="code-ref">→ Kapitel 05</span></h3>
+            <p>Benachbarte, gleichartige und annähernd koplanare Surfaces (<code>MergeSurfaces</code>) werden zu einer Fläche zusammengefasst.</p>
+          </div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+          <div class="pipe-num">5</div>
+          <div class="pipe-card">
+            <h3>Löcher schließen &amp; orientieren <span class="code-ref">→ Kapitel 05</span></h3>
+            <p><code>FindHolesAndOrientSurfaces</code> fügt Ground/Wall/Roof über gemeinsame Kanten zu einem konsistent orientierten Solid zusammen und schließt verbleibende Lücken.</p>
+          </div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+          <div class="pipe-num">6</div>
+          <div class="pipe-card">
+            <h3>Punkte exakt auf ihre Ebenen projizieren <span class="code-ref">→ Kapitel 06</span></h3>
+            <p><code>RecalculatePoints</code> garantiert Planarität je Vertex — die eigentliche Besonderheit dieses Heilers.</p>
+          </div>
+        </div>
+        <div class="pipe-connector">↓</div>
+        <div class="pipe-stage">
+          <div class="pipe-num">7</div>
+          <div class="pipe-card">
+            <h3>Finales BuildingPart aufbauen <span class="code-ref">→ Kapitel 04 &amp; 07</span></h3>
+            <p>Jede Fläche wird ein letztes Mal trianguliert und als Polygon (oder Dreiecksfächer) exportiert; Fehler bleiben als Audit-Trail an den Originaldaten stehen.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 01 DEDUPLIZIERUNG ================= -->
+    <section class="stage" id="deduplizierung">
+      <div class="stage-head"><span class="stage-num">01</span><h2>Deduplizierung (Vertex Welding)</h2></div>
+      <p class="stage-sub"><code>CityGmlGeometry/Deduplication.cs</code> — transitives Verschmelzen benachbarter Punkte per Voxel-Grid und Union-Find.</p>
+
+      <div class="prose">
+        <p>
+          CityGML-Ringe wiederholen Eckpunkte, die eigentlich identisch sein sollten, aber durch
+          Rundungsfehler beim Export minimal auseinanderliegen — und benachbarte Flächen referenzieren
+          «denselben» Punkt oft mit leicht unterschiedlichen Koordinaten. Bevor irgendetwas
+          Geometrisches passiert, werden deshalb <strong>alle</strong> Rohpunkte eines BuildingPart in einem
+          einzigen Lauf verschmolzen.
+        </p>
+        <p>
+          Das Verfahren legt ein Voxel-Gitter der Kantenlänge <code>pointTolerance</code> an, sortiert alle
+          Punkte per SIMD-Bounding-Box-Scan dort ein und prüft je Punkt nur das eigene Voxel plus 13 der 26
+          Nachbarvoxel (die halbe Würfelumgebung reicht, weil jedes ungeordnete Punktpaar so genau einmal
+          betrachtet wird). Liegt ein Paar innerhalb der Toleranz, werden beide Punkte per Union-Find
+          verbunden.
+        </p>
+        <div class="callout">
+          <b>Wichtig:</b> Das Welding ist <em>transitiv</em>. A–B und B–C verschmilzt automatisch
+          auch A und C, selbst wenn <code>dist(A, C) &gt; pointTolerance</code> ist. Cluster-Durchmesser sind
+          damit prinzipiell unbeschränkt — die Toleranz sollte deshalb deutlich unter der kürzesten
+          legitimen Kantenlänge des Modells liegen.
+        </div>
+        <p>
+          Jedes entstandene Cluster wird zu seinem Schwerpunkt zusammengefasst und auf das durch
+          <code>--decimals</code> vorgegebene Rundungsgitter (relativ zur Bounding-Box) projiziert. Runden
+          zwei Cluster-Schwerpunkte zufällig auf denselben Gitterpunkt, werden auch sie zusammengelegt.
+          Das globale Minimum der Bounding-Box wird als <code>Anchor</code> zurückgegeben: Alle späteren
+          Berechnungen arbeiten Anchor-relativ, was bei großen UTM-artigen Absolutkoordinaten die
+          numerische Stabilität der Ebenen- und Schnittpunktberechnung deutlich verbessert.
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 250" role="img" aria-label="Voxel-Grid mit zwei Punkt-Clustern, die zu je einem Schwerpunkt verschmolzen werden">
+            <!-- panel A: raw voxel grid with clusters -->
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <!-- grid -->
+              <g stroke="var(--line)" stroke-width="1">
+                <line x1="30" y1="30" x2="30" y2="210"></line><line x1="70" y1="30" x2="70" y2="210"></line>
+                <line x1="110" y1="30" x2="110" y2="210"></line><line x1="150" y1="30" x2="150" y2="210"></line>
+                <line x1="190" y1="30" x2="190" y2="210"></line><line x1="230" y1="30" x2="230" y2="210"></line>
+                <line x1="30" y1="30" x2="230" y2="30"></line><line x1="30" y1="70" x2="230" y2="70"></line>
+                <line x1="30" y1="110" x2="230" y2="110"></line><line x1="30" y1="150" x2="230" y2="150"></line>
+                <line x1="30" y1="190" x2="230" y2="190"></line><line x1="30" y1="210" x2="230" y2="210"></line>
+              </g>
+              <!-- cluster A links: points connected -->
+              <g>
+                <line x1="88" y1="78" x2="104" y2="92" stroke="var(--accent)" stroke-width="1.4"></line>
+                <line x1="104" y1="92" x2="92" y2="108" stroke="var(--accent)" stroke-width="1.4"></line>
+                <line x1="88" y1="78" x2="92" y2="108" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="2 2"></line>
+                <circle cx="88" cy="78" r="4" fill="var(--ink)"></circle>
+                <circle cx="104" cy="92" r="4" fill="var(--ink)"></circle>
+                <circle cx="92" cy="108" r="4" fill="var(--ink)"></circle>
+              </g>
+              <!-- cluster B rechts: points connected -->
+              <g>
+                <line x1="165" y1="140" x2="182" y2="132" stroke="var(--accent)" stroke-width="1.4"></line>
+                <line x1="182" y1="132" x2="178" y2="158" stroke="var(--accent)" stroke-width="1.4"></line>
+                <circle cx="165" cy="140" r="4" fill="var(--ink)"></circle>
+                <circle cx="182" cy="132" r="4" fill="var(--ink)"></circle>
+                <circle cx="178" cy="158" r="4" fill="var(--ink)"></circle>
+              </g>
+              <text x="30" y="228" fill="var(--ink-muted)">Voxel-Raster (Kantenlänge = pointTolerance), Union-Find-Kanten in Akzentfarbe</text>
+              <text x="130" y="20" text-anchor="middle" fill="var(--ink-muted)">Rohpunkte</text>
+            </g>
+
+            <!-- arrow -->
+            <g stroke="var(--ink-muted)" stroke-width="1.6" fill="none">
+              <line x1="270" y1="120" x2="330" y2="120"></line>
+              <path d="M 322 113 L 330 120 L 322 127"></path>
+            </g>
+            <text x="300" y="105" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="var(--ink-muted)">Cluster→Schwerpunkt,</text>
+            <text x="300" y="140" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="var(--ink-muted)">auf Gitter gerundet</text>
+
+            <!-- panel B: reduced unique points -->
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <g stroke="var(--line)" stroke-width="1">
+                <line x1="380" y1="30" x2="380" y2="210"></line><line x1="420" y1="30" x2="420" y2="210"></line>
+                <line x1="460" y1="30" x2="460" y2="210"></line><line x1="500" y1="30" x2="500" y2="210"></line>
+                <line x1="540" y1="30" x2="540" y2="210"></line><line x1="580" y1="30" x2="580" y2="210"></line>
+                <line x1="380" y1="30" x2="580" y2="30"></line><line x1="380" y1="70" x2="580" y2="70"></line>
+                <line x1="380" y1="110" x2="580" y2="110"></line><line x1="380" y1="150" x2="580" y2="150"></line>
+                <line x1="380" y1="190" x2="580" y2="190"></line><line x1="380" y1="210" x2="580" y2="210"></line>
+              </g>
+              <circle cx="438" cy="93" r="6" fill="var(--accent)"></circle>
+              <circle cx="525" cy="143" r="6" fill="var(--accent)"></circle>
+              <text x="480" y="20" text-anchor="middle" fill="var(--ink-muted)">Eindeutige Punkte</text>
+              <text x="380" y="228" fill="var(--ink-muted)">Je Cluster genau ein Punkt, Anchor-relativ gespeichert</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Zwei räumlich benachbarte Punktwolken (links) werden per Union-Find transitiv zu je einem Schwerpunkt verschmolzen (rechts) — unabhängig davon, welche Surface sie ursprünglich referenziert hat.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ================= 02 EBENENBILDUNG ================= -->
+    <section class="stage" id="ebenenbildung">
+      <div class="stage-head"><span class="stage-num">02</span><h2>Ebenenbildung</h2></div>
+      <p class="stage-sub"><code>CityGmlGeometry/Plane/*</code> — robustes Ebenen-Fitting mit iterativer Ausreißer-Verwerfung, typspezifisch eingeschränkt.</p>
+
+      <div class="prose">
+        <p>
+          Für jede Surface wird zuerst eine Best-Fit-Ebene durch ihre (deduplizierten) Kandidatenpunkte gelegt.
+          Welche Art Ebene zulässig ist, richtet sich nach dem CityGML-Flächentyp — das ist zugleich
+          eine Robustheits-Maßnahme, weil sie den Freiheitsgrad der Ebene auf das einschränkt, was für
+          diesen Bauteiltyp physikalisch sinnvoll ist:
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 190" role="img" aria-label="Drei Ebenentypen: Horizontal, Vertikal, Allgemein">
+            <g font-family="ui-monospace, monospace" font-size="11">
+              <!-- horizontal -->
+              <g>
+                <ellipse cx="100" cy="120" rx="70" ry="20" fill="var(--ground-soft)" stroke="var(--ground)" stroke-width="1.6"></ellipse>
+                <line x1="100" y1="120" x2="100" y2="60" stroke="var(--ink)" stroke-width="1.6"></line>
+                <path d="M 95 68 L 100 58 L 105 68" fill="none" stroke="var(--ink)" stroke-width="1.6"></path>
+                <text x="100" y="45" text-anchor="middle" fill="var(--ink)">Horizontal</text>
+                <text x="100" y="160" text-anchor="middle" fill="var(--ink-muted)">Ground</text>
+                <text x="100" y="175" text-anchor="middle" fill="var(--ink-muted)">N fix = (0,0,±1)</text>
+              </g>
+              <!-- vertical -->
+              <g>
+                <rect x="255" y="70" width="90" height="60" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.6" transform="skewX(-18)"></rect>
+                <line x1="345" y1="100" x2="400" y2="100" stroke="var(--ink)" stroke-width="1.6" transform="translate(-40,0)"></line>
+                <line x1="300" y1="100" x2="345" y2="88" stroke="var(--ink)" stroke-width="1.6"></line>
+                <path d="M 337 82 L 347 88 L 338 94" fill="none" stroke="var(--ink)" stroke-width="1.6"></path>
+                <text x="300" y="45" text-anchor="middle" fill="var(--ink)">Vertikal</text>
+                <text x="300" y="160" text-anchor="middle" fill="var(--ink-muted)">Wall</text>
+                <text x="300" y="175" text-anchor="middle" fill="var(--ink-muted)">N ∈ XY-Ebene</text>
+              </g>
+              <!-- general -->
+              <g>
+                <polygon points="470,110 560,95 575,140 485,155" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.6"></polygon>
+                <line x1="520" y1="120" x2="548" y2="70" stroke="var(--ink)" stroke-width="1.6"></line>
+                <path d="M 538 74 L 549 69 L 546 81" fill="none" stroke="var(--ink)" stroke-width="1.6"></path>
+                <text x="520" y="45" text-anchor="middle" fill="var(--ink)">Allgemein</text>
+                <text x="520" y="160" text-anchor="middle" fill="var(--ink-muted)">Roof</text>
+                <text x="520" y="175" text-anchor="middle" fill="var(--ink-muted)">N frei (PCA/Jacobi)</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+        <figcaption><b>HorizontalPlane</b> für Ground (Normale starr (0,0,±1)), <b>VerticalPlane</b> für Wall (Normale liegt starr in der XY-Ebene, beliebiger Azimut), <b>GeneralPlane</b> für Roof (freie Normale über Eigenwertzerlegung der Kovarianzmatrix, Jacobi-Verfahren in <code>GeneralPlane.SolveJacobi</code>).</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Der Fit selbst läuft wie ein schlankes RANSAC: Aus allen Kandidatenpunkten wird eine Ebene
+          berechnet (bei drei Punkten direkt über das Kreuzprodukt, sonst über die kleinste
+          Eigenrichtung der Kovarianzmatrix). Liegt ein Punkt weiter als <code>PlaneThreshold</code> von
+          dieser Ebene entfernt, wird der am weitesten entfernte als Ausreißer markiert, entfernt und neu
+          gefittet — iterativ, bis kein Ausreißer mehr übrig ist oder mehr als ein Drittel der
+          Punkte (<code>MaxOutliersRatio</code>) verworfen werden müsste, in welchem Fall die Fläche als
+          <code>SurfaceError.NotPlanar</code> scheitert.
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 170" role="img" aria-label="Iterative Ausreisser-Verwerfung beim Ebenen-Fit">
+            <g font-family="ui-monospace, monospace" font-size="11">
+              <line x1="40" y1="120" x2="280" y2="95" stroke="var(--roof)" stroke-width="1.6"></line>
+              <circle cx="60" cy="116" r="4" fill="var(--ink)"></circle>
+              <circle cx="110" cy="110" r="4" fill="var(--ink)"></circle>
+              <circle cx="160" cy="106" r="4" fill="var(--ink)"></circle>
+              <circle cx="210" cy="100" r="4" fill="var(--ink)"></circle>
+              <circle cx="255" cy="97" r="4" fill="var(--ink)"></circle>
+              <circle cx="150" cy="55" r="4.5" fill="var(--ink)" stroke="var(--ink)"></circle>
+              <line x1="150" y1="55" x2="153" y2="107" stroke="var(--ink-muted)" stroke-width="1.2" stroke-dasharray="3 3"></line>
+              <text x="160" y="45" fill="var(--ink-muted)">Abstand &gt; PlaneThreshold → Ausreißer</text>
+              <text x="150" y="140" text-anchor="middle" fill="var(--ink-muted)">Fit über alle Kandidaten</text>
+            </g>
+            <g stroke="var(--ink-muted)" stroke-width="1.6" fill="none">
+              <line x1="320" y1="90" x2="370" y2="90"></line>
+              <path d="M 362 83 L 370 90 L 362 97"></path>
+            </g>
+            <text x="345" y="75" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="var(--ink-muted)">Refit</text>
+            <g font-family="ui-monospace, monospace" font-size="11">
+              <line x1="410" y1="118" x2="600" y2="97" stroke="var(--roof)" stroke-width="1.6"></line>
+              <circle cx="425" cy="115" r="4" fill="var(--ink)"></circle>
+              <circle cx="465" cy="110" r="4" fill="var(--ink)"></circle>
+              <circle cx="505" cy="106" r="4" fill="var(--ink)"></circle>
+              <circle cx="545" cy="101" r="4" fill="var(--ink)"></circle>
+              <circle cx="585" cy="97" r="4" fill="var(--ink)"></circle>
+              <circle cx="510" cy="55" r="4.5" fill="none" stroke="var(--ink-muted)" stroke-width="1.4"></circle>
+              <text x="520" y="45" fill="var(--ink-muted)">verworfen</text>
+              <text x="500" y="140" text-anchor="middle" fill="var(--ink-muted)">stabile Ebene, Punkt in OutlierIndices</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Ausreißer werden nicht gelöscht, sondern in <code>OutlierIndices</code> geführt (getrennt von <code>PointIndices</code>) — das ermöglicht später einen vollständigen Refit beim Verschmelzen zweier Flächen (<code>TryMerge</code>), ohne diese Information neu ermitteln zu müssen.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Zwei Ebenen gelten als koplanar, wenn der Kosinus ihres Diederwinkels über <code>0.7071</code>
+          liegt (≤&nbsp;45°, <code>IPlane.DiHedralAngleCosTo</code>) — die Schwelle, die
+          <code>MergeSurfaces</code> in Kapitel&nbsp;05 verwendet, um künstlich aufgeteilte
+          Fassaden-/Dachteile wiederzuerkennen.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= 03 POLYGONREPARATUR ================= -->
+    <section class="stage" id="polygonreparatur">
+      <div class="stage-head"><span class="stage-num">03</span><h2>Polygonreparatur</h2></div>
+      <p class="stage-sub"><code>PolygonPure2DCleaner</code> + <code>SurfaceCheck</code>/<code>Partition</code> — lokale Bereinigung, dann topologische Rekonstruktion in der 2D-Ebene.</p>
+
+      <div class="prose">
+        <p>
+          Sobald eine Ebene feststeht, werden alle Ringe der Surface auf sie projiziert
+          (<code>IPlane.ProjectToLocal</code>) und lokal bereinigt, bevor irgendetwas trianguliert wird.
+          <code>PolygonPure2DCleaner.CleanPolygon2D</code> läuft den Ring einmal ab und fasst
+          aufeinanderfolgende Punkte, die innerhalb der Punkttoleranz auf derselben wachsenden Linie liegen
+          — Duplikate ebenso wie fast-kollineare Zwischenpunkte — zu Liniensegmenten zusammen. Die
+          finalen Eckpunkte entstehen anschließend aus den Schnittpunkten benachbarter Segmente, nicht aus
+          den Originalpunkten selbst.
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 220" role="img" aria-label="Bereinigung eines verrauschten Polygonrandes">
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <polygon points="60,150 66,148 90,60 150,58 148,64 210,150 130,180 68,152" fill="none" stroke="var(--ink-muted)" stroke-width="1.4" stroke-dasharray="3 3"></polygon>
+              <circle cx="60" cy="150" r="3" fill="var(--ink)"></circle><circle cx="66" cy="148" r="3" fill="var(--ink)"></circle>
+              <circle cx="90" cy="60" r="3" fill="var(--ink)"></circle><circle cx="150" cy="58" r="3" fill="var(--ink)"></circle>
+              <circle cx="148" cy="64" r="3" fill="var(--ink)"></circle><circle cx="210" cy="150" r="3" fill="var(--ink)"></circle>
+              <circle cx="130" cy="180" r="3" fill="var(--ink)"></circle><circle cx="68" cy="152" r="3" fill="var(--ink)"></circle>
+              <text x="135" y="205" text-anchor="middle" fill="var(--ink-muted)">Duplikate &amp; Fast-Kollinearpunkte</text>
+            </g>
+            <g stroke="var(--ink-muted)" stroke-width="1.6" fill="none">
+              <line x1="255" y1="115" x2="305" y2="115"></line>
+              <path d="M 297 108 L 305 115 L 297 122"></path>
+            </g>
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <polygon points="345,148 375,58 440,58 470,148" fill="var(--roof-soft)" stroke="var(--accent)" stroke-width="1.8"></polygon>
+              <circle cx="345" cy="148" r="3.5" fill="var(--accent)"></circle><circle cx="375" cy="58" r="3.5" fill="var(--accent)"></circle>
+              <circle cx="440" cy="58" r="3.5" fill="var(--accent)"></circle><circle cx="470" cy="148" r="3.5" fill="var(--accent)"></circle>
+              <text x="407" y="205" text-anchor="middle" fill="var(--ink-muted)">Segment-Schnittpunkte = neue Ecken</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Der Nahtpunkt bei Ring-Index&nbsp;0 wird per Nachlauf-Check gesondert behandelt, damit der willkürliche Startpunkt keine echte Kante künstlich in zwei Segmente zerschneidet.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Die bereinigten Randkanten aller Ringe einer Surface gehen anschließend als Constraints in
+          <code>SurfaceCheck.TryCreatePolygonPatch</code>: Auf einem <strong>Ganzzahl-Raster</strong> (dazu mehr
+          in Kapitel&nbsp;04) entsteht zuerst eine freie Delaunay-Triangulation aller Punkte, dann werden die
+          Randkanten als feste (<code>IsFixed</code>) Kanten eingefügt. Anschließend klassifiziert eine
+          <strong>Winding-Number-Flutung</strong> von der äußeren Face aus jede Dreiecksfläche: Jede
+          überquerte feste Kante ändert die Winding-Number um ±1, je nach Richtung. Flächen mit
+          Winding-Number&nbsp;0 liegen außerhalb aller Ringe, alles andere zählt als «innen».
+        </p>
+        <p>
+          Dieser Mechanismus löst gleich mehrere Problemklassen auf einmal: mehrere Ringe (Löcher),
+          sich selbst überschneidende Randpolygone und überlappende Polygonteile — ohne dass eine
+          dieser Fälle gesondert erkannt werden muss. Ergibt sich mehr als eine große zusammenhängende
+          Komponente (die größte deckt weniger als 90&nbsp;% der Gesamtfläche ab,
+          <code>AreaRatioTolerance</code>), gilt die Fläche als nicht automatisch reparierbar
+          (<code>SurfaceError.Decomposed</code>).
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 230" role="img" aria-label="Winding-Number-Klassifizierung an einer sich selbst ueberschneidenden Kontur">
+            <g font-family="ui-monospace, monospace" font-size="11">
+              <polygon points="80,180 260,180 260,60 170,140 80,60" fill="var(--accent-soft)"></polygon>
+              <polygon points="170,140 260,180 260,60" fill="var(--accent)" opacity="0.55"></polygon>
+              <polygon points="80,180 260,180 260,60 170,140 80,60" fill="none" stroke="var(--ink)" stroke-width="1.8"></polygon>
+              <line x1="80" y1="60" x2="170" y2="140" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#arrow)"></line>
+              <line x1="170" y1="140" x2="260" y2="60" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#arrow)"></line>
+              <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--ink)"></path></marker>
+              </defs>
+              <text x="110" y="120" fill="var(--ink)" font-weight="700">+1</text>
+              <text x="210" y="110" fill="var(--ink)" font-weight="700">+2</text>
+              <text x="40" y="30" fill="var(--ink-muted)">0 (Exterior)</text>
+              <text x="150" y="205" text-anchor="middle" fill="var(--ink-muted)">Feste (Constraint-)Kanten in Umlaufrichtung, Winding-Number je Face annotiert</text>
+            </g>
+            <g font-family="ui-monospace, monospace" font-size="11" transform="translate(340,0)">
+              <text x="0" y="30" fill="var(--ink)">Face-Auswahl (<tspan fill="var(--accent)">GetPolygonFaces</tspan>):</text>
+              <text x="0" y="60" fill="var(--ink-muted)">• Winding-Number ≠ 0 → „innen“</text>
+              <text x="0" y="85" fill="var(--ink-muted)">• größte zusammenhängende</text>
+              <text x="16" y="105" fill="var(--ink-muted)">Komponente gewinnt</text>
+              <text x="0" y="130" fill="var(--ink-muted)">• zweite große Komponente</text>
+              <text x="16" y="150" fill="var(--ink-muted)">(≥10% Fläche) → Decomposed</text>
+              <text x="0" y="185" fill="var(--ink-muted)">Löst gleichzeitig: Löcher,</text>
+              <text x="0" y="205" fill="var(--ink-muted)">Selbstüberschneidung, Überlappung</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><code>Partition.ClassifyFaces</code> flutet levelweise vom <code>Exterior</code>-Face; jede fixierte Kante ändert die Winding-Number der jenseitigen Face um ±1. Aus den Grenzkanten der gewählten Komponente rekonstruiert <code>GetComponentRings</code> die finale, kollinear-bereinigte Randkontur.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ================= 04 TRIANGULATION ================= -->
+    <section class="stage" id="triangulation">
+      <div class="stage-head"><span class="stage-num">04</span><h2>Triangulation</h2></div>
+      <p class="stage-sub"><code>Topology2D/Partition.*</code> — inkrementelle constrained Delaunay-Triangulation auf einem exakten Ganzzahl-Raster.</p>
+
+      <div class="prose">
+        <p>
+          Der 2D-Kern ist eine klassische <strong>Halbkanten-Struktur (DCEL)</strong>: jede Kante besteht aus
+          zwei <code>HalfEdge</code>s mit <code>Next</code>/<code>Prev</code>/<code>Twin</code>/<code>Face</code>-Zeigern.
+          Koordinaten werden vorab auf ein Ganzzahl-Raster skaliert (<code>Partition.TryDetermineGridScale</code>,
+          standardmäßig 10× feiner als die Punkttoleranz), damit Orientierungs- und Schnitttests exakt
+          statt gleitkomma-approximiert laufen — ausschlaggebend, um bei degenerierten Eingaben nicht durch
+          Rundungsfehler eine inkonsistente Topologie zu erzeugen.
+        </p>
+      </div>
+
+      <div class="legend">
+        <span class="swatch"><span class="chip" style="background:var(--ink)"></span>Vertex (Ganzzahl-Raster)</span>
+        <span class="swatch"><span class="chip" style="background:var(--accent)"></span>neu eingefügter Punkt</span>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 210" role="img" aria-label="Punktinsertion: Split eines Dreiecks vs Split einer Kante">
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <polygon points="60,170 200,170 130,50" fill="none" stroke="var(--ink)" stroke-width="1.4"></polygon>
+              <circle cx="130" cy="130" r="4.5" fill="var(--accent)"></circle>
+              <line x1="130" y1="130" x2="60" y2="170" stroke="var(--accent)" stroke-width="1.2"></line>
+              <line x1="130" y1="130" x2="200" y2="170" stroke="var(--accent)" stroke-width="1.2"></line>
+              <line x1="130" y1="130" x2="130" y2="50" stroke="var(--accent)" stroke-width="1.2"></line>
+              <circle cx="60" cy="170" r="3.5" fill="var(--ink)"></circle><circle cx="200" cy="170" r="3.5" fill="var(--ink)"></circle><circle cx="130" cy="50" r="3.5" fill="var(--ink)"></circle>
+              <text x="130" y="195" text-anchor="middle" fill="var(--ink-muted)">Punkt im Inneren → SplitTriangle (3 Dreiecke)</text>
+            </g>
+            <g font-family="ui-monospace, monospace" font-size="10" transform="translate(320,0)">
+              <polygon points="130,50 60,120 200,120" fill="none" stroke="var(--ink)" stroke-width="1.4"></polygon>
+              <polygon points="60,120 200,120 130,190" fill="none" stroke="var(--ink)" stroke-width="1.4"></polygon>
+              <line x1="130" y1="50" x2="130" y2="120" stroke="var(--accent)" stroke-width="1.2"></line>
+              <line x1="130" y1="190" x2="130" y2="120" stroke="var(--accent)" stroke-width="1.2"></line>
+              <circle cx="130" cy="120" r="4.5" fill="var(--accent)"></circle>
+              <circle cx="130" cy="50" r="3.5" fill="var(--ink)"></circle><circle cx="60" cy="120" r="3.5" fill="var(--ink)"></circle>
+              <circle cx="200" cy="120" r="3.5" fill="var(--ink)"></circle><circle cx="130" cy="190" r="3.5" fill="var(--ink)"></circle>
+              <text x="130" y="205" text-anchor="middle" fill="var(--ink-muted)">Punkt auf Kante → SplitHalfedge (4 Dreiecke)</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><code>InsertPoint</code> lokalisiert das enthaltende Dreieck per Kanten-Walk ab der zuletzt eingefügten Position, teilt es (oder die gefundene Kante) und stellt die Delaunay-Bedingung anschließend lokal wieder her (<code>EnforceDelaunay</code>). Punkte außerhalb der konvexen Hülle erweitern diese stattdessen (<code>ExtendTriangle</code>/<code>CloseIfConcave</code>).</figcaption>
+      </figure>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 420 210" role="img" aria-label="Delaunay Edge-Flip eines Vierecks">
+            <g font-family="ui-monospace, monospace" font-size="12">
+              <polygon points="150,40 90,110 150,180" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.6"></polygon>
+              <polygon points="150,40 210,110 150,180" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.6"></polygon>
+              <line x1="150" y1="40" x2="150" y2="180" stroke="var(--ink)" stroke-width="2.2"></line>
+              <circle cx="150" cy="40" r="3.5" fill="var(--ink)"></circle><circle cx="90" cy="110" r="3.5" fill="var(--ink)"></circle>
+              <circle cx="150" cy="180" r="3.5" fill="var(--ink)"></circle><circle cx="210" cy="110" r="3.5" fill="var(--ink)"></circle>
+              <text x="150" y="30" text-anchor="middle" fill="var(--ink)">c</text>
+              <text x="78" y="114" text-anchor="middle" fill="var(--ink)">a</text>
+              <text x="150" y="198" text-anchor="middle" fill="var(--ink)">d</text>
+              <text x="222" y="114" text-anchor="middle" fill="var(--ink)">b</text>
+              <text x="150" y="205" text-anchor="middle" fill="var(--ink-muted)" font-size="10">vorher: Kante a–b</text>
+            </g>
+            <g stroke="var(--ink-muted)" stroke-width="1.6" fill="none">
+              <line x1="230" y1="105" x2="270" y2="105"></line>
+              <path d="M 262 98 L 270 105 L 262 112"></path>
+            </g>
+            <text x="250" y="90" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="var(--ink-muted)">FlipSide</text>
+            <g font-family="ui-monospace, monospace" font-size="12" transform="translate(150,0)">
+              <polygon points="150,40 90,110 210,110" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.6"></polygon>
+              <polygon points="90,110 150,180 210,110" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.6"></polygon>
+              <line x1="90" y1="110" x2="210" y2="110" stroke="var(--ink)" stroke-width="2.2"></line>
+              <circle cx="150" cy="40" r="3.5" fill="var(--ink)"></circle><circle cx="90" cy="110" r="3.5" fill="var(--ink)"></circle>
+              <circle cx="150" cy="180" r="3.5" fill="var(--ink)"></circle><circle cx="210" cy="110" r="3.5" fill="var(--ink)"></circle>
+              <text x="150" y="30" text-anchor="middle" fill="var(--ink)">c</text>
+              <text x="78" y="114" text-anchor="middle" fill="var(--ink)">a</text>
+              <text x="150" y="198" text-anchor="middle" fill="var(--ink)">d</text>
+              <text x="222" y="114" text-anchor="middle" fill="var(--ink)">b</text>
+              <text x="150" y="205" text-anchor="middle" fill="var(--ink-muted)" font-size="10">nachher: Kante c–d</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Ein Flip ersetzt die Diagonale a–b eines Vierecks abcd durch c–d. <code>EnforceDelaunay</code> flippt so lange, wie <code>MustFlipDelaunay</code> (leerer Umkreis verletzt) es verlangt; <code>TryClearSegmentPath</code> nutzt denselben Mechanismus ohne Delaunay-Kriterium, nur um Kreuzungen mit einem einzufügenden Constraint-Segment aufzulösen. Fixierte oder außen liegende Kanten werden nie geflippt.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Randkanten (aus Kapitel&nbsp;03) werden als <strong>Constraints</strong> eingefügt. Zuerst versucht
+          <code>TryConstraintSegment</code>, den Weg von Quell- zu Zielpunkt allein durch Flippen
+          kreuzender Kanten frei zu räumen — ohne einen einzigen neuen Punkt einzufügen. Erst wenn eine
+          kreuzende Kante selbst fixiert (also nicht flippbar) ist, kommt
+          <code>InsertConstraintSegment</code> zum Einsatz: Es berechnet den exakten Schnittpunkt und splittet
+          beide betroffenen Kanten dort.
+        </p>
+        <p>
+          Dieser Schnittpunkt liegt so gut wie nie exakt auf dem Ganzzahl-Raster. Anstatt die
+          zugrunde liegende Ganzzahl-Triangulation dadurch zu verfälschen, hält die Partition ihn als
+          <strong>exakte rationale Position</strong> (<code>Fraction</code>, 64-Bit-Zähler/Nenner,
+          überlaufsicher per Stern-Brocot-Vergleich) entlang der ursprünglichen Ganzzahl-Kante — als
+          <code>SubVertex</code>/<code>SubHalfEdge</code>. So bleibt die Ganzzahl-Topologie exakt, während
+          beliebig viele Schnittpunkte präzise auf derselben Kante koexistieren können.
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 200" role="img" aria-label="Constraint-Segment mit exaktem Fraction-Schnittpunkt">
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <!-- mesh -->
+              <line x1="40" y1="150" x2="180" y2="40" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="40" y1="150" x2="220" y2="150" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="180" y1="40" x2="220" y2="150" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="180" y1="40" x2="330" y2="60" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="220" y1="150" x2="330" y2="60" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="220" y1="150" x2="380" y2="150" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="330" y1="60" x2="380" y2="150" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="330" y1="60" x2="470" y2="45" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="380" y1="150" x2="470" y2="45" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="380" y1="150" x2="540" y2="150" stroke="var(--line)" stroke-width="1.2"></line>
+              <line x1="470" y1="45" x2="540" y2="150" stroke="var(--line)" stroke-width="1.2"></line>
+              <!-- constraint -->
+              <line x1="60" y1="130" x2="560" y2="100" stroke="var(--accent)" stroke-width="2.2"></line>
+              <circle cx="60" cy="130" r="4" fill="var(--accent)"></circle>
+              <circle cx="560" cy="100" r="4" fill="var(--accent)"></circle>
+              <!-- flip marker -->
+              <circle cx="220" cy="150" r="0"></circle>
+              <g transform="translate(230,112)">
+                <path d="M -10,-6 A 12 12 0 1 1 -10,6" fill="none" stroke="var(--ink)" stroke-width="1.4" marker-end="url(#arrow2)"></path>
+                <defs><marker id="arrow2" markerWidth="7" markerHeight="7" refX="4" refY="2" orient="auto"><path d="M0,0 L5,2 L0,4 z" fill="var(--ink)"></path></marker></defs>
+              </g>
+              <text x="230" y="90" text-anchor="middle" fill="var(--ink-muted)">flippbar</text>
+              <!-- split marker -->
+              <circle cx="470" cy="114" r="5" fill="none" stroke="var(--roof)" stroke-width="2"></circle>
+              <text x="470" y="135" text-anchor="middle" fill="var(--roof)" font-weight="700">7/12</text>
+              <text x="470" y="20" text-anchor="middle" fill="var(--ink-muted)">fixierte Kante → Split bei exakter Fraction-Position</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Kreuzende, nicht fixierte Kanten (links) werden weggeflippt; trifft das Constraint-Segment auf eine bereits fixierte Kante (rechts, <code>7/12</code>), wird stattdessen exakt dort gesplittet — <code>SplitSubHalfEdge</code>/<code>SplitFacet</code> in <code>Partition.Reconstruction.cs</code>.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Entfernt die anschließende Randring-Extraktion (Kapitel&nbsp;03) kollineare Punkte oder entstehen
+          durch Splits neue Vertices, ändert sich die Adjazenz grundlegend genug, dass
+          <code>SurfaceCheck.TryInner</code> die komplette Triangulation mit den bereinigten Punkten neu
+          aufbaut — rekursiv, mit einem Kontingent von maximal fünf Versuchen, bis ein stabiler Zustand
+          erreicht ist.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= 05 SOLIDBILDUNG ================= -->
+    <section class="stage" id="solidbildung">
+      <div class="stage-head"><span class="stage-num">05</span><h2>Solidbildung</h2></div>
+      <p class="stage-sub"><code>BuildingPartSolid.cs</code> — einzelne Flächen-Contouren zu einem geschlossenen, konsistent orientierten Solid zusammensetzen.</p>
+
+      <div class="legend">
+        <span class="swatch"><span class="chip" style="background:var(--ground)"></span>Ground</span>
+        <span class="swatch"><span class="chip" style="background:var(--wall)"></span>Wall</span>
+        <span class="swatch"><span class="chip" style="background:var(--roof)"></span>Roof</span>
+      </div>
+
+      <div class="prose">
+        <p>
+          Bis hierhin wurde jede Surface isoliert behandelt. Zwei Schritte führen sie zu einem
+          zusammenhängenden Solid zusammen:
+        </p>
+        <p>
+          <strong>MergeSurfaces</strong> vergleicht jede Fläche paarweise mit allen flächenmäßig
+          «früheren» Flächen desselben Typs. Sind sie topologisch benachbart
+          (<code>SurfaceContour.IsConnected</code>) und annähernd koplanar (Diederwinkel ≤ 45°, siehe
+          Kapitel&nbsp;02), wird eine gemeinsame Ebene über beide Punktmengen gefittet und ihre Randkonturen
+          per <code>SurfaceCheck.TryMergePolygonEdges</code> zu einer einzigen Kontur verschmolzen — erneut
+          über dieselbe constrained-Delaunay/Winding-Number-Pipeline aus Kapitel&nbsp;03, diesmal im
+          <em>Union</em>-Modus, der zwingend nur ein Vorzeichen der Winding-Number zulässt. Das reduziert
+          künstlich in mehrere Polygone aufgeteilte, in Wirklichkeit durchgehende Fassaden- oder Dachteile auf
+          eine Fläche, bevor Lücken gesucht werden.
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 260" role="img" aria-label="Zusammensetzen von Ground, Wall und Roof zu einem geschlossenen Solid">
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <!-- ground -->
+              <polygon points="140,210 380,210 440,235 200,235" fill="var(--ground-soft)" stroke="var(--ground)" stroke-width="1.8"></polygon>
+              <!-- walls -->
+              <polygon points="140,210 380,210 380,90 140,90" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.8"></polygon>
+              <polygon points="380,210 440,235 440,115 380,90" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.8" opacity="0.85"></polygon>
+              <!-- roof -->
+              <polygon points="140,90 380,90 440,115 200,115" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.8"></polygon>
+              <!-- shared edge arrows -->
+              <g stroke="var(--ink)" stroke-width="1.2" fill="none">
+                <line x1="160" y1="210" x2="160" y2="220" stroke-dasharray="2 2"></line>
+                <line x1="360" y1="210" x2="360" y2="220" stroke-dasharray="2 2"></line>
+              </g>
+              <text x="260" y="252" text-anchor="middle" fill="var(--ink-muted)">gemeinsame Kanten → OrientedEdge-Matching (Wall ↔ Ground, Wall ↔ Roof)</text>
+              <text x="30" y="150" fill="var(--ink-muted)" transform="rotate(-90 30 150)">shared edges</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Der Walk in <code>FindHolesAndOrientSurfaces</code> beginnt bei einer Ground-Fläche, sucht dann Walls (Grounds sind nur über Walls erreichbar), dann restliche Grounds, zuletzt Roofs. Jede neu angehängte Fläche konsumiert passende Kanten aus dem laufenden <code>edges</code>-Dictionary — passt eine Kante nur umgekehrt, wird die Fläche (samt ihrer Ebene) geflippt, um konsistent zu bleiben.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Vorher gleicht <code>AddCollinearPoints</code> T-Stöße aus: liegt ein Eckpunkt einer Nachbarfläche
+          exakt auf einer Kante der aktuellen Kontur, wird diese Kante dort gesplittet — sonst könnten
+          zwei eigentlich zusammenpassende Ränder nie Kante-für-Kante übereinstimmen.
+        </p>
+        <p>
+          Was am Ende übrig bleibt, sind Randkanten, die keine Gegenkante gefunden haben — echte Lücken.
+          <code>RingFinder.TryExtractSafeRings</code> setzt daraus geschlossene Ringe zusammen, aber
+          <em>nur</em> dort, wo jeder durchlaufene Vertex höchstens einen ein- und einen ausgehenden
+          Kandidaten hat; an nicht-mannigfaltigen Verzweigungen bleiben die Kanten bewusst unangetastet, statt
+          eine möglicherweise falsche Ringzuordnung zu raten. Jeder gefundene Ring wird entweder als inneres
+          Loch einer bestehenden Fläche erkannt (liegt er innerhalb der Ebenentoleranz auf ihr) oder als
+          <strong>neue Roof-Fläche</strong> angelegt — eine tatsächliche Lücke, die geschlossen werden
+          musste.
+        </p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 190" role="img" aria-label="Uebrige Randkanten werden zu einem Ring geschlossen und als neue Flaeche ergaenzt">
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <polygon points="70,150 210,150 260,60 130,45" fill="none" stroke="var(--ink-muted)" stroke-width="1.6" stroke-dasharray="5 4"></polygon>
+              <circle cx="70" cy="150" r="3.5" fill="var(--ink)"></circle><circle cx="210" cy="150" r="3.5" fill="var(--ink)"></circle>
+              <circle cx="260" cy="60" r="3.5" fill="var(--ink)"></circle><circle cx="130" cy="45" r="3.5" fill="var(--ink)"></circle>
+              <text x="165" y="180" text-anchor="middle" fill="var(--ink-muted)">übrige, nicht gematchte Kanten (Grad≤2)</text>
+            </g>
+            <g stroke="var(--ink-muted)" stroke-width="1.6" fill="none">
+              <line x1="300" y1="105" x2="350" y2="105"></line>
+              <path d="M 342 98 L 350 105 L 342 112"></path>
+            </g>
+            <text x="325" y="90" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="var(--ink-muted)">RingFinder</text>
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <polygon points="410,150 550,150 600,60 470,45" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.8"></polygon>
+              <text x="500" y="180" text-anchor="middle" fill="var(--ink-muted)">neue Roof-Surface (Correction: NewSurface)</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Findet sich für einen geschlossenen Restring keine passende bestehende Fläche, entsteht eine neue Surface mit generierter GmlId (<code>NewSurfaceId</code>) und der Korrektur-Markierung <code>SurfaceCorrection.NewSurface</code> — sichtbar im Audit-Trail der geheilten Datei.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ================= 06 PLANARITAET ================= -->
+    <section class="stage" id="planaritaet">
+      <div class="stage-head"><span class="stage-num">06</span><h2>Spezieller Ansatz für die Planarität</h2></div>
+      <p class="stage-sub"><code>BuildingPartSolid.Surface.cs</code> — jeder Vertex wird exakt auf den Schnitt seiner beteiligten Ebenen projiziert.</p>
+
+      <div class="prose">
+        <p>
+          Nach dem Zusammenfügen in Kapitel&nbsp;05 kennt jeder Vertex über <code>PointSurfaces</code> genau,
+          welche Flächen an ihm zusammentreffen — aber seine Koordinate stammt noch aus der unabhängigen
+          2D-Rekonstruktion einer einzelnen Fläche. Selbst innerhalb der Toleranz gefittete Nachbarebenen
+          gehen an gemeinsamen Ecken selten exakt durch denselben Punkt. <code>RecalculatePoints</code>
+          schließt diese Lücke, indem es jeden Vertex auf den <strong>exakten</strong> Schnitt seiner
+          beteiligten Ebenen verschiebt — das eigentliche Alleinstellungsmerkmal dieses Heilers gegenüber
+          einer reinen Toleranz-Reparatur.
+        </p>
+        <p>Die Geometrie ist für zwei und drei Ebenen eindeutig:</p>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 210" role="img" aria-label="Exakte Projektion auf Schnittgerade zweier Ebenen und Schnittpunkt dreier Ebenen">
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <polygon points="30,170 170,170 210,60 70,60" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.6"></polygon>
+              <polygon points="130,170 260,170 300,50 170,50" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.6" opacity="0.85"></polygon>
+              <line x1="140" y1="170" x2="192" y2="55" stroke="var(--accent)" stroke-width="2.4"></line>
+              <circle cx="150" cy="130" r="4" fill="var(--ink)"></circle>
+              <line x1="150" y1="130" x2="158" y2="103" stroke="var(--ink-muted)" stroke-width="1.2" stroke-dasharray="2 2"></line>
+              <circle cx="158" cy="103" r="4" fill="var(--accent)"></circle>
+              <text x="140" y="195" text-anchor="middle" fill="var(--ink-muted)">2 Ebenen → Schnittgerade</text>
+              <text x="140" y="20" text-anchor="middle" fill="var(--ink-muted)">ProjectToIntersectionLine</text>
+            </g>
+            <g font-family="ui-monospace, monospace" font-size="10" transform="translate(340,0)">
+              <polygon points="20,170 130,170 165,70 55,70" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.6"></polygon>
+              <polygon points="90,170 200,170 235,55 125,55" fill="var(--ground-soft)" stroke="var(--ground)" stroke-width="1.6" opacity="0.9"></polygon>
+              <polygon points="60,140 240,120 220,45 90,55" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.6" opacity="0.75"></polygon>
+              <circle cx="118" cy="107" r="4.5" fill="var(--ink)"></circle>
+              <line x1="118" y1="107" x2="130" y2="95" stroke="var(--ink-muted)" stroke-width="1.2" stroke-dasharray="2 2"></line>
+              <circle cx="130" cy="95" r="5" fill="var(--accent)"></circle>
+              <text x="130" y="195" text-anchor="middle" fill="var(--ink-muted)">3 Ebenen → Schnittpunkt</text>
+              <text x="130" y="20" text-anchor="middle" fill="var(--ink-muted)">IntersectThreePlanes</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Beide Fälle sind geschlossene Formeln je Ebenenart-Kombination (<code>IPlane</code>, Kreuz-/Cramer-Produkte, je nach Horizontal/Vertikal/Allgemein optimiert). Die Korrektur wird verworfen, wenn die nötige Verschiebung <code>2×</code> bzw. <code>3× PointThreshold²</code> übersteigt — ein Indiz für grob fehlerhafte statt nur verrauschte Eingabegeometrie.</figcaption>
+      </figure>
+
+      <div class="prose">
+        <p>
+          Ab vier beteiligten Ebenen gibt es im Allgemeinen keinen gemeinsamen Schnittpunkt mehr — die
+          Planaritätsgarantie der exakten Schnittberechnung gilt nur bis drei Ebenen. Solche Vertices
+          entstehen typisch an Walm- oder Grateckpunkten, wo neben zwei Wänden und dem Boden zusätzlich
+          mehrere kleine Dachdreiecke zusammentreffen. <code>TryRecalculateVertex</code> löst das, indem es
+          die beteiligten Flächen in <strong>unverzichtbare</strong> (Walls, Grounds, mehreckige Roofs) und
+          <strong>verzichtbare</strong> (reine Dreiecke, sonstige Roofs) trennt:
+        </p>
+        <ul>
+          <li>Bleiben genau drei unverzichtbare Ebenen übrig, wird auf deren Schnittpunkt projiziert; alle
+            übrigen (verzichtbaren) Flächen an diesem Vertex werden für den Export als
+            <strong>Dreiecksvermaschung</strong> markiert (<code>TriangleMeshSurfaces</code>).</li>
+          <li>Bleiben mehr als drei unverzichtbare Ebenen übrig, ist der Vertex nicht heilbar — Abbruch.</li>
+          <li>Andernfalls sucht eine kombinatorische Suche über alle Dreier-Teilmengen der beteiligten Ebenen
+            nach der besten Kombination, bewertet über <code>ComputeIntersectionQuality</code> (Produkt aus
+            Orthogonalität der drei Normalen und dem Flächenverhältnis kleinste/größte beteiligte
+            Fläche — kleine, wacklige Dreiecke sollen den Schnittpunkt nicht dominieren), unter der
+            Nebenbedingung, mindestens so viele unverzichtbare Ebenen wie möglich einzuschließen.</li>
+        </ul>
+      </div>
+
+      <figure class="plate">
+        <div class="plate-body">
+          <svg viewBox="0 0 640 230" role="img" aria-label="Mehr als drei Ebenen an einem Vertex: drei unverzichtbare Ebenen legen den Punkt fest, uebrige Dachdreiecke werden einzeln vermascht">
+            <g font-family="ui-monospace, monospace" font-size="10">
+              <polygon points="30,190 150,190 180,90 60,90" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.6"></polygon>
+              <polygon points="150,190 260,205 280,105 180,90" fill="var(--wall-soft)" stroke="var(--wall)" stroke-width="1.6" opacity="0.85"></polygon>
+              <polygon points="60,205 260,205 280,225 90,225" fill="var(--ground-soft)" stroke="var(--ground)" stroke-width="1.6"></polygon>
+              <circle cx="185" cy="122" r="5.5" fill="var(--ink)"></circle>
+              <line x1="185" y1="122" x2="200" y2="108" stroke="var(--ink-muted)" stroke-width="1.2" stroke-dasharray="2 2"></line>
+              <circle cx="200" cy="108" r="5.5" fill="var(--accent)"></circle>
+              <!-- roof triangle fan -->
+              <polygon points="200,108 260,40 320,95" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.4"></polygon>
+              <polygon points="200,108 320,95 300,150" fill="var(--roof-soft)" stroke="var(--roof)" stroke-width="1.4" opacity="0.7"></polygon>
+              <line x1="200" y1="108" x2="320" y2="95" stroke="var(--roof)" stroke-width="1"></line>
+              <text x="150" y="20" fill="var(--ink-muted)">2 Wände + Ground = 3 unverzichtbare Ebenen → legen den Punkt exakt fest</text>
+              <text x="250" y="215" fill="var(--ink-muted)">Dach-Dreiecke einzeln um den fixierten Punkt neu vermascht</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>Jedes einzelne Dreieck ist trivialerweise planar — deshalb exportiert
+          <code>TryCreateHealedSurfacePolygon</code> für <code>TriangleMeshSurfaces</code>-markierte Flächen
+          nicht ein Polygon, sondern <strong>ein 3-Punkt-Polygon pro Dreieck</strong> (<code>TryCreateTrianglePolygons</code>),
+          statt eine nach der Punktverschiebung nicht mehr garantiert ebene Fläche als ein Polygon
+          auszugeben.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ================= 07 FEHLERBEHANDLUNG ================= -->
+    <section class="stage" id="fehlerbehandlung">
+      <div class="stage-head"><span class="stage-num">07</span><h2>Fehlerbehandlung &amp; Ergebnis</h2></div>
+      <p class="stage-sub">Flags statt Exceptions, Audit-Trail statt Löschen.</p>
+
+      <div class="prose">
+        <p>
+          Jede Ebene der Pipeline meldet Fehlschläge über <code>bool Try...(..., out ...)</code> und
+          sammelt sie als Flag-Enums (<code>BuildingPartError</code>, <code>SurfaceError</code>) statt
+          Exceptions zu werfen. Beim finalen Zusammenbau (<code>TryCreateHealedBuildingPart</code>) gilt:
+        </p>
+        <ul>
+          <li>Surfaces, die unverändert durch die Heilung liefen, werden vollständig übernommen.</li>
+          <li>Beim Heilen entfernte oder veränderte Surfaces bleiben mit Typ, GmlId und Attributen erhalten,
+            aber mit leerer Geometrie und gesetztem <code>SurfaceError</code> — ein Audit-Trail, kein
+            Datenverlust in der Nachvollziehbarkeit.</li>
+          <li>Erfolgreich geheilte/neue Surfaces werden ein letztes Mal trianguliert
+            (<code>SurfaceCheck.GetTriangles</code>) und als finales Polygon exportiert.</li>
+        </ul>
+        <p>Die wichtigsten Fehler-Flags im Überblick:</p>
+      </div>
+
+      <table class="flags">
+        <thead><tr><th>Flag</th><th>Ebene</th><th>Bedeutung</th></tr></thead>
+        <tbody>
+          <tr><td>NotPlanar</td><td>Surface</td><td>Ebenen-Fit scheiterte (mehr als 1/3 Ausreißer)</td></tr>
+          <tr><td>Decomposed</td><td>Surface</td><td>Winding-Number-Klassifizierung ergab mehrere große Komponenten</td></tr>
+          <tr><td>InvalidTopology</td><td>Surface</td><td>Constraint-Einfügung oder Ringrekonstruktion inkonsistent</td></tr>
+          <tr><td>RemovedDueMerging</td><td>Surface</td><td>In eine koplanare Nachbarfläche aufgegangen</td></tr>
+          <tr><td>MissingGroundSurface / TooFewWallSurfaces</td><td>BuildingPart</td><td>Zu wenige gültige Flächen des Typs für ein Solid</td></tr>
+          <tr><td>HealingFailed</td><td>BuildingPart</td><td>Merge, Löcherschluss, Planarität oder Export scheiterten</td></tr>
+        </tbody>
+      </table>
+
+      <div class="prose">
+        <p>
+          Am Ende werden alle Koordinaten wieder um den <code>Anchor</code> aus Kapitel&nbsp;01 verschoben und
+          gemäß <code>Precision.Decimals</code> formatiert, bevor <code>WriteSqlite</code>
+          (<code>CityGmlElements</code>) das Ergebnis persistiert.
+        </p>
+      </div>
+
+      <footer class="doc-end">
+        Quellen: <code>BuildingPartSolid.cs</code>, <code>.Surface.cs</code>, <code>.Export.cs</code> ·
+        <code>SurfaceBuilder.cs</code> · <code>Topology2D/Core/PolygonPreCleaner.cs</code>,
+        <code>RingFinder.cs</code>, <code>SurfaceContour.cs</code> ·
+        <code>Topology2D/Partition.*.cs</code> · <code>CityGmlGeometry/Deduplication.cs</code>,
+        <code>Plane/*.cs</code>, <code>Fraction.cs</code>, <code>Precision.cs</code>.
+      </footer>
+    </section>
+  </main>
+</div>
+
+</body></html>

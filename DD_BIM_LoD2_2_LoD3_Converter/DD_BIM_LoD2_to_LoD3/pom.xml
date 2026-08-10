@@ -53,7 +53,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>de.mpsc.lod2tolod3.Lod2ToLod3Basement</mainClass>
+                            <mainClass>de.mpsc.lod2tolod3.BasementGenerator</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

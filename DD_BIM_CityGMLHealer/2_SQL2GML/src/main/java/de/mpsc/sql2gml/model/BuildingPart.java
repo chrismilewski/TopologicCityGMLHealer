@@ -5,7 +5,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Represents a BuildingPart from the SQLite database
+ * Represents a BuildingPart from the SQLite database (new healer schema).
+ *
+ * Bedeutung von PartIdGml:
+ *   - null:               das Building selbst trägt die Geometrie (kein BuildingPart im GML)
+ *   - "Part_..." (o.ä.):  existierendes GML-BuildingPart mit dieser gml:id
+ *   - "solid1", "solid2": NEUES BuildingPart — der Healer hat das ursprünglich part-lose
+ *                         Building in mehrere eigenständige Solids zerlegt
  */
 public class BuildingPart {
     private long id;

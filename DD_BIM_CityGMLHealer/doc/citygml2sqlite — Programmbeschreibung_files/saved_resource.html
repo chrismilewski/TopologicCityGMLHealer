@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<!-- saved from url=(0253)https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/?__frame_t=_Ils0bDiCpD6YxrC2ZwshmHM.496403f9-da42-4e0a-ba29-4c304a19d44f.3dd59578-8284-448b-9059-d35d4f789301.1783463132&__frame_v=manifest.bd9446110d1c7761.json -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><!-- frame-runtime --><!--<base href="/_f/1783459190-7cb4/">--><base href="."><script>window.__FRAME_PREAMBLE={"capabilities":{"mcp":"mcp.BQqQVVN_.js"},"transforms":"_transforms.DYk1Ltlh.js"}</script><script>(function(){"use strict";const X="modulepreload",Y=function(e){return"/"+e},Z={},U=function(t,n,u){let o=Promise.resolve();function i(f){const a=new Event("vite:preloadError",{cancelable:!0});if(a.payload=f,window.dispatchEvent(a),!a.defaultPrevented)throw f}return o.then(f=>{for(const a of f||[])a.status==="rejected"&&i(a.reason);return t().catch(i)})},D=["light","dark","system"];function $(e){if(e==null||typeof e!="object")return!1;const t=e.__frame_init;return t!=null&&typeof t=="object"}function q(e){if(e==null||typeof e!="object")return!1;const t=e.__frame_theme;if(t==null||typeof t!="object")return!1;const n=t.theme;return typeof n=="string"&&D.includes(n)}function M(e){if(window===top||e.type==="auxclick"&&e.button!==1)return;const t=e.composedPath?e.composedPath():[e.target];let n=null;for(let f=0;f<t.length;f++){const a=t[f];if(a&&a.matches&&a.matches("a[href],area[href]")){n=a;break}}if(!n&&e.target&&e.target.closest&&(n=e.target.closest("a[href],area[href]")),!n)return;const u=n.getAttribute("href");if(!u)return;let o,i;try{o=new URL(u,document.baseURI),i=new URL(document.baseURI).origin}catch{return}(o.protocol==="http:"||o.protocol==="https:")&&o.origin!==i&&(e.preventDefault(),parent.postMessage({__frame_nav:!0,url:o.href},"*"))}const L={};function y(e){if(window===top)return;const t=Date.now();t-(L[e]||0)<500||(L[e]=t,parent.postMessage({__frame_engaged:!0,kind:e},"*"))}const F=2e3,T=["wheel","touchstart","touchmove","keydown","pointerdown"];let k=0;function B(e){e.isTrusted&&(k=Date.now())}function z(){addEventListener("click",M,!0),addEventListener("auxclick",M,!0)}function W(){for(let e=0;e<T.length;e++)addEventListener(T[e],B,{capture:!0,passive:!0});addEventListener("scroll",e=>{e.isTrusted&&Date.now()-k<F&&y("scroll")},{capture:!0,passive:!0}),addEventListener("pointermove",e=>{e.isTrusted&&y("pointer")},{capture:!0,passive:!0}),addEventListener("click",e=>{e.isTrusted&&y("click")},{capture:!0,passive:!0})}function x(e,t,n){const u=[...t.values()].filter(o=>o.targets.some(i=>i.startsWith(e+".")));return{wrap(o,i){const f=`${e}.${o}`,a=u.filter(s=>s.targets.includes(f));return a.length===0?(...s)=>{try{return i(...s)}catch(d){return Promise.reject(d)}}:(...s)=>{let d=s;for(const c of a){const l=c.module.parameters;if(l)try{d=l(d)}catch{return Promise.reject({code:"transform_error",id:c.id,scope:e,message:"parameters transform failed"})}}let m;try{m=i(...d)}catch(c){m=Promise.reject(c)}return m.then(c=>{for(let l=a.length-1;l>=0;l--){const h=a[l],p=h.module.returns;if(p)try{c=p(c)}catch{return n({id:h.id,scope:e,leg:"returns"}),c}}return c},c=>{for(let l=a.length-1;l>=0;l--){const h=a[l],p=h.module.throws;if(p)try{c=p(c)}catch{return n({id:h.id,scope:e,leg:"throws"}),Promise.reject(c)}}return Promise.reject(c)})}}}}function H(e,t,n,u=()=>{}){const o=new Set(e.changes??[]),i=new Map;for(const f of o){const a=t[f];a&&i.set(f,a)}return{contract:e.contract,changes:o,flags:new Set(e.flags??[]),capabilities:e.capabilities??{},transforms:i,shellOrigin:n.shellOrigin,mount:n.mount,pipe:f=>x(f,i,u)}}(function(){const e=Object.defineProperty,t=globalThis,n=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let u=0;for(let o=0;o<n.length;o++){const i=n[o];try{e(t,i,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[i]}catch{}try{e(t,i,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[i]=="function"&&u++}if(u&&window!==top)try{parent.postMessage({__frame_rtc_lockdown_failed:u},"*")}catch{}})();const K=1e4,G=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function J(e){for(const t of G)if(t.endsWith(":*"))try{const n=new URL(e);if(`${n.protocol}//${n.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}const w=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities??{}}),E=window.__FRAME_PREAMBLE?.transforms,C=/^[\w.-]+\.js$/,V=/^[a-z][a-z0-9_-]{0,63}$/;let A=null,g=null;function P(e,t,n){try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!0,enumerable:!0})}catch{}}}let R=!1;function N(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,R=!0):R&&(delete t.dataset.theme,t.style.colorScheme="",R=!1)}const _=new Map;function Q(e,t){const n=_.get(e);if(!n)return;Object.assign(n.impl,t),n.impl.__settled=()=>Promise.reject({code:"capability_removed",message:`${e}: method not in this runtime`});const u=n.queue;n.queue=[];for(const o of u){const i=t[o.method];i?i(...o.args).then(o.resolve,o.reject):o.reject({code:"capability_removed",message:`${e}.${o.method} is not in this runtime`})}}function O(e,t){const n=_.get(e);if(!n)return;n.impl.__settled=()=>Promise.reject(t);const u=n.queue;n.queue=[];for(const o of u)o.reject(t)}const j=Object.getOwnPropertyDescriptor(window,"claude");if(window!==top&&!(j&&j.writable===!1)){z(),W();const e=j?.value??{};P(window,"claude",e);const t=s=>{const d={impl:Object.create(null),queue:[]};_.set(s,d);const m=new Proxy(d.impl,{get:(c,l)=>{if(typeof l=="string"&&!(l==="then"||l==="toJSON"||l==="valueOf"))return l==="toString"?Object.prototype.toString:(...h)=>{const p=c[l]??c.__settled;return p?p(...h):new Promise((b,S)=>{d.queue.push({method:l,args:h,resolve:b,reject:S})})}},set:()=>!1});P(e,s,m)};for(const s of Object.keys(w)){if(e[s]!==void 0){P(e,s,e[s]);continue}t(s)}let n=null,u=null,o=0;const i=s=>{s.source!==parent||!J(s.origin)||$(s.data)&&(n=s.data.__frame_init,g=s.origin,removeEventListener("message",i),clearTimeout(o),u?.())};addEventListener("message",i),parent.postMessage({__frame_connect:!0},"*");const f=new Promise(s=>{u=s,o=setTimeout(()=>{removeEventListener("message",i),s()},K)}),a=document.readyState==="loading"?new Promise(s=>document.addEventListener("DOMContentLoaded",()=>s(),{once:!0})):Promise.resolve();f.then(async()=>{if(!n||!g){for(const r of _.keys())O(r,{code:"not_granted",message:"frame initialization did not arrive - capability unavailable"});return}N(n.theme);const s=g;addEventListener("message",r=>{r.source!==parent||r.origin!==s||q(r.data)&&N(r.data.__frame_theme.theme)});const d=r=>U(()=>import("/_runtime/"+r),void 0),m=Object.keys(n.capabilities??{});for(const r of m)Object.hasOwn(w,r)||V.test(r)&&e[r]===void 0&&(t(r),O(r,{code:"capability_disabled",message:"capability not in this runtime generation"}));const c=m.filter(r=>Object.hasOwn(w,r)).map(r=>[r,w[r]]).filter(r=>typeof r[1]=="string"&&C.test(r[1])),[l,...h]=await Promise.allSettled([E&&C.test(E)?d(E):Promise.resolve({}),...c.map(([,r])=>d(r))]),p=g;A=H(n,l.status==="fulfilled"&&l.value?.TRANSFORMS||{},{shellOrigin:p,mount:Q},r=>parent.postMessage({__frame_cap_telemetry:r},p));const b=r=>parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:r}},p),S=A;h.forEach((r,v)=>{const I=c[v][0];if(r.status!=="fulfilled"){b(I);return}try{r.value?.install?.(S)}catch{b(I)}});for(const[r,v]of _)v.queue.length===0&&Object.keys(v.impl).length>0||O(r,{code:m.includes(r)?"capability_disabled":"not_granted",message:"capability not available in this session"});await a,parent.postMessage({__frame_ready:!0},g)})}})();</script><!-- /frame-runtime --><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>citygml2sqlite — Programmbeschreibung</title>
+<style>
+  :root {
+    --bg: #eef3f9;
+    --surface: #ffffff;
+    --surface-2: #f5f8fc;
+    --ink: #142338;
+    --muted: #5c728c;
+    --line: #b9c9dd;
+    --line-strong: #8fa6c2;
+    --accent: #d9560f;
+    --accent-ink: #ffffff;
+    --accent-2: #1f6fb2;
+    --grid: rgba(31, 111, 178, 0.07);
+    --shadow: rgba(20, 35, 56, 0.10);
+    --ok: #1a7d4a;
+    --warn: #b7791f;
+    --bad: #b3311f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c1c30;
+      --surface: #12253d;
+      --surface-2: #0f2036;
+      --ink: #e7eef8;
+      --muted: #93a9c4;
+      --line: #2c4f74;
+      --line-strong: #3d6690;
+      --accent: #ff8a45;
+      --accent-ink: #1a1206;
+      --accent-2: #6ab6ff;
+      --grid: rgba(106, 182, 255, 0.08);
+      --shadow: rgba(0, 0, 0, 0.45);
+      --ok: #4bc98a;
+      --warn: #e0ac4a;
+      --bad: #ff6b57;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0c1c30; --surface: #12253d; --surface-2: #0f2036; --ink: #e7eef8; --muted: #93a9c4;
+    --line: #2c4f74; --line-strong: #3d6690; --accent: #ff8a45; --accent-ink: #1a1206; --accent-2: #6ab6ff;
+    --grid: rgba(106, 182, 255, 0.08); --shadow: rgba(0, 0, 0, 0.45);
+    --ok: #4bc98a; --warn: #e0ac4a; --bad: #ff6b57;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef3f9; --surface: #ffffff; --surface-2: #f5f8fc; --ink: #142338; --muted: #5c728c;
+    --line: #b9c9dd; --line-strong: #8fa6c2; --accent: #d9560f; --accent-ink: #ffffff; --accent-2: #1f6fb2;
+    --grid: rgba(31, 111, 178, 0.07); --shadow: rgba(20, 35, 56, 0.10);
+    --ok: #1a7d4a; --warn: #b7791f; --bad: #b3311f;
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  h1, h2, h3 {
+    font-family: "Bahnschrift", "Yu Gothic UI", "Segoe UI Semibold", "Arial Narrow", sans-serif;
+    font-weight: 600;
+    text-wrap: balance;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  code, .mono, .tag, table, .pipeline-step .step-title small {
+    font-family: "Cascadia Code", "Cascadia Mono", ui-monospace, Consolas, "SFMono-Regular", Menlo, monospace;
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+  a { color: var(--accent-2); }
+  p { margin: 0 0 1em; max-width: 68ch; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ---------- Title block ---------- */
+  .titleblock {
+    border-bottom: 3px double var(--line-strong);
+    padding: 2.4rem 2rem 1.6rem;
+    background: linear-gradient(180deg, var(--surface) 0%, transparent 100%);
+  }
+  .titleblock-inner { max-width: 1180px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 0.5em;
+    font-family: "Cascadia Code", ui-monospace, Consolas, monospace;
+    font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 0.9rem;
+  }
+  .eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--accent); display: inline-block; }
+  h1.title { font-size: clamp(2rem, 4vw, 2.9rem); color: var(--ink); }
+  .subtitle { color: var(--muted); font-size: 1.08rem; margin-top: 0.6rem; max-width: 62ch; }
+  .titlemeta {
+    display: flex; flex-wrap: wrap; gap: 1.6rem 2.4rem; margin-top: 1.6rem;
+    padding-top: 1.2rem; border-top: 1px solid var(--line);
+    font-family: "Cascadia Code", ui-monospace, Consolas, monospace; font-size: 0.82rem; color: var(--muted);
+  }
+  .titlemeta b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Layout ---------- */
+  .layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 216px 1fr; gap: 2.4rem; padding: 2rem 2rem 4rem; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+  nav.toc { position: sticky; top: 1.4rem; align-self: start; }
+  @media (max-width: 860px) { nav.toc { position: static; margin-bottom: 0.5rem; } }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--line); }
+  nav.toc li a {
+    display: block; padding: 0.4rem 0 0.4rem 0.9rem; margin-left: -2px; border-left: 2px solid transparent;
+    color: var(--muted); text-decoration: none; font-size: 0.87rem;
+  }
+  nav.toc li a:hover, nav.toc li a:focus-visible { color: var(--ink); border-left-color: var(--accent); outline: none; }
+  nav.toc .sheet-no { color: var(--accent); font-family: "Cascadia Code", ui-monospace, monospace; font-size: 0.76rem; margin-right: 0.5em; }
+
+  main { display: flex; flex-direction: column; gap: 2.6rem; min-width: 0; }
+
+  section.sheet {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+    box-shadow: 0 1px 3px var(--shadow); padding: 1.9rem 2rem 2.2rem; position: relative;
+  }
+  section.sheet::before, section.sheet::after,
+  section.sheet .reg-tl, section.sheet .reg-br { content: none; }
+  .sheet-tag {
+    position: absolute; top: 0; right: 0; font-family: "Cascadia Code", ui-monospace, monospace;
+    font-size: 0.72rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line);
+    border-top: none; border-right: none; padding: 0.25rem 0.6rem; border-radius: 0 3px 0 3px;
+  }
+  .sheet-head { display: flex; align-items: baseline; gap: 0.8rem; margin-bottom: 1.1rem; flex-wrap: wrap; }
+  .sheet-head h2 { font-size: 1.5rem; }
+  .sheet-head .kicker { color: var(--accent); font-family: "Cascadia Code", ui-monospace, monospace; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .sheet h3 { font-size: 1.06rem; margin: 1.6rem 0 0.7rem; color: var(--ink); }
+  .sheet h3:first-of-type { margin-top: 1rem; }
+
+  .lede { color: var(--muted); font-size: 1.03rem; margin-bottom: 0.4rem; }
+
+  /* ---------- Tables ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.86rem; min-width: 480px; }
+  th, td { text-align: left; padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 0.72rem;
+    letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid var(--line-strong);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.key { color: var(--accent-2); white-space: nowrap; }
+  td .default { color: var(--muted); }
+
+  /* ---------- CLI block ---------- */
+  .cli {
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px;
+    padding: 1rem 1.2rem; overflow-x: auto; font-family: "Cascadia Code", ui-monospace, Consolas, monospace;
+    font-size: 0.86rem; line-height: 1.7; white-space: pre;
+  }
+  .cli .cmt { color: var(--muted); }
+  .cli .flag { color: var(--accent-2); }
+  .cli .str { color: var(--ok); }
+
+  /* ---------- Pipeline diagram ---------- */
+  .pipeline-scroll { overflow-x: auto; padding: 0.3rem 0.1rem 1rem; }
+  .pipeline { display: flex; gap: 0; min-width: 920px; padding: 0.6rem 0; }
+  .pipeline-step { flex: 1; position: relative; padding: 0 0.7rem; }
+  .pipeline-step .rail { position: relative; height: 2px; background: var(--line-strong); margin-bottom: 0.9rem; }
+  .pipeline-step:first-child .rail::before { content: none; }
+  .pipeline-step .node {
+    position: absolute; top: -6px; left: 0; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--accent);
+  }
+  .pipeline-step .arrow { position: absolute; top: -5px; right: -2px; width: 0; height: 0;
+    border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid var(--line-strong); }
+  .pipeline-step:last-child .arrow { display: none; }
+  .step-no { font-family: "Cascadia Code", ui-monospace, monospace; color: var(--accent); font-size: 0.76rem; }
+  .step-title { font-weight: 600; margin: 0.25rem 0 0.35rem; font-size: 0.95rem; }
+  .step-desc { color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
+
+  /* ---------- Schema chain ---------- */
+  .schema-chain { display: flex; flex-direction: column; }
+  .schema-node { display: grid; grid-template-columns: 30px 1fr; gap: 0.9rem; }
+  .schema-node .connector { display: flex; flex-direction: column; align-items: center; }
+  .schema-node .dot { width: 12px; height: 12px; border-radius: 2px; background: var(--accent-2); margin-top: 0.35rem; flex: none; }
+  .schema-node .stem { width: 2px; flex: 1; background: var(--line-strong); min-height: 1.6rem; }
+  .schema-node:last-child .stem { display: none; }
+  .schema-card { border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); padding: 0.85rem 1.05rem; margin-bottom: 1.1rem; }
+  .schema-card h4 { margin: 0 0 0.15rem; font-family: "Cascadia Code", ui-monospace, monospace; font-size: 0.95rem; color: var(--ink); }
+  .schema-card .rel { font-size: 0.76rem; color: var(--accent-2); margin-bottom: 0.5rem; }
+  .schema-cols { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; }
+  .col-pill {
+    font-family: "Cascadia Code", ui-monospace, monospace; font-size: 0.74rem; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 2px; padding: 0.12rem 0.45rem;
+  }
+  .col-pill.pk { color: var(--accent); border-color: var(--accent); }
+  .col-pill.fk { color: var(--accent-2); border-color: var(--accent-2); }
+
+  /* ---------- Compare cards (Debug/Release) ---------- */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+  @media (max-width: 620px) { .compare { grid-template-columns: 1fr; } }
+  .compare-card { border: 1px solid var(--line); border-radius: 3px; padding: 1.1rem 1.2rem; background: var(--surface-2); }
+  .compare-card h4 { margin: 0 0 0.8rem; display: flex; align-items: center; gap: 0.5em; font-size: 1rem; }
+  .compare-card h4 .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .compare-card.debug h4 .dot { background: var(--accent-2); }
+  .compare-card.release h4 .dot { background: var(--accent); }
+  .compare-card ul { margin: 0; padding-left: 1.1em; color: var(--muted); font-size: 0.9rem; }
+  .compare-card li { margin-bottom: 0.45rem; }
+  .compare-card li b { color: var(--ink); }
+
+  /* ---------- Callouts ---------- */
+  .callout { border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 3px 3px 0; padding: 0.85rem 1.1rem; margin: 1rem 0; font-size: 0.92rem; }
+  .callout.ok { border-left-color: var(--ok); }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout b { color: var(--ink); }
+
+  .badge { display: inline-block; font-family: "Cascadia Code", ui-monospace, monospace; font-size: 0.72rem; padding: 0.1rem 0.5rem; border-radius: 2px; border: 1px solid currentColor; }
+  .badge.ok { color: var(--ok); }
+  .badge.bad { color: var(--bad); }
+
+  footer.sheetfoot { max-width: 1180px; margin: 0 auto; padding: 1.5rem 2rem 3rem; color: var(--muted); font-size: 0.8rem; font-family: "Cascadia Code", ui-monospace, monospace; }
+
+  ul.plain { margin: 0.4rem 0 0; padding-left: 1.2em; color: var(--ink); }
+  ul.plain li { margin-bottom: 0.5rem; }
+  ul.plain li::marker { color: var(--accent); }
+
+  .diagram-figure { border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); padding: 1rem; overflow-x: auto; }
+  .diagram-figure svg { display: block; margin: 0 auto; }
+  figcaption { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 0.6rem; }
+</style>
+
+<div class="titleblock">
+  <div class="titleblock-inner">
+    <span class="eyebrow">CityGmlHealer &nbsp;·&nbsp; Werkzeug-Blatt</span>
+    <h1 class="title">citygml2sqlite</h1>
+    <p class="subtitle">Liest CityGML-1.0-LOD2-Gebäudemodelle aus einem Ordner, repariert fehlerhafte Gebäudegeometrie zu geschlossenen, planaren Solids und schreibt das Ergebnis in eine SQLite-Datenbank.</p>
+    <div class="titlemeta">
+      <span>Projekt: <b>CityGmlHealer</b></span>
+      <span>Ziel-Framework: <b>net10.0-windows</b></span>
+      <span>Plattform: <b>x64, Windows</b></span>
+      <span>Typ: <b>CLI-Batch-Tool</b></span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc" aria-label="Inhalt">
+    <ol>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#ueberblick"><span class="sheet-no">S-00</span>Überblick</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#installation"><span class="sheet-no">S-01</span>Installation &amp; Build</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#verwendung"><span class="sheet-no">S-02</span>Verwendung</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#ablauf"><span class="sheet-no">S-03</span>Verarbeitungs­ablauf</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#heilung"><span class="sheet-no">S-04</span>Heilungslogik</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#schema"><span class="sheet-no">S-05</span>Datenbank-Schema</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#debugrelease"><span class="sheet-no">S-06</span>Debug vs. Release</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#fehler"><span class="sheet-no">S-07</span>Ergebnis &amp; Fehler</a></li>
+      <li><a href="https://b05a94e9-9ffb-408d-823e-1698568d90c8.frame.claudeusercontent.com/_f/1783459190-7cb4/#grenzen"><span class="sheet-no">S-08</span>Grenzen</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section class="sheet" id="ueberblick">
+      <span class="sheet-tag">S-00 / ÜBERBLICK</span>
+      <div class="sheet-head">
+        <h2>Was das Tool macht</h2>
+      </div>
+      <p class="lede">citygml2sqlite ist die CLI-Schicht von CityGmlHealer. Es verarbeitet einen ganzen Ordner voller CityGML-Dateien in einem Lauf: einlesen, filtern, heilen, persistieren.</p>
+      <p>Reale LOD2-Datensätze enthalten regelmäßig kleine geometrische Fehler: doppelte oder fast-doppelte Punkte, Wände und Dächer, die sich nicht exakt in einer Ebene treffen, offene Kanten an Dachkniks, oder sich selbst überschneidende Ringe. Diese Fehler verhindern oft die Weiterverarbeitung in CAD-, GIS- oder Simulationssoftware. citygml2sqlite versucht jedes Gebäudeteil (<code>BuildingPart</code>) automatisch so zu korrigieren, dass am Ende ein <b>geschlossenes, exakt planares Solid</b> entsteht — oder meldet nachvollziehbar, warum das nicht gelungen ist.</p>
+      <div class="callout">
+        <b>Kurzformel:</b> Ordner mit <code>*.gml</code>-Dateien rein → geheilte Gebäudegeometrie plus vollständiger Fehler-/Korrektur-Log in einer <code>BuildingParts.db</code> (SQLite) raus.
+      </div>
+    </section>
+
+    <section class="sheet" id="installation">
+      <span class="sheet-tag">S-01 / SETUP</span>
+      <div class="sheet-head"><span class="kicker">Build</span><h2>Installation &amp; Build</h2></div>
+      <p>Die Solution liegt im <code>.slnx</code>-Format vor, die Plattform ist immer <code>x64</code>.</p>
+      <div class="cli">dotnet build CityGmlHealer.slnx</div>
+
+      <h3>Fertige exe erzeugen (Publish)</h3>
+      <p>Es gibt zwei vorbereitete Publish-Profile: eine schlanke, schnelle <b>Release</b>-Variante und eine <b>Debug</b>-Variante mit Analyse-Ausgaben. Beide erzeugen eine selbstständige Single-File-exe (keine separate .NET-Runtime-Installation nötig).</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Profil</th><th>Zielordner</th><th>Eigenschaft</th></tr></thead>
+          <tbody>
+            <tr><td class="key">FolderProfile.pubxml</td><td><code>publish/debug</code></td><td>ungetrimmt, ungeprüfte Zuordnung von Diagnose-Ausgaben (siehe S-06)</td></tr>
+            <tr><td class="key">FolderProfile1.pubxml</td><td><code>publish/release</code></td><td>ReadyToRun (AOT) + getrimmt → schnellster Start, kleinste Größe</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <b>Wichtig:</b> <code>dotnet publish</code> übernimmt <code>Configuration</code>/<code>Platform</code> aus der <code>.pubxml</code> <i>nicht</i> automatisch von der Kommandozeile aus — beide Werte müssen explizit mitgegeben werden, sonst baut die CLI standardmäßig Release/AnyCPU.
+      </div>
+      <div class="cli">dotnet publish citygml2sqlite\citygml2sqlite.csproj -c Release -p:Platform=x64 -p:PublishProfile=FolderProfile1.pubxml
+dotnet publish citygml2sqlite\citygml2sqlite.csproj -c Debug   -p:Platform=x64 -p:PublishProfile=FolderProfile.pubxml</div>
+    </section>
+
+    <section class="sheet" id="verwendung">
+      <span class="sheet-tag">S-02 / CLI</span>
+      <div class="sheet-head"><span class="kicker">Verwendung</span><h2>Aufruf &amp; Parameter</h2></div>
+      <div class="cli">citygml2sqlite &lt;gml-ordner-pfad&gt; [optionen]</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Parameter</th><th>Standard</th><th>Bedeutung</th></tr></thead>
+          <tbody>
+            <tr><td class="key">&lt;gml-ordner-pfad&gt;</td><td class="default">— (Pflicht)</td><td>Ordner, der rekursiv nicht durchsucht wird — nur direkte <code>*.gml</code>-Dateien in diesem Ordner werden verarbeitet.</td></tr>
+            <tr><td class="key">--decimals=&lt;n&gt;</td><td class="default tabular">3</td><td>Nachkommastellen für Rundung und Ausgabe-Koordinaten (0–9). Bestimmt auch die minimale Korrekturgröße, unterhalb der eine Vertex-Verschiebung gar nicht erst angewendet wird.</td></tr>
+            <tr><td class="key">--point-threshold=&lt;n&gt;</td><td class="default tabular">0.001</td><td>Schweiß-Toleranz in Koordinateneinheiten (meist Meter): Punkte innerhalb dieses Abstands gelten als identisch und werden verschmolzen.</td></tr>
+            <tr><td class="key">--plane-threshold=&lt;n&gt;</td><td class="default tabular">0.001</td><td>Maximal erlaubter senkrechter Abstand eines Punkts von seiner Fläche, damit diese noch als plan gilt bzw. zwei Flächen als koplanar zusammengeführt werden.</td></tr>
+            <tr><td class="key">--functions=&lt;code1,code2,…&gt;</td><td class="default">— (alle gesperrt)</td><td>CityGML-Gebäudefunktions-Codes als Filter, z. B. <code>1000</code> = Wohngebäude. Ohne diesen Parameter wird <i>kein</i> Gebäude verarbeitet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Beispiel</h3>
+      <div class="cli">citygml2sqlite C:\gml-data --decimals=3 --point-threshold=0.05 --plane-threshold=0.02 --functions=1000,1121</div>
+      <p>Verarbeitet alle <code>*.gml</code>-Dateien in <code>C:\gml-data</code>, akzeptiert nur Wohn- (1000) und Bürogebäude (1121), verschweißt Punkte bis 5&nbsp;cm Abstand und lässt Flächen bis 2&nbsp;cm Ebenenabweichung als planar gelten. Ergebnis landet in <code>C:\gml-data\BuildingParts.db</code> — eine bereits vorhandene Datei dieses Namens wird dabei ersetzt, jeder Lauf beginnt mit einer frischen Datenbank.</p>
+
+      <div class="callout warn">
+        <b>Toleranzen richtig wählen:</b> <code>point-threshold</code> sollte deutlich unter der kürzesten legitimen Kantenlänge im Modell liegen — das Verschweißen ist transitiv (A≈B und B≈C verschmilzt auch A und C), zu große Werte können also unabsichtlich ganze Gebäudeteile kollabieren lassen.
+      </div>
+    </section>
+
+    <section class="sheet" id="ablauf">
+      <span class="sheet-tag">S-03 / PIPELINE</span>
+      <div class="sheet-head"><span class="kicker">Ablauf</span><h2>Was pro Datei passiert</h2></div>
+      <p class="lede">Jede GML-Datei durchläuft dieselbe Kette, Gebäude für Gebäude, Gebäudeteil für Gebäudeteil.</p>
+
+      <div class="pipeline-scroll">
+        <div class="pipeline">
+          <div class="pipeline-step">
+            <div class="rail"><span class="node"></span><span class="arrow"></span></div>
+            <div class="step-no">01</div>
+            <div class="step-title">Einlesen &amp; Filtern</div>
+            <div class="step-desc">GML parsen (LINQ-to-XML), nur Gebäude mit passendem <code>--functions</code>-Code übernehmen.</div>
+          </div>
+          <div class="pipeline-step">
+            <div class="rail"><span class="node"></span><span class="arrow"></span></div>
+            <div class="step-no">02</div>
+            <div class="step-title">Global deduplizieren</div>
+            <div class="step-desc">Alle Rohpunkte eines Gebäudeteils per Voxel-Grid + Union-Find transitiv verschweißen.</div>
+          </div>
+          <div class="pipeline-step">
+            <div class="rail"><span class="node"></span><span class="arrow"></span></div>
+            <div class="step-no">03</div>
+            <div class="step-title">Je Fläche: Ebene &amp; Topologie</div>
+            <div class="step-desc">Best-Fit-Ebene fitten, in 2D projizieren, per constrained Delaunay triangulieren — löst Selbstüberschneidungen.</div>
+          </div>
+          <div class="pipeline-step">
+            <div class="rail"><span class="node"></span><span class="arrow"></span></div>
+            <div class="step-no">04</div>
+            <div class="step-title">Flächen zusammenführen</div>
+            <div class="step-desc">Benachbarte, annähernd koplanare Flächen (≤ 45° Diederwinkel) zu einer Fläche verschmelzen.</div>
+          </div>
+          <div class="pipeline-step">
+            <div class="rail"><span class="node"></span><span class="arrow"></span></div>
+            <div class="step-no">05</div>
+            <div class="step-title">Löcher schließen</div>
+            <div class="step-desc">Flächen über gemeinsame Kanten zum Solid verbinden, offene Restkanten zu neuen Flächen ergänzen.</div>
+          </div>
+          <div class="pipeline-step">
+            <div class="rail"><span class="node"></span><span class="arrow"></span></div>
+            <div class="step-no">06</div>
+            <div class="step-title">Vertices neu berechnen</div>
+            <div class="step-desc">Jeden Punkt exakt auf seine beteiligten Ebenen schneiden (Details siehe S-04).</div>
+          </div>
+          <div class="pipeline-step">
+            <div class="rail"><span class="node"></span></div>
+            <div class="step-no">07</div>
+            <div class="step-title">Export &amp; Schreiben</div>
+            <div class="step-desc">Nur erfolgreich geheilte Gebäudeteile mit finaler Geometrie in SQLite persistieren.</div>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:0.6rem;">Ein einzelnes fehlerhaftes Gebäudeteil beendet nicht den Lauf: Schlägt ein Schritt fehl, wird nur dieses Gebäudeteil als nicht geheilt markiert (siehe S-07), und die Verarbeitung geht mit dem nächsten weiter.</p>
+    </section>
+
+    <section class="sheet" id="heilung">
+      <span class="sheet-tag">S-04 / DETAIL</span>
+      <div class="sheet-head"><span class="kicker">Heilungslogik</span><h2>Wie aus fehlerhafter Geometrie ein sauberes Solid wird</h2></div>
+
+      <h3>Die vier Ziele der Heilung</h3>
+      <ul class="plain">
+        <li><b>Geschlossenes Solid</b> — jede Kante gehört am Ende zu genau zwei Flächen. Bleiben nach dem Kanten-Matching Lücken übrig, die sich nicht eindeutig zu einem Ring schließen lassen, schlägt die Heilung kontrolliert fehl, statt ein unvollständiges Ergebnis als Erfolg zu melden.</li>
+        <li><b>Planarität innerhalb der Toleranz</b> — jede Fläche liegt nach der Korrektur innerhalb von <code>--plane-threshold</code> in einer Ebene.</li>
+        <li><b>Bereinigte Punkte &amp; Ringe</b> — aufeinanderfolgende (Fast-)Duplikate und kollineare Zwischenpunkte werden entfernt, bevor sie die Triangulation verfälschen.</li>
+        <li><b>Selbstüberschneidungen aufgelöst</b> — die constrained-Delaunay-Triangulation mit Winding-Number-Klassifizierung erkennt und trennt sich überschneidende Ringabschnitte.</li>
+      </ul>
+
+      <h3>Der Sonderfall: mehr als drei Ebenen an einem Punkt</h3>
+      <p>Drei Ebenen schneiden sich immer in genau einem Punkt — Planarität ist da automatisch gegeben. Treffen an einem Eckpunkt aber vier oder mehr Flächen zusammen (typisch an komplexen Walm- oder Krüppelwalmdach-Ecken), gibt es im Allgemeinen <i>keinen</i> gemeinsamen Schnittpunkt aller Ebenen mehr. citygml2sqlite löst das, indem es die unverzichtbaren Flächen (Wände, Grundflächen) auf ihren exakten Schnittpunkt legt und die überzähligen, meist kleineren Dachflächen an dieser Ecke stattdessen in Dreiecke zerlegt — ein Dreieck ist per Definition immer eben.</p>
+
+      <figure class="diagram-figure">
+        <svg viewBox="0 0 640 220" width="100%" height="220" role="img" aria-labelledby="planeReductionTitle">
+          <title id="planeReductionTitle">Vergleich vor und nach der Ebenen-Reduktion an einem Vertex mit fünf beteiligten Flächen</title>
+          <!-- left: before -->
+          <g font-family="Cascadia Code, ui-monospace, Consolas, monospace" font-size="12">
+            <text x="150" y="24" text-anchor="middle" fill="var(--muted)" letter-spacing="1">VORHER — 5 EBENEN, NICHT PLANAR</text>
+            <circle cx="150" cy="120" r="4" fill="var(--ink)"></circle>
+            <g stroke="var(--accent-2)" stroke-width="2">
+              <line x1="150" y1="120" x2="150" y2="34"></line>
+              <line x1="150" y1="120" x2="230" y2="70"></line>
+              <line x1="150" y1="120" x2="245" y2="150"></line>
+              <line x1="150" y1="120" x2="150" y2="205"></line>
+            </g>
+            <line x1="150" y1="120" x2="58" y2="95" stroke="var(--warn)" stroke-width="2"></line>
+            <line x1="150" y1="120" x2="70" y2="160" stroke="var(--warn)" stroke-width="2"></line>
+            <text x="150" y="170" text-anchor="middle" fill="var(--warn)" font-size="11">Vertex nicht exakt eben</text>
+          </g>
+          <!-- divider -->
+          <line x1="320" y1="20" x2="320" y2="200" stroke="var(--line)" stroke-dasharray="3 4"></line>
+          <!-- right: after -->
+          <g font-family="Cascadia Code, ui-monospace, Consolas, monospace" font-size="12">
+            <text x="480" y="24" text-anchor="middle" fill="var(--muted)" letter-spacing="1">NACHHER — 3 EBENEN + TRIANGULIERT</text>
+            <circle cx="480" cy="120" r="4" fill="var(--ink)"></circle>
+            <g stroke="var(--accent-2)" stroke-width="2.4">
+              <line x1="480" y1="120" x2="480" y2="34"></line>
+              <line x1="480" y1="120" x2="560" y2="70"></line>
+              <line x1="480" y1="120" x2="480" y2="205"></line>
+            </g>
+            <polygon points="480,120 388,95 400,160" fill="var(--accent)" fill-opacity="0.18" stroke="var(--accent)" stroke-width="1.6"></polygon>
+            <text x="405" y="150" fill="var(--accent)" font-size="10">trianguliert</text>
+            <text x="480" y="170" text-anchor="middle" fill="var(--ok)" font-size="11">Vertex exakt eben</text>
+          </g>
+        </svg>
+        <figcaption>Blau = unverzichtbare Flächen (Wände/Grundfläche), auf deren Schnittpunkt der Vertex verschoben wird. Orange = zu Dreiecken zerlegte, überzählige Flächen.</figcaption>
+      </figure>
+
+      <div class="callout ok">
+        Bleiben nach Abzug der Dach-/Dreiecksflächen dennoch mehr als drei unverzichtbare Flächen an einem Punkt übrig, ist der Punkt nicht automatisch heilbar — das betroffene Gebäudeteil wird als fehlgeschlagen markiert statt eine unsichere Näherung zu schreiben.
+      </div>
+    </section>
+
+    <section class="sheet" id="schema">
+      <span class="sheet-tag">S-05 / DATENMODELL</span>
+      <div class="sheet-head"><span class="kicker">Ausgabe</span><h2>Datenbank-Schema (BuildingParts.db)</h2></div>
+      <p>Jede Ebene aus CityGML wird eins-zu-eins in eine eigene Tabelle abgebildet. Jede Tabelle (außer der Lookup-Tabelle <code>SurfaceTypes</code>) trägt <code>IsValid</code>/<code>Log</code> — so bleibt nachvollziehbar, <i>warum</i> etwas nicht geheilt werden konnte, statt es stillschweigend wegzulassen.</p>
+
+      <div class="schema-chain">
+        <div class="schema-node">
+          <div class="connector"><span class="dot"></span><span class="stem"></span></div>
+          <div class="schema-card">
+            <h4>CityGmlFiles</h4>
+            <div class="rel">eine Zeile pro eingelesener .gml-Datei</div>
+            <div class="schema-cols">
+              <span class="col-pill pk">Id</span><span class="col-pill">Filename</span><span class="col-pill">IsValid</span><span class="col-pill">Log</span>
+            </div>
+          </div>
+        </div>
+        <div class="schema-node">
+          <div class="connector"><span class="dot"></span><span class="stem"></span></div>
+          <div class="schema-card">
+            <h4>Buildings</h4>
+            <div class="rel">1—n je CityGmlFile · IsValid=false, wenn ≥1 BuildingPart nicht heilbar war</div>
+            <div class="schema-cols">
+              <span class="col-pill pk">Id</span><span class="col-pill">BuildingIdGml</span><span class="col-pill fk">FileId</span><span class="col-pill">Attributes (JSON)</span><span class="col-pill">IsValid</span><span class="col-pill">Log</span>
+            </div>
+          </div>
+        </div>
+        <div class="schema-node">
+          <div class="connector"><span class="dot"></span><span class="stem"></span></div>
+          <div class="schema-card">
+            <h4>BuildingParts</h4>
+            <div class="rel">1—n je Building · nur erfolgreich geheilte Teile bekommen Surfaces darunter</div>
+            <div class="schema-cols">
+              <span class="col-pill pk">Id</span><span class="col-pill">PartIdGml</span><span class="col-pill fk">BuildingId</span><span class="col-pill">Attributes (JSON)</span><span class="col-pill">IsValid</span><span class="col-pill">Log</span>
+            </div>
+          </div>
+        </div>
+        <div class="schema-node">
+          <div class="connector"><span class="dot"></span><span class="stem"></span></div>
+          <div class="schema-card">
+            <h4>Surfaces</h4>
+            <div class="rel">1—n je BuildingPart · SurfaceTypeId verweist auf Ground / Wall / Roof</div>
+            <div class="schema-cols">
+              <span class="col-pill pk">Id</span><span class="col-pill">SurfaceIdGml</span><span class="col-pill fk">BuildingPartId</span><span class="col-pill fk">SurfaceTypeId</span><span class="col-pill">Attributes (JSON)</span><span class="col-pill">IsValid</span><span class="col-pill">Log</span>
+            </div>
+          </div>
+        </div>
+        <div class="schema-node">
+          <div class="connector"><span class="dot"></span><span class="stem"></span></div>
+          <div class="schema-card">
+            <h4>Polygons</h4>
+            <div class="rel">1—n je Surface (bei Dreiecksvermaschung: ein Polygon pro Dreieck)</div>
+            <div class="schema-cols">
+              <span class="col-pill pk">Id</span><span class="col-pill fk">SurfaceId</span><span class="col-pill">PolygonIdGml</span><span class="col-pill">IsValid</span><span class="col-pill">Log</span>
+            </div>
+          </div>
+        </div>
+        <div class="schema-node">
+          <div class="connector"><span class="dot"></span></div>
+          <div class="schema-card">
+            <h4>LinearRings</h4>
+            <div class="rel">1—n je Polygon · Index 0 = Außenring, weitere Indizes = Löcher · PosList = finale, geheilte Koordinaten</div>
+            <div class="schema-cols">
+              <span class="col-pill pk">PolygonId</span><span class="col-pill pk">RingIndex</span><span class="col-pill">PosList</span><span class="col-pill">IsValid</span><span class="col-pill">Log</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p><code>SurfaceTypes</code> ist eine feste Lookup-Tabelle (Id/Name) mit den drei Werten <code>Ground</code>, <code>Wall</code>, <code>Roof</code>.</p>
+    </section>
+
+    <section class="sheet" id="debugrelease">
+      <span class="sheet-tag">S-06 / BUILD-VARIANTEN</span>
+      <div class="sheet-head"><span class="kicker">Verhalten</span><h2>Debug- vs. Release-Build</h2></div>
+      <p>Beide Varianten liefern dasselbe Heilungsergebnis in derselben Datenbank — sie unterscheiden sich nur in Geschwindigkeit und Diagnose-Tiefe.</p>
+      <div class="compare">
+        <div class="compare-card debug">
+          <h4><span class="dot"></span>Debug</h4>
+          <ul>
+            <li>Konsole zeigt <b>jedes</b> Gebäude und jedes Gebäudeteil einzeln mit ✓/✗</li>
+            <li>Schreibt für jedes erfolgreich geheilte Gebäudeteil eine <code>.obj</code>-Datei neben die exe — mit den finalen, reduzierten (deduplizierten/planarisierten) Koordinaten</li>
+            <li>Kein Trimming, kein ReadyToRun → größer, aber jede Codezeile ist im Zweifel debugbar</li>
+            <li>Löscht beim Start alte <code>.obj</code>/<code>.svg</code>-Dateien aus dem exe-Ordner</li>
+          </ul>
+        </div>
+        <div class="compare-card release">
+          <h4><span class="dot"></span>Release</h4>
+          <ul>
+            <li>Konsole zeigt nur Datei-Fortschritt, echte Warnungen/Fehler und die Abschlussstatistik</li>
+            <li>ReadyToRun (AOT-vorkompiliert) → deutlich schnellerer Start und Durchlauf</li>
+            <li>Getrimmt → kleinere exe, für Netzwerk-/Massenverteilung</li>
+            <li>Kein <code>.obj</code>-Export</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="sheet" id="fehler">
+      <span class="sheet-tag">S-07 / DIAGNOSE</span>
+      <div class="sheet-head"><span class="kicker">Ergebnis lesen</span><h2>Ergebnis- &amp; Fehlerinterpretation</h2></div>
+
+      <h3>Konsolen-Zusammenfassung</h3>
+      <p>Am Ende jedes Laufs steht eine kurze Bilanz:</p>
+      <div class="cli">Processing completed successfully.
+  Total BuildingParts healed successfully: 128
+  Total BuildingParts failed to heal: 7
+  Relative BuildingParts failed: 5.19%
+  Total GML files skipped due to errors: 1</div>
+
+      <h3>IsValid / Log richtig lesen</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Zeile in …</th><th>IsValid = false bedeutet</th></tr></thead>
+          <tbody>
+            <tr><td class="key">Buildings</td><td>mindestens ein <code>BuildingPart</code> dieses Gebäudes konnte nicht geheilt werden oder war schon beim Einlesen ungültig — <code>Log</code> listet welches(s) und warum. Erfolgreich geheilte Geschwister-Teile stehen trotzdem vollständig in der Datenbank.</td></tr>
+            <tr><td class="key">BuildingParts / Surfaces / Polygons / LinearRings</td><td>wird automatisch aus den zugehörigen Fehler-Flags abgeleitet (z. B. <code>MissingRoofSurface</code>, <code>NotPlanar</code>, <code>InvalidTopology</code>) — <code>Log</code> nennt die Flags im Klartext.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <b>Nur Erfolge werden vollständig geschrieben:</b> Ein <code>BuildingPart</code> landet nur dann mit Surfaces/Polygonen/Ringen in der Datenbank, wenn die Heilung vollständig gelungen ist. Fehlgeschlagene Teile tauchen ausschließlich im <code>Log</code> der übergeordneten <code>Building</code>-Zeile auf — es gibt keine „halb geheilten“ Geometriedaten in der DB.
+      </div>
+
+      <h3>Eine Datei schlägt fehl — was dann?</h3>
+      <p>Eine defekte GML-Datei (Parse-Fehler, unerwarteter Sonderfall) beendet nicht den gesamten Lauf. Die Datei wird geloggt und übersprungen, alle übrigen Dateien im Ordner werden trotzdem verarbeitet. Die Anzahl übersprungener Dateien erscheint am Ende als <code class="tabular">Total GML files skipped due to errors</code>.</p>
+    </section>
+
+    <section class="sheet" id="grenzen">
+      <span class="sheet-tag">S-08 / HINWEISE</span>
+      <div class="sheet-head"><span class="kicker">Grenzen</span><h2>Was das Tool nicht tut</h2></div>
+      <ul class="plain">
+        <li>Verarbeitet nur <b>CityGML 1.0</b> mit LOD2-Gebäudegeometrie (Ground-/Wall-/RoofSurface) — andere LODs oder CityGML-2/3-spezifische Elemente werden nicht erkannt.</li>
+        <li>Durchsucht den Eingabeordner <b>nicht rekursiv</b> — nur <code>*.gml</code>-Dateien direkt im angegebenen Ordner.</li>
+        <li>Läuft rein <b>sequenziell</b> (eine Datei nach der anderen); es gibt aktuell keine parallele Verarbeitung mehrerer Dateien.</li>
+        <li>Ist an <b>Windows/x64</b> gebunden (nutzt die Windows-eigene <code>winsqlite3.dll</code> über SQLitePCLRaw).</li>
+        <li>Reparaturen bleiben innerhalb der angegebenen Toleranzen — grob fehlerhafte Eingabegeometrie (z. B. Punkte weit außerhalb jeder sinnvollen Toleranz) führt zu einem kontrollierten Fehlschlag dieses Gebäudeteils, nicht zu einer erzwungenen Notlösung.</li>
+      </ul>
+    </section>
+
+  </main>
+</div>
+
+<footer class="sheetfoot">CityGmlHealer / citygml2sqlite — internes Werkzeug-Blatt, erstellt aus dem aktuellen Quellcode-Stand.</footer>
+
+</body></html>

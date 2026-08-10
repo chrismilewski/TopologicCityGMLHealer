@@ -1,8 +1,14 @@
 # sql2gml
 
-Java-Tool zum Zurückschreiben von validierten und reparierten CityGML-Geometrien aus einer SQLite-Datenbank in CityGML 1.0 Dateien.
+Java-Tool zum Zurückschreiben von validierten und reparierten CityGML-Geometrien aus einer SQLite-Datenbank (neues Healer-Schema) in CityGML 1.0 Dateien.
 
-Die Datenbank enthält eine hierarchische Gebäudestruktur (Buildings → BuildingParts → Surfaces → Polygons → LinearRings) mit korrigierten Koordinaten und Validierungsprotokollen. `sql2gml` liest diese Daten und schreibt sie zurück in die Original-CityGML-Datei — dabei werden Koordinaten aktualisiert, neue Polygone erzeugt, ungültige Geometrien entfernt und Logs als generische Attribute hinzugefügt.
+Die Datenbank enthält eine hierarchische Gebäudestruktur (Buildings → BuildingParts → Surfaces → SurfaceGeometries → PosLists) mit korrigierten Koordinaten und Validierungsprotokollen. Jede Surface trägt genau eine SurfaceGeometry, die entweder ein klassisches `gml:Polygon` (Außenring + Löcher) oder eine `gml:TriangulatedSurface` (Notlösung des Healers für nicht planarisierbare Flächen) ist.
+
+Der Standard-Workflow ist der **HealedReplaceWorkflow** (Main-Class des JARs, gestartet per `java -jar`): Für jedes Gebäude, das UND dessen gesamte Unterhierarchie (BuildingParts/Surfaces/Geometrien/PosLists) in der DB vollständig valide sind, wird die **gesamte Geometrie komplett ersetzt** — Solid samt XLinks neu erzeugt. Gebäude ohne DB-Eintrag oder mit irgendeinem invaliden Teil bleiben **unverändert** (kein teilweiser Ersatz, keine Hüllen-Lücken). Neue BuildingParts (Party-Wall-Merge/Split durch den Healer) werden automatisch angelegt, überholte alte Parts entfernt. Building-Attribute (measuredHeight, function, …) bleiben erhalten, DB-Logs werden als generische Attribute geschrieben.
+
+Daneben existiert **PolygonOnlyReplaceWorkflow** — identischer Aufruf, schreibt aber niemals `gml:TriangulatedSurface`, sondern zerlegt trianguliert Flächen in einzelne `gml:Polygon` (ein Dreieck je Polygon). Grund: CityDoctor 3.18.2 kann eine per xlink referenzierte TIN nicht auflösen und meldet fälschlich `GE_S_NOT_CLOSED`, obwohl `TriangulatedSurface` CityGML-1.0-konform ist.
+
+Die **älteren, per `java -cp … de.mpsc.sql2gml.legacy.<Klasse>` erreichbaren Workflows** (`ReplaceWorkflow`, `CompleteWorkflow`) arbeiten auf dem alten DB-Schema (Polygons + LinearRings statt SurfaceGeometries + PosLists) und werden nicht mehr weiterentwickelt — siehe Doku.md, Abschnitt „Legacy".
 
 ---
 
@@ -28,7 +34,7 @@ Alle Abhängigkeiten werden **automatisch von Maven heruntergeladen** — kein m
 
 | Bibliothek | Version | Zweck |
 |------------|---------|-------|
-| **citygml4j-xml** | 3.2.7 | CityGML-Dateien lesen und schreiben (CityGML 1.0 / 2.0 / 3.0); stellt das vollständige CityGML-Objektmodell bereit (`Building`, `WallSurface`, `Polygon`, `LinearRing`, …) sowie `CityGMLReader`, `CityGMLChunkWriter` und `ObjectWalker` |
+| **citygml4j-xml** | 3.2.7 | CityGML-Dateien lesen und schreiben (CityGML 1.0 / 2.0 / 3.0); stellt das vollständige CityGML-Objektmodell bereit (`Building`, `WallSurface`, `Polygon`, `TriangulatedSurface`, …) sowie `CityGMLReader`, `CityGMLChunkWriter` |
 | **sqlite-jdbc** | 3.47.1.0 | JDBC-Treiber für SQLite-Datenbanken; ermöglicht den direkten Zugriff auf `.db`-Dateien ohne Datenbank-Server |
 | **gson** | 2.11.0 | JSON-Parsing; liest die `Attributes`-Spalten (Building, Surface, …) als `Map<String, Object>` |
 | **slf4j-simple** | 2.0.16 | Einfache Logging-Ausgabe auf der Konsole (kein Konfigurationsfile notwendig) |
@@ -49,7 +55,7 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 mvn clean package -q
 ```
 
-Ergebnis: `target/sql2gml-complete.jar` — ein eigenständiges JAR mit allen Abhängigkeiten.
+Ergebnis: `target/sql2gml-complete.jar` — ein eigenständiges JAR mit allen Abhängigkeiten. Main-Class ist `HealedReplaceWorkflow`.
 
 ---
 
@@ -58,8 +64,10 @@ Ergebnis: `target/sql2gml-complete.jar` — ein eigenständiges JAR mit allen Ab
 ### Modus 1 — Einzelne Datei
 
 ```powershell
-java -jar target/sql2gml-complete.jar <input.gml> <database.db> <output.gml>
+java -jar target/sql2gml-complete.jar <input.gml> <database.db> [<output.gml>]
 ```
+
+Ohne expliziten Output wird `<input>_new.gml` neben der Eingabe erzeugt.
 
 Beispiel:
 
@@ -80,10 +88,25 @@ java -jar target/sql2gml-complete.jar <inputFolder> <database.db> [<outputFolder
 
 ### Modus 3 — Auto-Batch (empfohlen für große Datensätze)
 
-Liest die Dateiliste direkt aus der `CityGmlFiles`-Tabelle der Datenbank. Überspringt automatisch Kacheln ohne Modifikationen:
+Liest die Dateiliste direkt aus der `CityGmlFiles`-Tabelle der Datenbank. Überspringt automatisch Kacheln ohne valide Geometrien:
 
 ```powershell
 java -jar target/sql2gml-complete.jar <database.db> <inputFolder> <outputFolder> --auto
+```
+
+### PolygonOnlyReplaceWorkflow (keine TriangulatedSurface in der Ausgabe)
+
+Identischer Aufruf zu allen drei Modi oben, nur mit anderer Main-Class:
+
+```powershell
+java -cp target/sql2gml-complete.jar de.mpsc.sql2gml.PolygonOnlyReplaceWorkflow <input.gml> <database.db> [<output.gml>]
+```
+
+### Legacy-Workflows (altes DB-Schema, nicht weiterentwickelt)
+
+```powershell
+java -cp target/sql2gml-complete.jar de.mpsc.sql2gml.legacy.ReplaceWorkflow <gleiche Argumente>
+java -cp target/sql2gml-complete.jar de.mpsc.sql2gml.legacy.CompleteWorkflow <gleiche Argumente>
 ```
 
 ---
@@ -92,7 +115,7 @@ java -jar target/sql2gml-complete.jar <database.db> <inputFolder> <outputFolder>
 
 ### ExtractSst — Gebäude mit `sst`-Attribut extrahieren
 
-Extrahiert nur Gebäude mit dem generischen Attribut `name="sst"`. Textstrom-basiert — effizient auch für sehr große Kacheln.
+Extrahiert nur Gebäude mit dem generischen Attribut `name="sst"`. Textstrom-basiert (`GmlMemberFilter`) — effizient auch für sehr große Kacheln.
 
 ```powershell
 # Einzelne Datei (Output neben der Eingabe als _sst.gml)
@@ -115,24 +138,7 @@ java -cp target/sql2gml-complete.jar de.mpsc.sql2gml.ExtractBuildings <input.gml
 
 ## Ausführliche Dokumentation
 
-**→ [Doku.md](Doku.md)** — Vollständige Klassen-Dokumentation, Datenbankschema, Algorithmen, innere Klassen (`PolygonIndex`, `GmlUpdateWalker`, `ProcessingStats`) und citygml4j-Codebeispiele.
-
-
-## Voraussetzungen
-
-- Java 21+
-- Maven 3.6+
-
-## Dokumentation
-
-**→ Ausführliche Dokumentation siehe [Doku.md](Doku.md)**
-
-Enthält:
-- Vollständige Datenbankstruktur mit IsValid/Log-Semantik
-- Alle Ausführungsmodi (Single/Batch/Auto)
-- Klassen-Dokumentation (CompleteWorkflow, DatabaseReader, Model-Klassen)
-- citygml4j-Architektur und Code-Beispiele
-- Beispiel-Workflows
+**→ [Doku.md](Doku.md)** — Vollständige Klassen-Dokumentation, Datenbankschema (neu + Legacy), Algorithmen und citygml4j-Codebeispiele.
 
 ## Lizenz
 

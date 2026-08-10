@@ -1,0 +1,621 @@
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|Current FME version: FME 2025.2.3.0 (20260128 - Build 25831 - WIN64)
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|System Time: 20260714134550 UTC
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME_HOME is 'C:\Program Files\FME\'
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME license: FME Form (floating)
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|Machine host name is: kt21
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|OS Locale Name     : de_DE
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|OS Locale Encoding : windows-1252
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|Process Encoding   : UTF-8
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME API version: '4.0 20250912'
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME Configuration: FME_BASE is 'no'
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME Configuration: FME_MF_DIR is 'D:\02_Projekte\02_MPSC_digitaler_Starkregenzwilling\TopologicCityGMLHealer\DD_BIM_LoD2_2_LoD3_Converter\FME_Workbenches/'
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME Configuration: FME_MF_NAME is 'CityGML_GeometryTest.fmw'
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME Configuration: FME_PRODUCT_NAME is 'FME(R) 2025.2.3.0'
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|Operating System: Microsoft Windows 11 Education 64-Bit (Build 26100)
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME Platform: WIN64
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|System Status: 26.78 GB of disk space available in the FME temporary folder (C:\Users\dhoye396.DOM\AppData\Local\Temp\wbrun_1784031148655_25076\fmetmp_5)
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|System Status: 31.74 GB of physical memory available
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|System Status: 126.96 GB of virtual memory available
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|START - ProcessID: 29148, peak process memory usage: 70092 kB, current process memory usage: 56592 kB
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME Configuration: Command line arguments are `C:\Program Files\FME\fme.exe' `D:\02_Projekte\02_MPSC_digitaler_Starkregenzwilling\TopologicCityGMLHealer\DD_BIM_LoD2_2_LoD3_Converter\FME_Workbenches\wb-xlate-1784036748117_25076' `--FME_LAUNCH_VIEWER_APP' `WORKBENCH' `LOG_STANDARDOUT' `YES' `LOG_TIMINGS' `YES' `LogCountServerName' `57593' `LOG_STANDARDOUT' `No' `WORKBENCH_LOG_SERVER' `64608'
+2026-07-14 15:45:50|   0.0|  0.0|INFORM|FME Configuration: Connection Storage: 'C:\Users\dhoye396.DOM\AppData\Roaming\Safe Software\FME\'
+2026-07-14 15:45:50|   0.2|  0.2|INFORM|Shared folders for formats are : C:\Program Files\FME\datasources;C:\Users\dhoye396.DOM\Documents\FME\Formats
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Shared folders for transformers are : C:\Users\dhoye396.DOM\AppData\Roaming\Safe Software\FME\Packages\25831-win64\transformers;C:\Program Files\FME\transformers;C:\Users\dhoye396.DOM\AppData\Roaming\Safe Software\FME\FME Store\Transformers
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Shared folders for coordinate systems are : C:\Users\dhoye396.DOM\Documents\FME\CoordinateSystems
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Shared folders for coordinate system exceptions are : C:\Users\dhoye396.DOM\Documents\FME\CoordinateSystemExceptions
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Shared folders for coordinate system grid overrides are : C:\Users\dhoye396.DOM\Documents\FME\CoordinateSystemGridOverrides
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Shared folders for CS-MAP transformation exceptions are : C:\Users\dhoye396.DOM\Documents\FME\CsmapTransformationExceptions
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Shared folders for transformer categories are : C:\Users\dhoye396.DOM\Documents\FME\TransformerCategories
+2026-07-14 15:45:50|   0.2|  0.0|WARN  |Failed to free sufficient memory to reach the process usage limit. To improve stability and performance please increase the memory available to FME. Available memory can be increased by adding physical RAM, increasing swap space, or closing other applications
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|FME Configuration: No destination coordinate system set
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|FME Configuration: Current working folder is `D:\02_Projekte\02_MPSC_digitaler_Starkregenzwilling\TopologicCityGMLHealer\DD_BIM_LoD2_2_LoD3_Converter\FME_Workbenches'
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|FME Configuration: Temporary folder is `C:\Users\dhoye396.DOM\AppData\Local\Temp\wbrun_1784031148655_25076\fmetmp_5', set from environment variable `FME_TEMP'
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|FME Configuration: Cache folder is 'C:\Users\dhoye396.DOM\AppData\Local\Temp'
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|FME Configuration: FME_HOME is `C:\Program Files\FME\'
+2026-07-14 15:45:50|   0.2|  0.0|WARN  |FME Configuration: Extremely low initial memory conditions detected. To improve stability and performance please increase the memory available to FME. Available memory can be increased by adding physical RAM, increasing swap space, or closing other applications
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Creating writer for format: 
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Creating reader for format: 
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|MULTI_READER(MULTI_READER): Will fail with first member reader failure
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|MULTI_READER(MULTI_READER): Adding CITYGML Reader with keyword CITYGML_2
+2026-07-14 15:45:50|   0.2|  0.0|INFORM|Using Multi Reader with keyword `MULTI_READER' to read multiple datasets
+2026-07-14 15:45:51|   0.4|  0.2|INFORM|Creating reader for format: OGC CityGML
+2026-07-14 15:45:51|   0.4|  0.0|INFORM|Trying to find a DYNAMIC plugin for reader named `CITYGML'
+2026-07-14 15:45:51|   0.4|  0.0|INFORM|Opening the CITYGML reader with source dataset 'D:\02_Projekte\02_MPSC_digitaler_Starkregenzwilling\gml2sql2gml\sqltest\output\Test_14_Buildings\LoD2_33_412_5652_2_SN_BuildingPreferences.gml'
+2026-07-14 15:45:51|   0.4|  0.0|INFORM|Parsing XML document 'D:\02_Projekte\02_MPSC_digitaler_Starkregenzwilling\gml2sql2gml\sqltest\output\Test_14_Buildings\LoD2_33_412_5652_2_SN_BuildingPreferences.gml'
+2026-07-14 15:45:51|   0.4|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_aixm.xml' is being used to map from URI to URI
+2026-07-14 15:45:51|   0.4|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_inspire.xml' is being used to map from URI to URI
+2026-07-14 15:45:51|   0.5|  0.1|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_sosi.xml' is being used to map from URI to URI
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_urimap.xml' is being used to map from URI to URI
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_citygml.xml' is being used to map from URI to URI
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|CityGML Reader: Using cached xfMap 'C:\Users\dhoye396.DOM\AppData\Local\Temp\GML_XFMAP_CACHE\CACHED_AUTOGEN_1784031289405_21400.xfmap'
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|Using MultiWriter with keyword `PRIMARY_DEST' to output data (ID_ATTRIBUTE is `multi_writer_id')
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|Writer output will be ordered by value of multi_writer_id
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|FME Configuration: Using FME Reprojection Engine
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|The XML Reader is using xfMap 'C:\Users\dhoye396.DOM\AppData\Local\Temp\GML_XFMAP_CACHE\CACHED_AUTOGEN_1784031289405_21400.xfmap'
+2026-07-14 15:45:51|   0.5|  0.0|INFORM|Parsing XML document 'D:\02_Projekte\02_MPSC_digitaler_Starkregenzwilling\gml2sql2gml\sqltest\output\Test_14_Buildings\LoD2_33_412_5652_2_SN_BuildingPreferences.gml'
+2026-07-14 15:45:52|   1.9|  1.4|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:45:53|   2.2|  0.3|INFORM|XML Reader mapped feature # 5000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:45:53|   2.9|  0.7|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:45:54|   3.5|  0.6|INFORM|XML Reader mapped feature # 10000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:45:55|   3.8|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:45:56|   5.0|  1.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:45:56|   5.0|  0.0|INFORM|XML Reader mapped feature # 15000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:45:57|   5.8|  0.8|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:45:57|   6.4|  0.6|INFORM|XML Reader mapped feature # 20000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:45:58|   7.0|  0.6|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:45:59|   8.0|  1.0|INFORM|XML Reader mapped feature # 25000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:45:59|   8.3|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:00|   9.6|  1.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:00|   9.6|  0.0|INFORM|XML Reader mapped feature # 30000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:01|  10.4|  0.8|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:02|  11.0|  0.6|INFORM|XML Reader mapped feature # 35000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:02|  11.4|  0.4|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:03|  12.2|  0.8|INFORM|XML Reader mapped feature # 40000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:03|  12.5|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:05|  13.7|  1.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:05|  13.7|  0.0|INFORM|XML Reader mapped feature # 45000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:05|  14.4|  0.7|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:06|  14.8|  0.4|INFORM|XML Reader mapped feature # 50000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:06|  15.3|  0.5|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:07|  16.0|  0.7|INFORM|XML Reader mapped feature # 55000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:07|  16.2|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:08|  17.4|  1.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:08|  17.4|  0.0|INFORM|XML Reader mapped feature # 60000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:09|  18.4|  1.0|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:10|  18.9|  0.5|INFORM|XML Reader mapped feature # 65000  (xfMap: CityGML XFMAP auto-gen)
+2026-07-14 15:46:10|  19.2|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:11|  20.4|  1.2|INFORM|... Last line repeated 9 times ...
+2026-07-14 15:46:11|  20.4|  0.0|INFORM|FME Configuration: Source coordinate system for reader CITYGML_2[CITYGML] set to `EPSG:25833' as read from input data
+2026-07-14 15:46:11|  20.4|  0.0|INFORM|Coordinate System `EPSG:25833' parameters: CS_NAME=`ETRS89.UTM-33N' DESC_NM=`Transverse Mercator (ETRS89-TM33)' DT_NAME=`ETRF89' EPSG_QD=`1' GROUP=`UTMN' MAP_SCL=`1' MAX_LAT=`84.76666666666667' MAX_LNG=`18.516666666666666' MIN_LAT=`45.65' MIN_LNG=`11.5' PARM1=`15' PROJ=`TM' QUAD=`1' SCL_RED=`0.9996' SOURCE=`EPSG, V6.3, 25833 [Large and medium scale topographic mappi]' UNIT=`Meter' X_OFF=`500000' Y_OFF=`0.0' ZERO_X=`0.0001' ZERO_Y=`0.0001'
+2026-07-14 15:46:12|  20.6|  0.2|INFORM|Creating writer for format: OGC CityGML
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|Trying to find a DYNAMIC plugin for writer named `CITYGML'
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|FME Configuration: No destination coordinate system set
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|Writer `CITYGML_1' of type `CITYGML' using group definition keyword `CITYGML_1_DEF'
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_aixm.xml' is being used to map from URI to URI
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_inspire.xml' is being used to map from URI to URI
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_sosi.xml' is being used to map from URI to URI
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_urimap.xml' is being used to map from URI to URI
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_citygml.xml' is being used to map from URI to URI
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|URI 'CityGML.xsd' mapped to 'file:///C%3A%5CProgram%20Files%5CFME%5Cxml%5Cschemas%5CCityGML%5CCityGML%5C2.0%5CCityGML.xsd'
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|Parsing schema document 'file:///C%3A%5CProgram%20Files%5CFME%5Cxml%5Cschemas%5CCityGML%5CCityGML%5C2.0%5CCityGML.xsd' ...
+2026-07-14 15:46:12|  20.6|  0.0|INFORM|A <schemaLocation> in the uri-map is overriding the namespace 'http://www.w3.org/1999/xlink' xsd location from '../xlink/xlinks.xsd' to 'xlink.xsd'
+2026-07-14 15:46:12|  20.7|  0.1|INFORM|Using XSD semantics configuration file 'file:///C:/Program Files/FME/xml/CityGML/CityGML_config.xml'.
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'xlink' for uri 'http://www.w3.org/1999/xlink'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'gml' for uri 'http://www.opengis.net/gml'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'sch' for uri 'http://www.ascc.net/xml/schematron'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'smil20' for uri 'http://www.w3.org/2001/SMIL20/'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'xsi' for uri 'http://www.w3.org/2001/XMLSchema-instance'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'core' for uri 'http://www.opengis.net/citygml/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'smil20lang' for uri 'http://www.w3.org/2001/SMIL20/Language'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'grp' for uri 'http://www.opengis.net/citygml/cityobjectgroup/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'bldg' for uri 'http://www.opengis.net/citygml/building/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'app' for uri 'http://www.opengis.net/citygml/appearance/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'gen' for uri 'http://www.opengis.net/citygml/generics/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'xAL' for uri 'urn:oasis:names:tc:ciq:xsdschema:xAL:2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'pbase' for uri 'http://www.opengis.net/citygml/profiles/base/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'luse' for uri 'http://www.opengis.net/citygml/landuse/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'dem' for uri 'http://www.opengis.net/citygml/relief/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'tex' for uri 'http://www.opengis.net/citygml/texturedsurface/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'veg' for uri 'http://www.opengis.net/citygml/vegetation/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'tun' for uri 'http://www.opengis.net/citygml/tunnel/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'wtr' for uri 'http://www.opengis.net/citygml/waterbody/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'frn' for uri 'http://www.opengis.net/citygml/cityfurniture/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'brid' for uri 'http://www.opengis.net/citygml/bridge/2.0'
+2026-07-14 15:46:12|  20.7|  0.0|INFORM|Using prefix 'tran' for uri 'http://www.opengis.net/citygml/transportation/2.0'
+2026-07-14 15:46:13|  20.9|  0.2|INFORM|Creating reader for format: XML (Extensible Markup Language)
+2026-07-14 15:46:13|  21.0|  0.1|INFORM|Trying to find a DYNAMIC plugin for reader named `XML'
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|Opening the XML reader with source dataset 'C:\Users\dhoye396.DOM\AppData\Local\Temp\wbrun_1784031148655_25076\fmetmp_5\FME_1784036772737_29148.xfmap'
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|The XML Reader is using xfMap 'C:\Program Files\FME\xml\CityGML\CityGML_meta_schema_xfmap.xml'
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_aixm.xml' is being used to map from URI to URI
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_citygml.xml' is being used to map from URI to URI
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_inspire.xml' is being used to map from URI to URI
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_sosi.xml' is being used to map from URI to URI
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|The uri-map document 'C:\Program Files\FME\xml\urimap\gml_urimap.xml' is being used to map from URI to URI
+2026-07-14 15:46:13|  21.0|  0.0|INFORM|Parsing XML document 'C:\Users\dhoye396.DOM\AppData\Local\Temp\wbrun_1784031148655_25076\fmetmp_5\FME_1784036772737_29148.xfmap'
+2026-07-14 15:46:13|  21.2|  0.2|INFORM|FME Configuration: Destination coordinate system set to input coordinate system `EPSG:25833'
+2026-07-14 15:46:13|  21.4|  0.2|INFORM|Reading source feature # 500
+2026-07-14 15:46:14|  21.6|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:18|  26.1|  4.5|INFORM|... Last line repeated 15 times ...
+2026-07-14 15:46:18|  26.1|  0.0|INFORM|Reading source feature # 16.000
+2026-07-14 15:46:19|  26.4|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:24|  31.3|  4.9|INFORM|... Last line repeated 19 times ...
+2026-07-14 15:46:24|  31.3|  0.0|INFORM|Reading source feature # 33.000
+2026-07-14 15:46:24|  31.3|  0.0|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:29|  36.2|  4.9|INFORM|... Last line repeated 19 times ...
+2026-07-14 15:46:29|  36.2|  0.0|INFORM|Reading source feature # 48.000
+2026-07-14 15:46:29|  36.5|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:32|  39.4|  2.9|INFORM|... Last line repeated 20 times ...
+2026-07-14 15:46:32|  39.4|  0.0|INFORM|MULTI_READER(MULTI_READER): Done reading 66480 features from 1 readers
+2026-07-14 15:46:32|  39.4|  0.0|INFORM|Emptying factory pipeline
+2026-07-14 15:46:32|  39.4|  0.0|STATS |Router and Unexpected Input Remover (RoutingFactory): Tested 66480 input feature(s), wrote 66480 output feature(s): 66480 matched merge filters, 66480 were routed to output, 0 could not be routed.
+2026-07-14 15:46:32|  39.4|  0.0|STATS |Unwanted Router Input Nuker (TeeFactory): Cloned 0 input feature(s) into 0 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |WallSurface_CITYGML_2 Splitter (TeeFactory): Cloned 37438 input feature(s) into 37438 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |RoofSurface_CITYGML_2 Splitter (TeeFactory): Cloned 15838 input feature(s) into 15838 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |GroundSurface_CITYGML_2 Splitter (TeeFactory): Cloned 5375 input feature(s) into 5375 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |CityModel_CITYGML_2 Splitter (TeeFactory): Cloned 1 input feature(s) into 1 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |BuildingPart_CITYGML_2 Splitter (TeeFactory): Cloned 1251 input feature(s) into 1251 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |Building_CITYGML_2 Splitter (TeeFactory): Cloned 4473 input feature(s) into 4473 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |Address_CITYGML_2 Splitter (TeeFactory): Cloned 2104 input feature(s) into 2104 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |Buildings_mit_sst_INPUT (TeeFactory): Cloned 4473 input feature(s) into 4473 output feature(s)
+2026-07-14 15:46:32|  39.4|  0.0|STATS |Buildings_mit_sst (TestFactory): Tested 4473 input feature(s) -- 2319 feature(s) passed and 2154 feature(s) failed
+2026-07-14 15:46:32|  39.4|  0.0|STATS |Buildings_mit_sst sst ATTRIBUTE_HAS_A_VALUE Splitter (TeeFactory): Cloned 2319 input feature(s) into 4638 output feature(s)
+2026-07-14 15:46:32|  39.8|  0.4|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:35|  41.8|  2.0|INFORM|... Last line repeated 5 times ...
+2026-07-14 15:46:35|  41.8|  0.0|STATS |B_Parts_mit_sst (ReferenceFactory): Total Results: 992 Complete Feature(s), 259 Incomplete Feature(s), 317 Referenced Feature(s), 2002 Unreferenced Feature(s), 0 Referencer Feature(s) (NO REFERENCES), 0 Referencee Feature(s) (NO Referencee fields defined), and 0 Duplicate Referencee Feature(s)
+2026-07-14 15:46:35|  41.8|  0.0|STATS |Junction (TeeFactory): Cloned 3311 input feature(s) into 3311 output feature(s)
+2026-07-14 15:46:35|  41.8|  0.0|STATS |Junction Output Splitter (TeeFactory): Cloned 3311 input feature(s) into 13244 output feature(s)
+2026-07-14 15:46:35|  41.8|  0.0|STATS |TestFilter_2_INPUT (TeeFactory): Cloned 470 input feature(s) into 470 output feature(s)
+2026-07-14 15:46:35|  41.8|  0.0|STATS |TestFilter_2 (TestFactory): Tested 470 input feature(s) -- 470 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:46:35|  41.8|  0.0|STATS |TestFilter_3_INPUT (TeeFactory): Cloned 407 input feature(s) into 407 output feature(s)
+2026-07-14 15:46:35|  41.8|  0.0|STATS |TestFilter_3 (TestFactory): Tested 407 input feature(s) -- 407 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:46:35|  41.9|  0.1|INFORM|GeometryValidator_3 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1306580671999991e-8
+2026-07-14 15:46:35|  41.9|  0.0|INFORM|GeometryValidator_4 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1306580671999991e-8
+2026-07-14 15:46:35|  42.2|  0.3|INFORM|GeometryValidator_3 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1306017058000013e-8
+2026-07-14 15:46:35|  42.2|  0.0|INFORM|GeometryValidator_4 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1306017058000013e-8
+2026-07-14 15:46:35|  42.2|  0.0|INFORM|GeometryValidator_3 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1304736337999974e-8
+2026-07-14 15:46:35|  42.2|  0.0|INFORM|GeometryValidator_4 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1304736337999974e-8
+2026-07-14 15:46:35|  42.2|  0.0|INFORM|GeometryValidator_3 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1304998031999972e-8
+2026-07-14 15:46:35|  42.2|  0.0|INFORM|GeometryValidator_4 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1304998031999972e-8
+2026-07-14 15:46:35|  42.2|  0.0|INFORM|GeometryValidator_3 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1306527691999997e-8
+2026-07-14 15:46:35|  42.2|  0.0|INFORM|GeometryValidator_4 (GeometryValidationFactory): Detecting self-intersections in 2D geometries with an automatic tolerance of 1.1306527691999997e-8
+2026-07-14 15:46:36|  42.5|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:40|  46.1|  3.6|INFORM|... Last line repeated 7 times ...
+2026-07-14 15:46:40|  46.1|  0.0|INFORM|GroundSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 33.48% of intermediate processing
+2026-07-14 15:46:40|  46.3|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:45|  51.0|  4.7|INFORM|... Last line repeated 10 times ...
+2026-07-14 15:46:45|  51.0|  0.0|INFORM|GroundSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 78.13% of intermediate processing
+2026-07-14 15:46:45|  51.0|  0.0|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:49|  55.1|  4.1|INFORM|... Last line repeated 8 times ...
+2026-07-14 15:46:49|  55.1|  0.0|INFORM|GroundSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 100% of intermediate processing
+2026-07-14 15:46:49|  55.3|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:50|  55.6|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:50|  55.6|  0.0|STATS |GroundSurface_mit_sst (ReferenceFactory): Total Results: 3039 Complete Feature(s), 2336 Incomplete Feature(s), 2994 Referenced Feature(s), 317 Unreferenced Feature(s), 0 Referencer Feature(s) (NO REFERENCES), 0 Referencee Feature(s) (NO Referencee fields defined), and 0 Duplicate Referencee Feature(s)
+2026-07-14 15:46:50|  55.6|  0.0|STATS |GroundSurface_mit_sst MERGED Splitter (TeeFactory): Cloned 3039 input feature(s) into 6078 output feature(s)
+2026-07-14 15:46:50|  55.6|  0.0|STATS |PlanarityFilter_3 (TeeFactory): Cloned 3039 input feature(s) into 3039 output feature(s)
+2026-07-14 15:46:50|  56.2|  0.6|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:46:55|  60.5|  4.3|INFORM|... Last line repeated 9 times ...
+2026-07-14 15:46:55|  60.5|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 10.1% of intermediate processing
+2026-07-14 15:46:55|  60.6|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:00|  65.6|  5.0|INFORM|... Last line repeated 10 times ...
+2026-07-14 15:47:00|  65.6|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 20.2% of intermediate processing
+2026-07-14 15:47:00|  65.8|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:05|  70.5|  4.7|INFORM|... Last line repeated 11 times ...
+2026-07-14 15:47:05|  70.5|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 30.3% of intermediate processing
+2026-07-14 15:47:05|  70.7|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:10|  75.7|  5.0|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:47:10|  75.7|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 41.04% of intermediate processing
+2026-07-14 15:47:11|  76.0|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:16|  80.9|  4.9|INFORM|... Last line repeated 13 times ...
+2026-07-14 15:47:16|  80.9|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 52.4% of intermediate processing
+2026-07-14 15:47:16|  81.0|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:21|  86.0|  5.0|INFORM|... Last line repeated 14 times ...
+2026-07-14 15:47:21|  86.0|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 63.13% of intermediate processing
+2026-07-14 15:47:21|  86.1|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:26|  91.1|  5.0|INFORM|... Last line repeated 13 times ...
+2026-07-14 15:47:26|  91.1|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 73.24% of intermediate processing
+2026-07-14 15:47:26|  91.1|  0.0|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:31|  96.2|  5.1|INFORM|... Last line repeated 13 times ...
+2026-07-14 15:47:31|  96.2|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 82.71% of intermediate processing
+2026-07-14 15:47:31|  96.2|  0.0|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:36| 100.9|  4.7|INFORM|... Last line repeated 14 times ...
+2026-07-14 15:47:36| 100.9|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 92.81% of intermediate processing
+2026-07-14 15:47:37| 101.2|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:40| 104.4|  3.2|INFORM|... Last line repeated 8 times ...
+2026-07-14 15:47:40| 104.4|  0.0|INFORM|RoofSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 100% of intermediate processing
+2026-07-14 15:47:40| 104.5|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:40| 104.9|  0.4|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:40| 104.9|  0.0|STATS |RoofSurface_mit_sst (ReferenceFactory): Total Results: 11905 Complete Feature(s), 3933 Incomplete Feature(s), 2994 Referenced Feature(s), 317 Unreferenced Feature(s), 0 Referencer Feature(s) (NO REFERENCES), 0 Referencee Feature(s) (NO Referencee fields defined), and 0 Duplicate Referencee Feature(s)
+2026-07-14 15:47:40| 104.9|  0.0|STATS |RoofSurface_mit_sst MERGED Splitter (TeeFactory): Cloned 11905 input feature(s) into 23810 output feature(s)
+2026-07-14 15:47:40| 104.9|  0.0|STATS |PlanarityFilter (TeeFactory): Cloned 11905 input feature(s) into 11905 output feature(s)
+2026-07-14 15:47:41| 105.1|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:46| 109.8|  4.7|INFORM|... Last line repeated 11 times ...
+2026-07-14 15:47:46| 109.8|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 5.07% of intermediate processing
+2026-07-14 15:47:46| 110.0|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:51| 115.0|  5.0|INFORM|... Last line repeated 11 times ...
+2026-07-14 15:47:51| 115.0|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 10.41% of intermediate processing
+2026-07-14 15:47:51| 115.1|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:47:56| 120.0|  4.9|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:47:56| 120.0|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 16.02% of intermediate processing
+2026-07-14 15:47:57| 120.4|  0.4|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:01| 125.0|  4.6|INFORM|... Last line repeated 9 times ...
+2026-07-14 15:48:01| 125.0|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 20.3% of intermediate processing
+2026-07-14 15:48:01| 125.1|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:06| 129.7|  4.6|INFORM|... Last line repeated 7 times ...
+2026-07-14 15:48:06| 129.7|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 23.5% of intermediate processing
+2026-07-14 15:48:07| 130.1|  0.4|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:12| 134.7|  4.6|INFORM|... Last line repeated 10 times ...
+2026-07-14 15:48:12| 134.7|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 28.04% of intermediate processing
+2026-07-14 15:48:12| 134.9|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:17| 140.0|  5.1|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:48:17| 140.0|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 32.85% of intermediate processing
+2026-07-14 15:48:17| 140.2|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:22| 145.1|  4.9|INFORM|... Last line repeated 11 times ...
+2026-07-14 15:48:22| 145.1|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 37.39% of intermediate processing
+2026-07-14 15:48:22| 145.3|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:27| 150.2|  4.9|INFORM|... Last line repeated 8 times ...
+2026-07-14 15:48:27| 150.2|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 41.13% of intermediate processing
+2026-07-14 15:48:28| 150.3|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:33| 155.2|  4.9|INFORM|... Last line repeated 7 times ...
+2026-07-14 15:48:33| 155.2|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 43.8% of intermediate processing
+2026-07-14 15:48:33| 155.8|  0.6|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:38| 160.0|  4.2|INFORM|... Last line repeated 7 times ...
+2026-07-14 15:48:38| 160.0|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 47.01% of intermediate processing
+2026-07-14 15:48:38| 160.0|  0.0|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:43| 165.1|  5.1|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:48:43| 165.1|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 52.08% of intermediate processing
+2026-07-14 15:48:43| 165.1|  0.0|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:48| 170.1|  5.0|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:48:48| 170.1|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 56.62% of intermediate processing
+2026-07-14 15:48:48| 170.2|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:53| 175.0|  4.8|INFORM|... Last line repeated 11 times ...
+2026-07-14 15:48:53| 175.0|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 60.9% of intermediate processing
+2026-07-14 15:48:53| 175.2|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:48:58| 180.2|  5.0|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:48:58| 180.2|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 65.7% of intermediate processing
+2026-07-14 15:48:59| 180.5|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:04| 185.4|  4.9|INFORM|... Last line repeated 11 times ...
+2026-07-14 15:49:04| 185.4|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 70.51% of intermediate processing
+2026-07-14 15:49:04| 185.5|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:09| 190.4|  4.9|INFORM|... Last line repeated 8 times ...
+2026-07-14 15:49:09| 190.4|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 73.98% of intermediate processing
+2026-07-14 15:49:09| 190.7|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:14| 195.4|  4.7|INFORM|... Last line repeated 9 times ...
+2026-07-14 15:49:14| 195.4|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 76.92% of intermediate processing
+2026-07-14 15:49:14| 195.5|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:19| 200.7|  5.2|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:49:19| 200.7|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 80.93% of intermediate processing
+2026-07-14 15:49:19| 200.8|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:24| 205.6|  4.8|INFORM|... Last line repeated 7 times ...
+2026-07-14 15:49:24| 205.6|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 83.33% of intermediate processing
+2026-07-14 15:49:25| 206.0|  0.4|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:30| 210.8|  4.8|INFORM|... Last line repeated 7 times ...
+2026-07-14 15:49:30| 210.8|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 86% of intermediate processing
+2026-07-14 15:49:30| 211.4|  0.6|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:35| 215.9|  4.5|INFORM|... Last line repeated 6 times ...
+2026-07-14 15:49:35| 215.9|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 89.21% of intermediate processing
+2026-07-14 15:49:35| 216.0|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:40| 221.1|  5.1|INFORM|... Last line repeated 11 times ...
+2026-07-14 15:49:40| 221.1|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 92.95% of intermediate processing
+2026-07-14 15:49:41| 221.3|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:45| 226.2|  4.9|INFORM|... Last line repeated 12 times ...
+2026-07-14 15:49:45| 226.2|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 96.42% of intermediate processing
+2026-07-14 15:49:46| 226.4|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:49| 229.7|  3.3|INFORM|... Last line repeated 9 times ...
+2026-07-14 15:49:49| 229.7|  0.0|INFORM|WallSurface_mit_sst (ReferenceFactory): Processing requestors: Completed 100% of intermediate processing
+2026-07-14 15:49:49| 229.8|  0.1|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:50| 230.1|  0.3|INFORM|... Last line repeated 2 times ...
+2026-07-14 15:49:50| 230.1|  0.0|STATS |WallSurface_mit_sst (ReferenceFactory): Total Results: 24750 Complete Feature(s), 12688 Incomplete Feature(s), 2994 Referenced Feature(s), 317 Unreferenced Feature(s), 0 Referencer Feature(s) (NO REFERENCES), 0 Referencee Feature(s) (NO Referencee fields defined), and 0 Duplicate Referencee Feature(s)
+2026-07-14 15:49:50| 230.1|  0.0|STATS |WallSurface_mit_sst MERGED Splitter (TeeFactory): Cloned 24750 input feature(s) into 49500 output feature(s)
+2026-07-14 15:49:50| 230.1|  0.0|STATS |PlanarityFilter_2 (TeeFactory): Cloned 24750 input feature(s) into 24750 output feature(s)
+2026-07-14 15:49:50| 230.3|  0.2|STATS |Gruppieren_nach_gml_id (AggregateFactory): Combined 1072 input feature(s) into 548 output feature(s), including 0 singleton(s)
+2026-07-14 15:49:50| 230.3|  0.0|STATS |non_planar_Buildings (TestFactory): Tested 548 input feature(s) -- 85 feature(s) passed and 463 feature(s) failed
+2026-07-14 15:49:50| 230.3|  0.0|STATS |Junction_2 (TeeFactory): Cloned 39694 input feature(s) into 39694 output feature(s)
+2026-07-14 15:49:50| 230.3|  0.0|STATS |Junction_2 Output Splitter (TeeFactory): Cloned 39694 input feature(s) into 79388 output feature(s)
+2026-07-14 15:49:50| 230.3|  0.0|INFORM|GeometryValidator_3 (GeometryValidationFactory): Detected self-intersections in 2D geometries 39689 additional times with automatic tolerances between 2.607000000000005e-13 and 1.1337476880758775e-8
+2026-07-14 15:49:50| 230.3|  0.0|STATS |TestFilter_INPUT (TeeFactory): Cloned 1180 input feature(s) into 1180 output feature(s)
+2026-07-14 15:49:50| 230.3|  0.0|STATS |TestFilter (TestFactory): Tested 1180 input feature(s) -- 1180 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:49:50| 230.5|  0.2|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:49:50| 230.5|  0.0|STATS |Gruppieren_nach_gml_id_2 (AggregateFactory): Combined 1128 input feature(s) into 548 output feature(s), including 0 singleton(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |non_planar_Buildings_2 (TestFactory): Tested 548 input feature(s) -- 85 feature(s) passed and 463 feature(s) failed
+2026-07-14 15:49:50| 230.5|  0.0|INFORM|GeometryValidator_4 (GeometryValidationFactory): Detected self-intersections in 2D geometries 39689 additional times with automatic tolerances between 2.607000000000005e-13 and 1.1337476880758775e-8
+2026-07-14 15:49:50| 230.5|  0.0|STATS |Junction_3 (TeeFactory): Cloned 39694 input feature(s) into 39694 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |Junction_3 Output Splitter (TeeFactory): Cloned 39694 input feature(s) into 79388 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |Type_INPUT (TeeFactory): Cloned 39694 input feature(s) into 39694 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |Type (TestFactory): Tested 39694 input feature(s) -- 39694 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter Input Input Collector (TeeFactory): Cloned 11905 input feature(s) into 11905 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_Input1771018093 Input Splitter (TeeFactory): Cloned 11905 input feature(s) into 11905 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_GeometryPropertySetter_Tester (TestFactory): Tested 11905 input feature(s) -- 11905 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_GeometryPropertySetter_Outputter (TeeFactory): Cloned 11905 input feature(s) into 11905 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_Output1771018093 Output Collector (TeeFactory): Cloned 11905 input feature(s) into 11905 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter Output Output Renamer/Nuker (TeeFactory): Cloned 11905 input feature(s) into 11905 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_2 Input Input Collector (TeeFactory): Cloned 24750 input feature(s) into 24750 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_2_Input1771018093 Input Splitter (TeeFactory): Cloned 24750 input feature(s) into 24750 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_2_GeometryPropertySetter_Tester (TestFactory): Tested 24750 input feature(s) -- 24750 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_2_GeometryPropertySetter_Outputter (TeeFactory): Cloned 24750 input feature(s) into 24750 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_2_Output1771018093 Output Collector (TeeFactory): Cloned 24750 input feature(s) into 24750 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_2 Output Output Renamer/Nuker (TeeFactory): Cloned 24750 input feature(s) into 24750 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |TestFilter_4_INPUT (TeeFactory): Cloned 3039 input feature(s) into 3039 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |TestFilter_4 (TestFactory): Tested 3039 input feature(s) -- 1 feature(s) passed and 3038 feature(s) failed
+2026-07-14 15:49:50| 230.5|  0.0|STATS |Deaggregator (DeaggregateFactory): Split 1 input feature(s) into 0 point-in-polygon feature(s), 0 donut polygon(s), 0 polygon(s), 0 line(s), 0 point(s), and 1 aggregate(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_3 Input Input Collector (TeeFactory): Cloned 3038 input feature(s) into 3038 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_3_Input1771018093 Input Splitter (TeeFactory): Cloned 3038 input feature(s) into 3038 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_3_GeometryPropertySetter_Tester (TestFactory): Tested 3038 input feature(s) -- 3038 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_3_GeometryPropertySetter_Outputter (TeeFactory): Cloned 3038 input feature(s) into 3038 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_3_Output1771018093 Output Collector (TeeFactory): Cloned 3038 input feature(s) into 3038 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |CityGMLGeometrySetter_3 Output Output Renamer/Nuker (TeeFactory): Cloned 3038 input feature(s) into 3038 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |BuildinPart_or_Building_INPUT (TeeFactory): Cloned 39694 input feature(s) into 39694 output feature(s)
+2026-07-14 15:49:50| 230.5|  0.0|STATS |BuildinPart_or_Building (TestFactory): Tested 39694 input feature(s) -- 12279 feature(s) passed and 27415 feature(s) failed
+2026-07-14 15:49:53| 232.9|  2.4|STATS |BuildingPart (AggregateFactory): Combined 12279 input feature(s) into 992 output feature(s), including 0 singleton(s)
+2026-07-14 15:49:53| 232.9|  0.0|STATS |BuildingPart AGGREGATE Splitter (TeeFactory): Cloned 992 input feature(s) into 1984 output feature(s)
+2026-07-14 15:49:54| 233.8|  0.9|STATS |Building_2 (AggregateFactory): Combined 992 input feature(s) into 317 output feature(s), including 0 singleton(s)
+2026-07-14 15:49:54| 233.8|  0.0|STATS |CityGMLGeometrySetter_4 Input Input Collector (TeeFactory): Cloned 992 input feature(s) into 992 output feature(s)
+2026-07-14 15:49:54| 233.8|  0.0|STATS |CityGMLGeometrySetter_4_Input1771018093 Input Splitter (TeeFactory): Cloned 992 input feature(s) into 992 output feature(s)
+2026-07-14 15:49:54| 233.8|  0.0|STATS |CityGMLGeometrySetter_4_GeometryPropertySetter_Tester (TestFactory): Tested 992 input feature(s) -- 992 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:49:54| 233.8|  0.0|STATS |CityGMLGeometrySetter_4_GeometryPropertySetter_Outputter (TeeFactory): Cloned 992 input feature(s) into 992 output feature(s)
+2026-07-14 15:49:54| 233.8|  0.0|STATS |CityGMLGeometrySetter_4_Output1771018093 Output Collector (TeeFactory): Cloned 992 input feature(s) into 992 output feature(s)
+2026-07-14 15:49:54| 233.8|  0.0|STATS |CityGMLGeometrySetter_4 Output Output Renamer/Nuker (TeeFactory): Cloned 992 input feature(s) into 992 output feature(s)
+2026-07-14 15:49:59| 238.6|  4.8|STATS |Building (AggregateFactory): Combined 27415 input feature(s) into 2002 output feature(s), including 0 singleton(s)
+2026-07-14 15:49:59| 238.6|  0.0|STATS |Junction_4 (TeeFactory): Cloned 2319 input feature(s) into 2319 output feature(s)
+2026-07-14 15:49:59| 238.6|  0.0|STATS |CityGMLGeometrySetter_5 Input Input Collector (TeeFactory): Cloned 2319 input feature(s) into 2319 output feature(s)
+2026-07-14 15:49:59| 238.6|  0.0|STATS |CityGMLGeometrySetter_5_Input1771018093 Input Splitter (TeeFactory): Cloned 2319 input feature(s) into 2319 output feature(s)
+2026-07-14 15:49:59| 238.6|  0.0|STATS |CityGMLGeometrySetter_5_GeometryPropertySetter_Tester (TestFactory): Tested 2319 input feature(s) -- 2319 feature(s) passed and 0 feature(s) failed
+2026-07-14 15:49:59| 238.6|  0.0|STATS |CityGMLGeometrySetter_5_GeometryPropertySetter_Outputter (TeeFactory): Cloned 2319 input feature(s) into 2319 output feature(s)
+2026-07-14 15:49:59| 238.6|  0.0|STATS |CityGMLGeometrySetter_5_Output1771018093 Output Collector (TeeFactory): Cloned 2319 input feature(s) into 2319 output feature(s)
+2026-07-14 15:49:59| 238.6|  0.0|STATS |CityGMLGeometrySetter_5 Output Output Renamer/Nuker (TeeFactory): Cloned 2319 input feature(s) into 2319 output feature(s)
+2026-07-14 15:49:59| 238.6|  0.0|STATS |Destination Feature Type Routing Correlator (RoutingFactory): Tested 45109 input feature(s), wrote 45109 output feature(s): 0 matched merge filters, 45109 were routed to output, 0 could not be routed.
+2026-07-14 15:49:59| 238.6|  0.0|STATS |Final Output Nuker (TeeFactory): Cloned 0 input feature(s) into 0 output feature(s)
+2026-07-14 15:49:59| 238.9|  0.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:50:05| 243.9|  5.0|INFORM|... Last line repeated 14 times ...
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-9766b8be-1fd4-4ab0-9caf-121825b1f6c5', parent-id: 'DESNALK02Ij0014G'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-7cc54296-3d05-4a92-8a3e-5dba89b85a40', parent-id: 'DESNALK02rA000dI'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-d1b98b32-1af2-4aac-af1e-cedf06a9eff7', parent-id: 'DESNALK05Sk000Kl'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-797cbde0-1e64-48be-87b5-da90cd55dda0', parent-id: 'DESNALK05Wr0008b'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-a1104adc-6601-40b2-a1e6-2ffc1c5f5a33', parent-id: 'DESNALK09M30001i'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-181d2612-1045-4863-8d98-8608d44d3432', parent-id: 'DESNALK0B7i000Hd'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ccaf40fa-a3c2-4c2a-8a14-54d96d803e6e', parent-id: 'DESNALK0CDl0003i'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-a5a55b94-df74-4f34-8b31-7e09e6145568', parent-id: 'DESNALK0Cys000FF'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-13b53e53-d398-445e-845f-db199d7ca8d5', parent-id: 'DESNALK0D3R000IV'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e09a17b6-40ee-4122-b875-02d430b494b3', parent-id: 'DESNALK0DHB000HR'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-31eb56aa-2a86-4be3-8914-8f63f0648b05', parent-id: 'DESNALK0DHB000HS'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-5eca1fee-7779-46d9-bf3c-f6c0f080a385', parent-id: 'DESNALK0DId0008n'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-720058d3-68a4-4308-b5ec-45db783c6f3f', parent-id: 'DESNALK0DVt000wQ'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-18e55ad7-0c0c-49bd-a099-5d42f337f725', parent-id: 'DESNALK0DXK0001e'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e5bb54aa-5d18-4e12-9473-8d3f24d9a6f2', parent-id: 'DESNALK0DXK0001f'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-d0ede6e1-38ee-4981-836f-b94f5717aeb4', parent-id: 'DESNALK0DXK0001g'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f7c1662e-b4c1-4f31-876c-bf35834caf70', parent-id: 'DESNALK0DXK0001h'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f1f0040a-d7fa-44d7-8136-15ec4c042a39', parent-id: 'DESNALK0DXK0001i'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-24fb18f5-27f5-4246-827f-6cdb2826467f', parent-id: 'DESNALK0DXK0001j'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e1742037-ac74-4044-8355-17aa6ccd1d5c', parent-id: 'DESNALK0DXK0001k'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e04333f7-8062-4919-aea1-d9df6123ca82', parent-id: 'DESNALK0DXK0001l'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-5d9b6c84-77c9-42f3-b977-a476e417c896', parent-id: 'DESNALK0DXK0001m'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-33afcd3e-ad75-4969-a0f5-eaa9a6cbda19', parent-id: 'DESNALK0DXK0001n'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-7a3ee586-a755-45de-99d0-5ef967242559', parent-id: 'DESNALK0DXK0001o'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-808be9a5-9285-4f04-b07c-db3ec29c9c64', parent-id: 'DESNALK0DXK0001p'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-c47b1d89-5787-4d5a-99ef-de05c434911e', parent-id: 'DESNALK0DXK0001q'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-dec8240e-fbd2-4bff-a070-37cca9902517', parent-id: 'DESNALK0DXK0001r'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-2f569af1-a0d4-4cd0-b6c7-eb8ac53e6601', parent-id: 'DESNALK0DXK0001s'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ab6eea94-ce16-4a8d-8bc8-ffe9ed058737', parent-id: 'DESNALK0DYv000lE'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f6adcc8d-d95d-4853-8088-974353be4fd9', parent-id: 'DESNALK0DYv000lH'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ef44b299-bfa5-4155-8c41-d1d868b65f44', parent-id: 'DESNALK0DdK000Xg'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-495892e9-8bda-4bff-a2aa-b4f08c6a44b3', parent-id: 'DESNALK0pc002gAH'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-776578a0-9551-43ad-98dc-dbb7be5ce26f', parent-id: 'DESNALK0pc002gFs'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-477df07b-30f5-472e-8ff3-26f2e0cf9cd7', parent-id: 'DESNALK0pc002gG1'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6be626cf-8031-43df-96fe-2420dd5a429a', parent-id: 'DESNALK0pc002gbZ'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-a4c38eed-4edf-40e5-865b-2aa6d8b35792', parent-id: 'DESNALK0pc002gqj'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f45f32f6-e6e5-4436-b7c8-789627722093', parent-id: 'DESNALK0pc002hD0'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b4e32a78-700d-4971-a4fe-8e001c7abaac', parent-id: 'DESNALK0pc002hI7'
+2026-07-14 15:50:05| 243.9|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-24fb1ccb-d8ea-4585-9aa7-1fbfe7a3f128', parent-id: 'DESNALK0pc002hMv'
+2026-07-14 15:50:05| 244.0|  0.1|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-168f2652-d47a-4477-af10-cf6ffc90d671', parent-id: 'DESNALK0pc002hXO'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ac7a5aac-78b2-4830-9fe0-d9e8396b7755', parent-id: 'DESNALK0pc002hb7'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6bc729a7-89cd-4999-aa97-b1d4e088ac6e', parent-id: 'DESNALK0pc002heb'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-90b3aac0-dc6e-4a9a-915f-dfdb5e997815', parent-id: 'DESNALK0pc002hgb'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-90d26f3b-24ec-4c40-81dd-fd003b7318a1', parent-id: 'DESNALK0pc002hsg'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-2278451e-ae55-4cd7-ae64-6c7a7ad9db4d', parent-id: 'DESNALK0pc002hxG'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-71257cf6-6d93-46ad-a6d3-d44470afe7ff', parent-id: 'DESNALK0pc002i4O'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ba951ca6-d6e0-454d-b764-e49040daa56c', parent-id: 'DESNALK0pc002i57'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-64169c95-5008-43f2-a56e-055f04439799', parent-id: 'DESNALK0pc002i5m'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-932427ec-f7e4-48b2-831d-eaeb1cc5e4ea', parent-id: 'DESNALK0pc002iBD'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-66740397-f457-4f3e-bfbc-39317c2d5084', parent-id: 'DESNALK0pc002iHF'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-734ed89d-e38d-4a2d-946e-853aaa858848', parent-id: 'DESNALK0pc002ia8'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-31c33990-7e9f-4f1e-b31a-61944a3dd715', parent-id: 'DESNALK0pc002iaY'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-718d0b1f-830a-449b-bede-7ab89455b4d7', parent-id: 'DESNALK0pc002ibF'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6efcf5ee-ee3d-4f6d-96be-75d3889e97af', parent-id: 'DESNALK0pc002iev'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b43f8bcc-a6f9-49e4-b2c0-cc98d7858942', parent-id: 'DESNALK0pc002ijW'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-3c2e6e15-45aa-405a-af45-d4fdb38649a3', parent-id: 'DESNALK0pc002ilM'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-22e05055-819c-4d2c-9352-be0db8d9e2aa', parent-id: 'DESNALK0pc002ild'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-1f827f3f-663b-41e8-b885-1597cc56958c', parent-id: 'DESNALK0pc002ilx'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ddb1b3ef-7da7-44ad-a006-9943990e4e8e', parent-id: 'DESNALK0pc002j4f'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-fc79d435-f301-485c-b327-3cc9ec5b8684', parent-id: 'DESNALK0pc002jAU'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6b4e97bf-5518-45f8-95e8-319a6b4771f7', parent-id: 'DESNALK0pc002jGQ'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-0d8d5869-3e2e-4af9-b045-727f20cf42ef', parent-id: 'DESNALK0pc002jHh'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-80f28a09-f24b-4ce8-9a7e-a5bd7015c693', parent-id: 'DESNALK0pc002jIp'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-aa4f0f7e-fca3-493d-a7fe-2874ed7c35cb', parent-id: 'DESNALK0pc002jNV'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-22b5919b-992f-4306-9169-1ae383c6df5d', parent-id: 'DESNALK0pc002jNb'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b52ef418-d2be-4c7b-bb4d-5939519058db', parent-id: 'DESNALK0pc002jOb'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-3b19f32d-ac62-4166-8ac0-fc8a17a39555', parent-id: 'DESNALK0pc002jaS'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-3ad15538-d9af-4843-9e06-a78a3c72107d', parent-id: 'DESNALK0pc002jdk'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-a2f56622-87f1-4fc1-b8ec-3d579878609f', parent-id: 'DESNALK0pc002jhG'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-47a6448e-d0c7-418d-9ba5-b65df609b139', parent-id: 'DESNALK0pc002jiG'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-bb51370c-0e35-461a-b6f2-ca4e73f2d013', parent-id: 'DESNALK0pc002jmu'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-8e507184-feea-4dca-8f9b-32ae6056a5bf', parent-id: 'DESNALK0pc002jpc'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-aa29ac1b-0a00-400b-9c29-02607d8f8037', parent-id: 'DESNALK0pc002ju9'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-1301590d-7069-41af-af2f-51564f02efb7', parent-id: 'DESNALK0pc002jxg'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-186c6ce8-efb0-4401-bd50-d66a2af0640d', parent-id: 'DESNALK0pc002jyP'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e65fd15d-3728-4b62-9e26-b4afcd6f8a2f', parent-id: 'DESNALK0pc002k4E'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-116a20ac-16f4-48a0-8d75-20028fd7dd67', parent-id: 'DESNALK0pc002k7Q'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-1771acfc-c193-44da-840f-6a12bc2cb4aa', parent-id: 'DESNALK0pc002kDX'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-15048b0b-94d1-49d8-a273-3c434720c4b1', parent-id: 'DESNALK0pc002kDc'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-17c35024-9347-47bb-bcbb-c746c8bbcc23', parent-id: 'DESNALK0pc002kFp'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-534436f9-a9ed-45a6-8897-c467ca7211df', parent-id: 'DESNALK0pc002kIK'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-81621d7e-f0da-47b0-b2cc-f02eec2069ac', parent-id: 'DESNALK0pc002kKv'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-65f79d75-c130-4a3d-a27e-ac63e1a67852', parent-id: 'DESNALK0pc002kNq'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b877eb61-1d3c-4f47-a5ad-c9e589a5c7b1', parent-id: 'DESNALK0pc002kOr'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6458b22d-02e4-4cce-ba93-8e21591ba0bf', parent-id: 'DESNALK0pc002kWC'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-7b04ec88-ccb5-4005-9126-6115f7949e50', parent-id: 'DESNALK0pc002kYd'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b05896cf-395a-40e0-b864-4e2a59691d38', parent-id: 'DESNALK0pc002kZr'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e2706da6-a558-4afa-8685-8f93d0832c83', parent-id: 'DESNALK0pc002kd3'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-4fe42eb5-6b90-48ec-b626-38752a1e49c7', parent-id: 'DESNALK0pc002keM'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-81f02f97-fd31-4714-b2c2-5c5125133bb8', parent-id: 'DESNALK0pc002kkS'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b5f94f20-cb35-4ca3-835b-84f56cde3181', parent-id: 'DESNALK0pc002kkV'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-d957f101-f6ac-4820-89ad-eaadf2113582', parent-id: 'DESNALK0pc002klG'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b3727eba-5777-4d62-988b-42aa31f87a5c', parent-id: 'DESNALK0pc002l3L'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-bd698df4-b70b-49be-bfa8-8e714e3feb14', parent-id: 'DESNALK0pc002l51'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-4c368366-9110-46d6-ab05-4a2566a853b0', parent-id: 'DESNALK0pc002lEd'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-bc6b6662-620e-4bae-8d47-634a305ca8d4', parent-id: 'DESNALK0pc002lJw'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f4ab45d6-a7d8-4989-9d53-6609055343eb', parent-id: 'DESNALK0pc002lQI'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-241ef386-a4d2-4657-99a4-02f5165b98d9', parent-id: 'DESNALK0pc002lU4'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-47756e17-4994-4a33-83f7-669dcd06e989', parent-id: 'DESNALK0pc002lf2'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-da244b30-9c6e-4950-8c70-749b2928b1ae', parent-id: 'DESNALK0pc002lh3'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ed71ab2c-384a-4e28-b212-a0af76b353d0', parent-id: 'DESNALK0pc002lu1'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-d2c9d5f3-bb87-49a8-8e9c-d6457e1b2e37', parent-id: 'DESNALK0pc002lxy'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f0429bda-2182-433a-b619-046253aca3b9', parent-id: 'DESNALK0pc002m7W'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b950621f-fc73-48b8-8f90-ec1d36da9ba0', parent-id: 'DESNALK0pc002mTj'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6dc86769-7df3-4f85-aacb-95ace9d002ac', parent-id: 'DESNALK0pc002mjh'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f7c205cf-e3da-4d67-b213-b62e1181d74e', parent-id: 'DESNALK0pc002mmu'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-35bce96e-79b4-4ba2-9128-81daab0120bb', parent-id: 'DESNALK0pc002msm'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-c09803f5-b158-4654-bbfa-32feae4dcdbe', parent-id: 'DESNALK0q80045VD'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6fbf3390-7794-4f86-9520-5fc6c51da956', parent-id: 'DESNALK0q80046NR'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-fed6ab38-4362-4b20-8b6a-32700b9d1d26', parent-id: 'DESNALK0q80046Tw'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e305d03d-c5b3-4f5d-8017-bb136099648a', parent-id: 'DESNALK0q80046hP'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-abdf6670-4b28-4b5b-a04b-b1676c135d64', parent-id: 'DESNALK0q80047cY'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-3d2b42c1-2cb6-4c87-ad78-40de54f0063e', parent-id: 'DESNALK0q8004MKq'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-68238ef7-4ad4-41ea-940d-7dac8396295c', parent-id: 'DESNALK0q8004P0j'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-711a65be-b245-405a-9606-e621262f1060', parent-id: 'DESNALK0q8006Ogk'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-a579c126-625e-4770-88a2-481636053a16', parent-id: 'DESNALK0q8006Oty'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-556387ae-78d9-4492-ae50-a35447217177', parent-id: 'DESNALK0q8006OuH'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-66d7a3b2-1d8e-4315-814e-4bf55b765881', parent-id: 'DESNALK0q8006Oww'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-206a967d-4bde-446b-a485-e906c692b988', parent-id: 'DESNALK0q8006P3k'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-259428a8-9708-46be-ac60-e6cc2a1f2c40', parent-id: 'DESNALK0q8006PKG'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-c50e05df-8c5f-42dc-9042-8148b260bca8', parent-id: 'DESNALK0q8006PVe'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-4897bc59-47cb-442e-909b-9a14e5d15c64', parent-id: 'DESNALK0q8006PVy'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-efa3cb0a-e2c9-4141-8d1a-9acaccadde04', parent-id: 'DESNALK0q8006PWS'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-33adfd0d-d0bf-4c2d-aecc-e643703c50cf', parent-id: 'DESNALK0q8006PbL'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-aa06b982-e792-4626-a32a-cc28e8ee34d3', parent-id: 'DESNALK0q8006Pco'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f2767be7-6f9c-44cc-9fd1-3267377107ab', parent-id: 'DESNALK0q8006PdW'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-92e57c79-7025-420b-a8f3-ae77a0788474', parent-id: 'DESNALK0q8006PhT'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-93c65279-2cc6-4434-90ab-8fb4231f7594', parent-id: 'DESNALK0q8006Ppo'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-690a2401-ecd3-49ce-b6ea-83b6590d4517', parent-id: 'DESNALK0q8006PsW'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-32d4e807-2484-4df2-99e3-364ae7289758', parent-id: 'DESNALK0q8006Q41'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-2058dffb-320b-4484-afb0-cc17aec84b9d', parent-id: 'DESNALK0q8006QF4'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-5639f268-c668-4239-ad32-2f5be79e8b5f', parent-id: 'DESNALK0q8006QFJ'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-0affd1bd-b247-42bb-a10b-aac9b64e0b36', parent-id: 'DESNALK0q8006QQ9'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-7b3d9f79-24fb-477f-9520-cad10a5acffc', parent-id: 'DESNALK0q8006QTx'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-dc57c64d-c3d1-4528-a56f-76cdf8c13d22', parent-id: 'DESNALK0q8006QYC'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f4b1ce4a-11fa-45fa-adc0-b4261a526e2f', parent-id: 'DESNALK0q8006Qbi'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b2ac8f01-0d87-4e91-a32a-54f7e4b8d936', parent-id: 'DESNALK0q8006Qgi'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-73ec1f05-319c-400e-b8cd-e54814e1fa5c', parent-id: 'DESNALK0q8006Qk4'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-bb270e84-e6b5-4e9d-a71d-a7f774ebd7dd', parent-id: 'DESNALK0q8006Qkx'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-fc66547a-dbee-4a7b-a457-0fc98871ffcd', parent-id: 'DESNALK0q8006Qtv'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-aa103171-c0d6-407e-8b6a-3fb493643637', parent-id: 'DESNALK0q8006Quj'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-0a8968ea-c4aa-43b9-9158-1c6f37b792b7', parent-id: 'DESNALK0q8006R1k'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-886d1cc4-5ea6-4d15-abb7-4c5e81b9e81f', parent-id: 'DESNALK0q8006R2U'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-7bf06002-a0af-4db0-8e56-90d17cd0a80c', parent-id: 'DESNALK0q8006R5V'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f9c6ff2a-9d31-477d-b5ff-9a3986b9d9ec', parent-id: 'DESNALK0q8006R8O'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b45c2d34-939c-4141-b7db-07e3206ae57f', parent-id: 'DESNALK0q8006RAt'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-309de2d8-9798-4381-bc13-38d5dbc9b40f', parent-id: 'DESNALK0q8006RID'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-a64734fa-c289-4397-a230-d772ed528f45', parent-id: 'DESNALK0q8006RLM'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-86b95b8d-0c24-4979-9067-62df6fb9b2b1', parent-id: 'DESNALK0q8006RMx'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e7f22ba7-2f2b-46b7-91a2-4256502f887c', parent-id: 'DESNALK0q8006RUb'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-5b3ab124-df65-4358-ab80-15989152e405', parent-id: 'DESNALK0q8006RWC'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-295798be-eb50-4ab0-a9d9-c6d6f9e898eb', parent-id: 'DESNALK0q8006RYG'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-3dd9ea98-d98d-4309-8f1b-da7444f216ed', parent-id: 'DESNALK0q8006Ral'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f8c087ba-2669-4596-8ed8-d6c1560f745e', parent-id: 'DESNALK0q8006Rbq'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-fc6b22f5-a3ef-4731-9c17-5a8167ed1cdf', parent-id: 'DESNALK0q8006Rcg'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-174b9254-352a-49cd-89a4-4d36f563c1e1', parent-id: 'DESNALK0q8006Re2'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-46bdb223-f0dd-43d0-8248-3f453722d21c', parent-id: 'DESNALK0q8006Rhj'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-07b7b9fc-9fee-443b-8e2e-1db712be0414', parent-id: 'DESNALK0q8006RlP'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b3e753a5-67fe-42b8-a202-3da00f1899f1', parent-id: 'DESNALK0q8006RmU'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-53da3c53-8528-4d56-b909-153fe471cbe5', parent-id: 'DESNALK0q8006S70'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b8a3a0ed-f85b-4485-b348-04983eb89cae', parent-id: 'DESNALK0q8006S76'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-6e0c78a7-67c8-4477-bf6d-68e55c12f1ba', parent-id: 'DESNALK0q8006SCm'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-5606392d-20bc-45ab-bac5-4d5833eccf43', parent-id: 'DESNALK0q8006SFH'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-44b0b6a4-b9f9-40f8-b07c-634d9bf7b7a2', parent-id: 'DESNALK0q8006SGJ'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-34d45b9d-b846-4521-ade2-11761eca3f0e', parent-id: 'DESNALK0q8006SJF'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-814724fd-4306-4281-9954-75be2e579d3d', parent-id: 'DESNALK0q8006SJM'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e66fe0e5-c3e4-4bef-96fd-6de29c32928a', parent-id: 'DESNALK0q8006SL3'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-cbe49cda-fe0e-4fee-8733-b269e41794d0', parent-id: 'DESNALK0q8006SNW'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-adcb205a-4093-4b1f-8ed0-719a139afc0e', parent-id: 'DESNALK0q8006SUW'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-83e8dc8b-f987-451f-a9fb-b8e229fb1c15', parent-id: 'DESNALK0q8006SWF'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ff25fb10-eee0-4e7b-a5d8-11cc67cdaabd', parent-id: 'DESNALK0q8006SiA'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-aec73736-fed0-4c0c-a913-c121127829e9', parent-id: 'DESNALK0q8006SjR'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-4ca72f46-3c6c-41a6-86ce-06cea4320b70', parent-id: 'DESNALK0q8006Sob'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-4c22d89f-a0a2-4e1f-b027-212f2755e294', parent-id: 'DESNALK0q8006Spp'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-5bf08a22-9ed8-4a2f-b1ca-0b8de06d4824', parent-id: 'DESNALK0q8006Svk'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-60fb7b25-eae5-4669-b2a1-92ad9aadb827', parent-id: 'DESNALK0q8006Swc'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-835d07d2-31d0-41a9-93a2-ebcc60717c47', parent-id: 'DESNALK0q8006Sy5'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-75ce092e-3a43-4202-a7e9-e6133fb6228f', parent-id: 'DESNALK0q8006T0v'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b42f8053-4685-4c3d-ab88-4a6a16c74486', parent-id: 'DESNALK0q8006T1A'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-191da8a6-b405-45fa-a52e-d5444d35c968', parent-id: 'DESNALK0q8006T2k'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-fbbe2326-5fb1-43e9-abe9-407efe985158', parent-id: 'DESNALK0q8006TAH'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-f8f2d94d-a346-464f-8df4-c730a2b75952', parent-id: 'DESNALK0q8006TKS'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-b2824487-339d-478b-b8e5-838b20119fbe', parent-id: 'DESNALK0q8006TPh'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-3c7e56e9-a809-4359-b54e-5ab931e87f75', parent-id: 'DESNALK0q8006TS0'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-87b7281e-5ff5-41df-a144-020c437712b0', parent-id: 'DESNALK0q8006TV5'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-8c45278c-041a-4887-acde-b61f33cdb35c', parent-id: 'DESNALK0q8006TbD'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-692a6292-a195-431b-aee3-d9314978c258', parent-id: 'DESNALK0q8006Tc2'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-88055592-203b-4568-93ed-115fb04fdde9', parent-id: 'DESNALK0q8006Tee'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-3d6711f1-74ae-446d-867c-1c41e612f06c', parent-id: 'DESNALK0q8006Thn'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ed4a9fbb-bb30-48ce-92cd-04f42e7551e0', parent-id: 'DESNALK0q8006Tka'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-8f8c16f8-1632-41d2-8559-bc748eaefbb4', parent-id: 'DESNALK0q8006TnH'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-449f531f-3285-48e1-b946-fe151c76ab74', parent-id: 'DESNALK0q8006ToS'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-d8c7cb7f-abcb-4b1c-9893-004fa2b36fd7', parent-id: 'DESNALK0q8006Toc'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-ad2cfd27-3ee2-46e4-b4f6-128db4c6a36f', parent-id: 'DESNALK0q8006TpP'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-e1628109-d3d7-4ebb-87b5-a6f147a28ba3', parent-id: 'DESNALK0q8006Tsz'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-4af8f59c-6a23-46a7-9530-58786ef87f2f', parent-id: 'DESNALK0q8006Tzn'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-13f04046-4815-4d89-ba9d-61e5b4bc96af', parent-id: 'DESNALK0q8006U70'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-97324132-12a0-4d83-96f9-5fc7ed425a69', parent-id: 'DESNALK0q8006U8K'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-74fe7af5-9cff-425b-84f7-23f4b57f31e1', parent-id: 'DESNALK0q8006U90'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: Orphaned feature found, feature type: 'Address', id: 'fme-gen-703b71c2-e0d9-40d5-bbe8-af8672c06ac6', parent-id: 'DESNALK0q8006UBu'
+2026-07-14 15:50:05| 244.0|  0.0|WARN  |CityGML Writer: '200' orphaned features found
+2026-07-14 15:50:06| 245.3|  1.3|INFORM|ResourceManager: Optimizing Memory Usage.  Please wait...
+2026-07-14 15:50:14| 252.7|  7.4|INFORM|=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|INFORM|Feature output statistics for `CITYGML' writer using keyword `CITYGML_1':
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |                           Features Written Summary
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Address                                                                   2104
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Building                                                                  2319
+2026-07-14 15:50:14| 252.7|  0.0|STATS |BuildingPart                                                               992
+2026-07-14 15:50:14| 252.7|  0.0|STATS |CityModel                                                                    1
+2026-07-14 15:50:14| 252.7|  0.0|STATS |GroundSurface                                                             3038
+2026-07-14 15:50:14| 252.7|  0.0|STATS |RoofSurface                                                              11905
+2026-07-14 15:50:14| 252.7|  0.0|STATS |WallSurface                                                              24750
+2026-07-14 15:50:14| 252.7|  0.0|STATS |==============================================================================
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Total Features Written                                                   45109
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |                            Features Read Summary
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Address                                                                   2104
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Building                                                                  4473
+2026-07-14 15:50:14| 252.7|  0.0|STATS |BuildingPart                                                              1251
+2026-07-14 15:50:14| 252.7|  0.0|STATS |CityModel                                                                    1
+2026-07-14 15:50:14| 252.7|  0.0|STATS |GroundSurface                                                             5375
+2026-07-14 15:50:14| 252.7|  0.0|STATS |RoofSurface                                                              15838
+2026-07-14 15:50:14| 252.7|  0.0|STATS |WallSurface                                                              37438
+2026-07-14 15:50:14| 252.7|  0.0|STATS |==============================================================================
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Total Features Read                                                      66480
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |                           Features Written Summary
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Address                                                                   2104
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Building                                                                  2319
+2026-07-14 15:50:14| 252.7|  0.0|STATS |BuildingPart                                                               992
+2026-07-14 15:50:14| 252.7|  0.0|STATS |CityModel                                                                    1
+2026-07-14 15:50:14| 252.7|  0.0|STATS |GroundSurface                                                             3038
+2026-07-14 15:50:14| 252.7|  0.0|STATS |RoofSurface                                                              11905
+2026-07-14 15:50:14| 252.7|  0.0|STATS |WallSurface                                                              24750
+2026-07-14 15:50:14| 252.7|  0.0|STATS |==============================================================================
+2026-07-14 15:50:14| 252.7|  0.0|STATS |Total Features Written                                                   45109
+2026-07-14 15:50:14| 252.7|  0.0|STATS |=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+2026-07-14 15:50:14| 252.7|  0.0|WARN  |-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+2026-07-14 15:50:14| 252.7|  0.0|WARN  |-~                                                                             ~-
+2026-07-14 15:50:14| 252.7|  0.0|WARN  |-~      Data caches have been recorded at every stage of the translation.      ~-
+2026-07-14 15:50:14| 252.7|  0.0|WARN  |-~                      To inspect the recorded features,                      ~-
+2026-07-14 15:50:14| 252.7|  0.0|WARN  |-~                click the data cache icons next to the ports.                ~-
+2026-07-14 15:50:14| 252.7|  0.0|WARN  |-~                                                                             ~-
+2026-07-14 15:50:14| 252.7|  0.0|WARN  |-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+2026-07-14 15:50:14| 252.7|  0.0|INFORM|Translation was SUCCESSFUL with 210 warning(s) (45109 feature(s) output)
+2026-07-14 15:50:14| 252.7|  0.0|INFORM|FME Session Duration: 4 minutes 24.1 seconds. (CPU: 202.2s user, 50.5s system)
+2026-07-14 15:50:14| 252.7|  0.0|INFORM|END - ProcessID: 29148, peak process memory usage: 307380 kB, current process memory usage: 145736 kB

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Represents a Building from the SQLite database (new structure)
+ * Represents a Building from the SQLite database (new healer schema).
  */
 public class Building {
     private long id;
@@ -32,6 +32,10 @@ public class Building {
 
     public String getBuildingIdGml() {
         return buildingIdGml;
+    }
+
+    public long getFileId() {
+        return fileId;
     }
 
     public Map<String, Object> getAttributes() {

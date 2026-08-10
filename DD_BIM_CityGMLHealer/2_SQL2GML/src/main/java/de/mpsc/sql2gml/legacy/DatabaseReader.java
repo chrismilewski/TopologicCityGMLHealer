@@ -1,8 +1,8 @@
-package de.mpsc.sql2gml;
+package de.mpsc.sql2gml.legacy;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import de.mpsc.sql2gml.model.*;
+import de.mpsc.sql2gml.legacy.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -142,6 +142,7 @@ public class DatabaseReader {
                     Surface surface = new Surface(
                         rs.getLong("Id"),
                         rs.getString("SurfaceIdGml"),
+                        rs.getInt("SurfaceTypeId"),
                         rs.getInt("IsValid") == 1,
                         rs.getString("Log")
                     );

@@ -24,11 +24,41 @@ einmal geschrieben wird. Es entstehen keine Zwischendateien.
   |  3. Storeys:   Geschosse unterteilen           |--+
   |  4. Doors:     Tueren einfuegen                |  |
   |  5. Windows:   Fenster einfuegen               |  |
+  |  ----------------------------------------------|  |
+  |  6. Conform:   T-Naht-Vertices einfuegen       |  |
   +------------------------------------------------+
 ```
 
-Die Verarbeitungsschritte koennen auch einzeln ausgefuehrt werden
-(jeweils eigene `main()`-Methode mit eigenem Lese-/Schreibzyklus).
+Die Schritte 1–5 erzeugen die eigentliche LoD3-Geometrie; Schritt 6 ist eine
+**streng formneutrale Topologie-Bereinigung** (kein bestehender Punkt wird verschoben,
+nur Punkte auf bestehende Kanten eingefuegt), die die geometrische Validitaet des
+Solids erhoeht — siehe
+[Topologie-Bereinigung & geometrische Validitaet](#topologie-bereinigung--geometrische-validitaet).
+
+Die Verarbeitungsschritte 1–5 koennen auch einzeln ausgefuehrt werden
+(jeweils eigene `main()`-Methode mit eigenem Lese-/Schreibzyklus). Die
+Nachbearbeitung (6) laeuft nur im Pipeline-Modus.
+
+### Gemeinsame Generator-Basis (`AbstractGenerator`)
+
+Die JSON-parametrisierten Generatoren (Keller, Geschosse, Tueren, Fenster — und
+kuenftig Balkone) erben von der abstrakten Basisklasse `AbstractGenerator<S>`.
+Sie kapselt das immer gleiche Geruest nach dem **Template-Method-Muster**:
+
+- **CLI** (`runCli`): Arg-Parsing `<input.gml> <jsonDir> [output.gml]`,
+  NPE-sichere Verzeichnis-Erstellung, Header-/Ergebnis-Logging.
+- **Datei-Lauf** (`process`): Lese-/Schreibschleife ueber `CityGmlUtils.processGmlFile`.
+- **Statistik** (`BaseStats` mit `buildingsProcessed`); jeder Generator erweitert sie.
+- **Parameter-Aufloesung** (`resolveParams`): `sst`-Attribut → passendes Baukoerpermodul.
+- **Hook** `onConfigure(args)` fuer Zusatz-Argumente (z.B. DGM beim BasementGenerator).
+
+Eine konkrete Unterklasse implementiert nur noch die generator-spezifischen Stellen:
+`outputSuffix()`, `displayName()`, `newStats()`, `processBuilding(...)` und `logResult(...)`.
+Ein neuer Schritt (z.B. Balkone) ist damit auf die reine Fachlogik reduziert — CLI,
+Datei-Loop und Statistik-Geruest kommen aus der Basis.
+
+> Der `Lod2ToLod3Promoter` (Schritt 1) faellt bewusst aus diesem Schema, da er
+> ohne JSON-Module und ohne `sst`-Aufloesung arbeitet.
 
 ## Schnellstart
 
@@ -101,6 +131,7 @@ input.gml
     |  3. Geschosse        |
     |  4. Tueren           |
     |  5. Fenster          |
+    |  6. Balkone          |
     +----------------------+
     |
     v
@@ -669,8 +700,10 @@ UF_2 Floor  → xlink:href="#Slab_{id}_UF_1_1"             ← Referenz (shared!
 | Konstante | Wert | Beschreibung |
 |-----------|------|--------------|
 | `CUT_TOLERANCE` | 0.05m | Mindesthoehe fuer Schnitt-Ergebnisse, verhindert degenerierte Geometrien |
+| `MIN_WALL_SEGMENT_HEIGHT` | 0.50m | Duennstreifen-Schutz: ragt eine Wand nur knapp ueber eine Geschossgrenze, wird der letzte Schnitt verworfen (kein hauchduennes Top-Segment) |
 | `MIN_STOREY_HEIGHT` | 1.20m | Fitzelchen-Schwelle: Resthoehe unter diesem Wert wird ins vorherige Geschoss gemerged |
 | `MAX_STOREY_HEIGHT_FLACHDACH` | 4.00m | Nur Flachdach: Wenn Merge-Ergebnis diesen Wert uebersteigt, wird stattdessen ein kurzes Fitzelchen-Geschoss erzeugt |
+| `XY_EDGE_TOLERANCE` | 0.50m | Toleranz fuer die Zuordnung von Wandsegment-Basiskanten zu Grundriss-Polygonen (Per-Polygon-Hoehenbegrenzung der Slabs) |
 | Flachdach-Erkennung | First - Traufe < 0.30m | Schwelle fuer Flachdach vs. geneigtes Dach |
 
 ### Sutherland-Hodgman: Wandschnitt fuer beliebige Polygone
@@ -863,22 +896,88 @@ CityGmlUtils.rebuildSolidShell(building);
 
 Nach dem Rebuild: **134.011 gueltige Referenzen, 0 dangling, 0 unreferenzierte Polygone**.
 
+### Bugfix: Wand haengt unter egFloorZ (2026-08-04)
+
+Gefunden ueber CityDoctor2 durch den Nutzer (Screenshot mit markierter Kante), verifiziert
+mit val3dity: an Gebaeude `DESNALK0pF001iSj` (Walmdach + Keller) zeigten zwei
+`Innenwand="1"`-Waende unter dem Dach (`Face_000434X_0_1_UF_1_1`, `Face_000434X_0_15_UF_1_7`)
+`NON_MANIFOLD_CASE`/`SHELL_NOT_CLOSED`. Beide behielten ihre Unterkante beim rohen
+Gelaendeniveau (`H_DGM`, hier 167,92) statt bei `egFloorZ` (168,37 = `H_DGM+heightGr`) —
+0,45 m Ueberlappung mit der vom `BasementGenerator` unabhaengig erzeugten Kellerwand, die
+exakt bei `egFloorZ` endet.
+
+**Ursache:** Schraeg zulaufende Giebel-/Walmdach-Innenwaende, deren Kontur der normale
+horizontale Mehrfach-Z-Schnitt (`cutWallAtMultipleZ`) nicht sauber fasst. Drei Codepfade
+liessen die Wand dabei unveraendert (samt zu tiefer Unterkante) durch:
+
+1. `applicableCuts` leer (keine Schnitthoehe faellt in den Wand-Z-Bereich) → Wand wird nur
+   getaggt, nicht geschnitten.
+2. `cutWallAtMultipleZ` liefert `null`/leer ("Schnitt fehlgeschlagen") → dieselbe
+   Nur-Tag-Behandlung.
+3. **Der subtilste Fall:** `cutWallAtMultipleZ` liefert formal >= 1 Segment (also
+   "erfolgreich"), aber innerhalb des konservativen Fallbacks
+   `cutWallSinglePieceGuarded` wurde der `egFloorZ`-Schnitt selbst als faltend
+   uebersprungen (`if (folds) continue;`) — das betroffene Segment behaelt dadurch
+   trotzdem seine urspruengliche, zu tiefe Unterkante. Da das Segment-Mittel-Z ueber
+   `egFloorZ` liegt, greift auch die bestehende Rand-Verwerfung
+   (`hasEgFloorCut && midZ < egFloorZ`) nicht.
+
+**Fix:** Neue Hilfsmethode `trimWallBelowEgFloor` — schneidet EINMAL bei `egFloorZ` (nahe
+der Wandunterkante, fernab der komplexen schraegen Oberkante, daher deutlich seltener
+faltend als ein Mehrfach-Schnitt) und behaelt nur das obere Stueck; schlaegt selbst das
+fehl, bleibt die Original-Kontur unveraendert (Logging) statt eine zweite, schlimmere
+Verletzung zu riskieren. An allen drei oben genannten Stellen eingebaut, jeweils nur wenn
+`params.hasBasement()` und die (Segment-)Unterkante unter `egFloorZ` liegt.
+
+**Verifiziert:** `DESNALK0pF001iSj` danach 100% valide (0 Fehler, beide Primitive). An
+Gebaeude `DESNALK0pF001gmt` (4 BuildingParts) zusaetzlich per Vorher/Nachher-Vergleich
+bestaetigt, dass ein **davon unabhaengiger** `CONSECUTIVE_POINTS_SAME`/`NON_MANIFOLD_CASE`
+an einer 1mm-Koordinatendifferenz (`416808.716` vs. `416808.717`) bereits in der
+Original-LoD2-Quelldatei vorhanden ist — dieser Fix aendert daran nichts, das ist ein
+separates, vorbestehendes Rohdaten-Problem (siehe Projektwissen: mm-Naehte sind bewusst
+Aufgabe des nachgelagerten Healers, nicht dieser Pipeline).
+
 ## Schritt 4: Tuer-Generator (DoorGenerator)
 
 Erzeugt Tueren (DoorSurface) an den Erdgeschoss-Wandsegmenten (GF-WallSurfaces).
 Die Tueren werden als `DoorSurface`-Elemente (`FillingSurface`) an den WallSurfaces verankert.
-Das Wandpolygon wird so modifiziert, dass die Tueroeffnungen geometrisch korrekt aus dem
-aeusseren Ring ausgeschnitten werden.
+Die Tueroeffnung wird — analog zum WindowGenerator (Schritt 5) — als **innerer Polygon-Ring**
+(Loch) ins Wandpolygon eingefuegt; der aeussere Ring bleibt unveraendert. Beide Generatoren
+nutzen dafuer dieselbe Hilfsmethode `CityGmlUtils.addOpeningToWall(...)`.
+
+> **Hinweis:** Fruehere Versionen des DoorGenerators modifizierten den aeusseren Ring direkt
+> (Ankerpunkte auf der Unterkante, siehe alte Fassung dieses Abschnitts). Seit dem
+> Refactoring auf die gemeinsame Oeffnungs-Logik mit dem WindowGenerator gilt das nicht
+> mehr — siehe Schritt 4.4.
 
 ### Funktionen
 
 - Liest `DoorCount`-Attribut von GF-WallSurfaces (gesetzt aus Building-Preferences)
 - Liest Tuerparameter aus JSON-Baukoerpermodulen (`GF.door`)
 - Erzeugt `DoorSurface`-Elemente als FillingSurface der WallSurface
-- Modifiziert das Wandpolygon (Tueroeffnung wird aus dem aeusseren Ring ausgeschnitten)
+- Fuegt die Tueroeffnung als inneren Polygon-Ring ins Wandpolygon ein (Loch, aeusserer Ring
+  unveraendert — wie beim WindowGenerator)
 - Aktualisiert FACEAREA der Wand und baut Solid-Shell neu auf
 - **DoorCount nur an GF-Segmenten**: Der StoreyGenerator propagiert das `DoorCount`-Attribut
   nur an Wandsegmente mit Geschoss-Tag `GF`, nicht an OG- oder Keller-Waende
+- **Geteilte Wand zwischen BuildingParts**: Wie beim WindowGenerator wird pro Wand ein
+  Mittelpunkt-Key aus der Unterkante berechnet (`CityGmlUtils.wallBottomMidKey`, gemeinsam
+  fuer Tuer- und Fenster-Generator). Teilen sich zwei BuildingParts eine geometrisch
+  identische Wand, bekommt nur der erste Part die Tuer(en) — der zweite ueberspringt sie
+  (`wallsSkippedCoveredByPart`). `DoorCount` stammt aus demselben Upstream-Prozess wie
+  `WindowPreference` und ist daher ebenso oft auf beiden Kopien einer geteilten Wand gesetzt
+  (im 14-Gebaeude-Testset: 10 von 355 Waenden betroffen, meist mit `DoorCount=0` auf beiden
+  Seiten — ohne Dedup waeren aber auch beidseitig gesetzte `DoorCount>0`-Faelle doppelt
+  ausgefuehrt worden).
+- **Anbau-Verdeckung**: Liegt die Mitte einer Tuer auf der gemeinsamen Kante von zwei
+  Footprint-Polygonen (eigenes Gebaeude + Anbau als separater BuildingPart), wuerde die Tuer
+  hinter dem Anbau liegen — sie wird verworfen (`doorsSkippedCovered`). Die Footprints werden
+  dafuer ueber **alle** Targets des Gebaeudes (Building + alle BuildingParts) gesammelt, nicht
+  nur ueber das jeweils verarbeitete Target — sonst kann der Anbau (typischerweise ein
+  eigener BuildingPart) gar nicht erkannt werden.
+- **Kontur-Check**: Alle 4 Tuer-Ecken muessen im Wandpolygon liegen (`openingInsideWall2D`),
+  sonst wird die Tuer verworfen (`doorsSkippedOutside`) — verhindert Tueren in Aussparungen
+  gestufter Wandsegmente (analog zum Kontur-Check beim WindowGenerator).
 
 ### Tuer-Parameter (aus JSON)
 
@@ -902,10 +1001,12 @@ Der DoorGenerator arbeitet pro GF-WallSurface in folgenden Schritten:
 
 #### 1. Unterkante der Wand ermitteln
 
-Die Unterkante wird als laengste Kante bei `zMin` identifiziert — zwei aufeinanderfolgende
-Ring-Punkte deren Z-Wert innerhalb 1 cm von `zMin` liegt. Die Unterkante kann dabei ueber
-die Array-Grenze des offenen Polygon-Rings wrappen (z.B. bei Fuenfeck-Giebel, wo der
-letzte Punkt und der erste Punkt die Basiskante bilden).
+Die Unterkante wird ueber die gemeinsame Hilfsmethode `CityGmlUtils.findBottomEdge(...)`
+ermittelt: aus allen Ring-Punkten auf `zMin` (innerhalb 1 cm) wird das **Punktepaar mit
+dem groessten 2D-Abstand** gewaehlt — also die volle Wandbreite am Fuss. Das ist robuster
+als „die erste Kante bei zMin", wenn mehrere Punkte auf `zMin` liegen (z.B. bei L-/Stufen-
+Grundrissen oder nach Geschoss-Schnitten mit Zwischenpunkten auf der Sohle). DoorGenerator
+und WindowGenerator nutzen dieselbe Logik.
 
 ```
 Beispiel: Giebel-Fuenfeck (CCW von aussen)
@@ -925,16 +1026,22 @@ edgeStartIdx=4, edgeEndIdx=0
 #### 2. Tuer-Positionen berechnen
 
 ```
-Wand-Unterkante (Start → Ende):
+Normalfall (HDistDoWa passt):
 |--HDistDoWa--|--Tuer1--|--spacing--|--Tuer2--|--spacing--|
 ```
 
-- **Erste Tuer**: Bei `HDistDoWa` vom Start der Unterkante
-- **Weitere Tueren**: Gleichmaessig im verbleibenden Wandbereich verteilt
-- **Abbruchkriterien**:
-  - Wandlaenge < HDistDoWa + doorWidth → Wand wird uebersprungen
-  - Spacing zwischen Tueren < 10 cm → Wand wird uebersprungen
-  - Tuerhoehe + 5 cm Sockel > Wandhoehe → Wand wird uebersprungen
+- **Normalfall** (`HDistDoWa + doorCount*doorWidth <= wallLength`): Erste Tuer bei
+  `HDistDoWa` vom Start der Unterkante, weitere Tueren gleichmaessig im verbleibenden
+  Wandbereich verteilt.
+- **Fallback: Zentrierung** (`HDistDoWa` passt nicht in die Wand): Statt die Wand zu
+  uebergehen, werden die Tuer(en) als Block zentriert (Randabstand dann `MIN_SPACING`
+  beidseitig statt `HDistDoWa`). Wird geloggt ("... Tuer(en) werden zentriert") und
+  betrifft in der Praxis viele Waende (z.B. 7 von 14 Testgebaeuden), da `HDistDoWa`
+  oft grosszuegiger bemessen ist als kurze Fassadenabschnitte.
+- **Abbruchkriterien** (Wand wird uebersprungen):
+  - Auch der zentrierte Block passt nicht (`totalDoorWidth + (n-1)*MIN_SPACING + 2*MIN_SPACING > wallLength`)
+  - Spacing zwischen Tueren im Normalfall < 10 cm
+  - Tuerhoehe + 5 cm Sockel > Wandhoehe
 
 #### 3. Tuer-Geometrie erzeugen
 
@@ -944,34 +1051,36 @@ Jede Tuer wird als Rechteck (BL, BR, TR, TL) auf der Wandebene berechnet:
 - **doorTopZ**: zMin + 0.05 m + doorHeight
 - **Horizontale Position**: entlang der Unterkanten-Richtung, Offset per `HDistDoWa`
 
-#### 4. Wandpolygon modifizieren
+#### 4. Wandpolygon modifizieren (innerer Ring)
 
-Der aeussere Ring des Wandpolygons wird so modifiziert, dass er um jede Tueroeffnung
-herum verlaeuft. Dabei werden **Ankerpunkte auf der Unterkante** (zMin) direkt unter den
-Tuer-Ecken eingefuegt, damit der Ring die Unterkante exakt verfolgt:
+Der aeussere Ring des Wandpolygons bleibt **unveraendert**. Stattdessen wird ueber
+`CityGmlUtils.addOpeningToWall(wallPoly, bl, br, tr, tl, extCCW)` ein **innerer Ring**
+(Loch) fuer das Tuer-Rechteck eingefuegt — dieselbe Hilfsmethode, die auch der
+WindowGenerator fuer Fensteroeffnungen verwendet:
 
 ```
-Original (Rechteck):          Mit Tuer (inkl. Ankerpunkte):
+Aussenring (unveraendert):        Innenring (Loch) fuer die Tuer:
 
-D ──────── C                  D ─────────────────── C
-│          │                  │                     │
-│          │         →        │     TL ──── TR      │
-│          │                  │     │  Tuer │      │
-A ──────── B                  A ── A1 BL    BR B1 ── B
-                                   ↑  (5cm)    ↑
-                              Ankerpunkt   Ankerpunkt
-                              (A1.x=BL.x, (B1.x=BR.x,
-                               A1.z=zMin)  B1.z=zMin)
+D ──────── C                      D ──────── C
+│          │                      │  TL──TR  │
+│          │           →          │  │Tuer│  │   ← innerer Ring, 5cm ueber
+│          │                      │  BL──BR  │     Wandunterkante (Sockel)
+A ──────── B                      A ──────── B
 ```
 
-**Ring-Pfad (modular):**
-```
-edgeStart → A1 ↑ BL ↑ TL → TR ↓ BR ↓ B1 → edgeEnd → [restliche Punkte modular] → zurueck
-```
+Der Tuer-Sockel (`DOOR_SILL_HEIGHT` = 5 cm) sorgt dafuer, dass der Innenring **nicht**
+die Wandunterkante beruehrt — ein Innenring, der den Aussenring beruehrt, waere
+topologisch degeneriert (Punkte auf der gemeinsamen Kante). Der 5cm-Streifen bleibt
+also als reales Wandmaterial unter der Tuer erhalten; er reduziert die Wandflaeche
+NICHT zusaetzlich (siehe Validierung unten).
 
-Die modulare Traversierung (`idx = edgeEndIdx; while (idx != edgeStartIdx) { ... idx = (idx+1)%n; }`)
-stellt sicher, dass der Ring auch bei Wrap-Around der Unterkante ueber die Array-Grenze
-korrekt aufgebaut wird.
+Die Orientierung des Innenrings ist immer **entgegengesetzt** zum Aussenring (GML-Pflicht
+fuer Loecher): Bei CW-Aussenring (Sachsen-LoD2-Waende) ist der Innenring CCW, bei
+CCW-Aussenring (z.B. generierte Kellerwaende) ist er CW. `isExteriorRingCCW(...)`
+bestimmt die Orientierung einmalig pro Wand; `addOpeningToWall` waehlt danach die
+passende Punktreihenfolge fuer Innenring und FillingSurface-Polygon (das FillingSurface-
+Polygon bekommt dieselbe Orientierung wie der Aussenring — nur so wird jede Innenring-
+Kante im Solid genau einmal in entgegengesetzter Richtung abgedeckt).
 
 #### 5. DoorSurface erzeugen
 
@@ -1032,21 +1141,27 @@ In der CityGML 1.0-Ausgabe wird dies automatisch als `bldg:opening > bldg:Door` 
 
 ### Validierung
 
-- **Flaechenerhaltung**: `wallAreaBefore ≈ wallAreaAfter + doorCount × doorWidth × (doorHeight + sockelHoehe)`
-  Die erwartete entfernte Flaeche umfasst die Tueroeffnung **plus** den Sockelstreifen darunter,
-  da der Ring durch die Ankerpunkte auf Unterkanten-Niveau (zMin) rechtwinklig zur Tueroeffnung
-  hochgeht und somit den Sockelbereich ebenfalls ausschneidet.
+- **Flaechenerhaltung**: `wallAreaBefore ≈ wallAreaAfter + doorsPlaced × doorWidth × doorHeight`
+  Da die Tueroeffnung als reiner Innenring (Loch) eingefuegt wird, entspricht die entfernte
+  Flaeche exakt der Tuerflaeche (`doorWidth × doorHeight`) — der 5cm-Sockelstreifen bleibt
+  als Wandmaterial erhalten und wird NICHT mitgerechnet (anders als bei der fruehen
+  Aussenring-Implementierung, siehe Hinweis oben in Schritt 4.4). `doorsPlaced` kann kleiner
+  als `doorCount` sein, wenn einzelne Tueren durch Anbau-Verdeckung oder Kontur-Check
+  verworfen wurden.
 - **Hoehenpruefung**: doorHeight + 5 cm Sockel ≤ Wandhoehe
-- **Breitenpruefung**: HDistDoWa + doorCount × doorWidth ≤ Wandlaenge
-- **Abstandspruefung**: Spacing zwischen Tueren ≥ 10 cm
+- **Breitenpruefung**: HDistDoWa + doorCount × doorWidth ≤ Wandlaenge (sonst Zentrierungs-Fallback)
+- **Abstandspruefung**: Spacing zwischen Tueren ≥ 10 cm (im Normalfall)
+- **Kontur-Check**: Alle 4 Tuer-Ecken muessen im Wandpolygon liegen (`openingInsideWall2D`)
+- **Anbau-Verdeckung**: Tuermitte darf nicht auf der gemeinsamen Kante zweier Footprints liegen
 - **Toleranz**: Abweichungen < 1 cm² werden akzeptiert (Floating-Point-Artefakte)
 
 ### Schwellwerte (DoorGenerator)
 
 | Konstante | Wert | Beschreibung |
 |-----------|------|--------------|
-| `DOOR_SILL_HEIGHT` | 0.05 m | Sockelhoehe ueber Wandunterkante |
+| `DOOR_SILL_HEIGHT` | 0.05 m | Sockelhoehe ueber Wandunterkante (haelt den Innenring von der Unterkante fern) |
 | `MIN_SPACING` | 0.10 m | Minimaler Abstand zwischen Tueren und zum Wandrand |
+| `FOOTPRINT_SHARE_TOL` | 0.10 m | Toleranz fuer „Tuermitte liegt auf gemeinsamer Footprint-Kante" (Anbau-Verdeckung) |
 | zTol | 0.01 m | Toleranz fuer Unterkanten-Erkennung (Z bei zMin) |
 | Flaechentoleranz | 0.01 m² | Schwelle fuer Flaechenabweichungs-Warnung |
 
@@ -1091,10 +1206,23 @@ BA: WiLen=0.8  WiHe=0.4  VDistFlWi=0.3  HDistWaWi=2.4   HDistWiWi=2.2  HDistMinW
 
 **WindowPreference-Attribut:**
 
+`WindowPreference` ist ein Attribut **pro `WallSurface`**, das aus den
+Upstream-BuildingPreferences-Daten stammt (nicht aus den JSON-Modulen). Der
+StoreyGenerator propagiert es beim Wandschnitt auf die Geschoss-Segmente, der
+BasementGenerator uebertraegt es auf die zugehoerigen Kellerwaende.
+
 | Wert | Anzahl | Bedeutung |
 |------|--------|-----------|
-| `0`  | 10.995 | Keine Fenster |
-| `1`  | 74.826 | Fenster gewuenscht |
+| `0` / fehlt | 10.995 | Keine Fenster (Wand wird uebersprungen) |
+| `1`  | 74.826 | Fenster gewuenscht (normale Platzierung) |
+| `2`  | —      | Wand **ueberragt eine Nachbarwand**: Fenster nur **oberhalb** der Nachbarhoehe |
+
+**Sonderfall `WindowPreference = "2"`:** Die Wand grenzt unten an ein niedrigeres
+Nachbarbauteil und ist nur im oberen Bereich frei. Voraussetzung ist `Z_Differenz > 0`
+(um wie viel die Wand die Nachbarwand ueberragt). Der StoreyGenerator berechnet daraus
+`Z_Fenster_ASL` (absolute Hoehe, ab der Fenster erlaubt sind); der WindowGenerator
+platziert Fenster nur oberhalb dieser Hoehe und ueberspringt die Wand, wenn sie
+komplett verdeckt ist (`Z_Fenster_ASL >= Wandoberkante`).
 
 **Geschoss-Verteilung der Waende:**
 
@@ -1110,15 +1238,49 @@ BA: WiLen=0.8  WiHe=0.4  VDistFlWi=0.3  HDistWaWi=2.4   HDistWiWi=2.2  HDistMinW
 | 2000 (Boden)| 2.195 | — |
 
 **BA-Waende (Keller):**
-- 26.820 BA-Waende gesamt, 16.198 davon mit WindowPreference
+- 26.820 BA-Waende gesamt, 16.198 davon mit WindowPreference (Stand VOR dem Bugfix unten —
+  d.h. **10.622 BA-Waende (~40%) hatten gar kein `WindowPreference`-Attribut** und wurden
+  von `WindowGenerator` deshalb wie eine Party-Wall behandelt, unabhaengig von ihrer
+  tatsaechlichen Groesse oder Hoehe ueber Gelaende)
 - 26.394 haben Z_Max > 0 (oberirdischer Anteil vorhanden)
 - 426 haben Z_Max = 0 (exakt auf Gelaendeniveau)
 - Nutzbare Hoehe fuer Fenster = Z_Max (= oberirdischer Anteil ueber Gelaende)
+
+**Bugfix `findWindowPreferenceForEdge` (BasementGenerator):** Die obigen ~40% fehlenden
+Werte waren kein Datenluecken-Artefakt, sondern ein Matching-Bug. `BasementGenerator`
+uebertraegt `WindowPreference` von der "zugehoerigen" Original-Wand auf jede neu erzeugte
+Kellerwand, indem der XY-Mittelpunkt der neuen Kante mit dem XY-Mittelpunkt (Durchschnitt
+aller Polygonpunkte) jeder Original-Wand verglichen wird (Toleranz 50 cm). Das versagt
+systematisch, sobald eine einzelne lange Original-Wand — z.B. durch den Gelaendeschnitt
+(Sutherland-Hodgman) oder eine komplexere Grundriss-Zerlegung — in MEHRERE kuerzere
+Kellerwand-Segmente aufgeteilt wird: nur das eine Segment, dessen eigener Mittelpunkt
+zufaellig nah am Mittelpunkt der GANZEN Original-Wand liegt, traf noch; alle
+Geschwister-Segmente blieben ohne `WindowPreference`.
+
+Verifiziert an einem echten Gebaeude mit kurviger Fassade (`K0pF001hmm`, 3 BuildingParts,
+45 Kellerwaende): 9 Waende — darunter die groesste (28,9 m²) — verloren so ihr
+`WindowPreference`, obwohl sie exakt denselben oberirdischen Anteil (`Z_Max=1,26`) hatten
+wie die einzige Wand, die zuvor ein Fenster bekam.
+
+Fix: statt Mittelpunkt-Distanz wird geprueft, ob der Mittelpunkt der Kellerwand-Kante auf
+der (unendlich verlaengerten) Grundkanten-Linie der Original-Wand liegt (senkrechter
+Abstand < Toleranz) UND innerhalb von deren Laengenbereich — erkennt so auch Teilsegmente
+einer laengeren, zerschnittenen Original-Wand, nicht nur volle 1:1-Entsprechungen.
+
+Wirkung am 14-Gebaeude-Testfall: bei `K0pF001hmm` bekamen danach 6 statt 1 Kellerwand ein
+Fenster (u.a. beide groessten Waende, 26,8 m² und 23,3 m²). Pipeline-weit:
+**Fenster gesamt 457 → 515 (+58)** — vollstaendig auf Keller-Fenster zurueckzufuehren
+(BA-Fenster 7 → 65; GF/UF/Dach nutzen `WindowPreference` direkt aus den
+Original-LoD2-Attributen, nicht ueber dieses Edge-Matching, und sind vom Fix nicht
+beruehrt). Die 26.820/16.198-Zahlen oben sind der VOR-Fix-Stand aus der 3.801-Gebaeude-
+Analyse und noch nicht auf den vollen Datensatz neu verifiziert — auf dem 14-Gebaeude-
+Testfall ist der Fix aber eindeutig bestaetigt.
 
 ### Vorbedingungen (Gate-Checks)
 
 Eine Wand wird **uebersprungen** wenn:
 - `WindowPreference` fehlt oder = `"0"`
+- `WindowPreference = "2"`, aber `Z_Differenz` fehlt oder ≤ 0 (Wand ueberragt die Nachbarwand nicht)
 - `Geschoss` ist `1000` (Dach), `2000` (Boden), oder fehlt
 - `Geschoss = "BA"` und `Z_Max <= 0` (komplett unterirdisch)
 - Window-Params ungueltig (`windowWidth <= 0` oder `windowHeight <= 0`)
@@ -1158,11 +1320,23 @@ Falls `n_max < 1`: keine Fenster auf dieser Wand.
 
 ### Fensterpositionen
 
-**Horizontale Positionierung:** HDistWaWi als Startabstand, HDistWiWi dazwischen:
+**Horizontale Positionierung (2026-08-03 auf zentriert umgestellt, Nutzer-Vorgabe):**
+Der Fensterblock wird **immer** auf den Wandabschnitt zentriert, `HDistWaWi` wird dafuer
+nicht mehr als Anker verwendet (vorher: `HDistWaWi`-Start, Zentrierung nur als Fallback
+wenn das nicht passte — wirkte auf echten Gebaeuden bei linksbuendiger Platzierung schief,
+siehe Screenshot-Feedback). `HDistWaWi` wird an keiner anderen Stelle im Code gelesen.
 ```
-offset_k = HDistWaWi + k × (WiLen + HDistWiWi)    fuer k = 0..n-1
+totalWidth = n × WiLen + (n-1) × HDistWiWi
+startOffset = (Abschnittlaenge - totalWidth) / 2
+offset_k = startOffset + k × (WiLen + HDistWiWi)    fuer k = 0..n-1
 ```
-Pruefung: letzte Fensterkante + HDistMinWaWi <= Abschnittlaenge. Falls nicht, n reduzieren.
+`HDistMinWaWi` bleibt als Mindestabstand zum Rand massgeblich — durch die Zentrierung
+symmetrisch statt nur einseitig garantiert. `n` (Fensteranzahl) bleibt unveraendert aus der
+Grundformel oben ("so viele wie passen"); da diese Formel bereits `HDistMinWaWi` auf BEIDEN
+Seiten einrechnet, passt der zentrierte Block praktisch immer beim ersten Versuch.
+Verifiziert an `Face_000C6Y7_0_3_GF_3` (5 Fenster, Wandlaenge 15,46 m): Randabstand links
+2,808 m, rechts 2,807 m. Gilt auch pro Abschnitt bei tuer-geteilten GF-Waenden
+(Links/Rechts-Aufteilung unten) — jeder Abschnitt wird unabhaengig zentriert.
 
 **Vertikale Positionierung:**
 ```
@@ -1191,15 +1365,20 @@ WWR = (Anzahl_Fenster × WiLen × WiHe) / FACEAREA_original
 
 | WWR-Bereich | Bewertung | Aktion |
 |-------------|-----------|--------|
-| 0–40 % | Normal | Alle Fenster platzieren |
-| 40–60 % | Grenzwertig | Warnung ausgeben |
-| > 60 % | Unrealistisch | Fensterreihen oder -anzahl reduzieren |
+| 0–60 % | OK | Alle Fenster platzieren |
+| > 60 % | Zu hoch | Ganze Fensterreihen von oben entfernen (bis ≤ 60 % oder 1 Reihe) |
 
 Der WWR-Check erfolgt **nach** der Berechnung aller Fensterreihen:
 1. Gesamt-Fensterflaeche berechnen
-2. Falls WWR > MAX_WWR (Schwellwert, z.B. 0.60): letzte Reihe(n) entfernen
-3. Falls immer noch > MAX_WWR: Fensteranzahl pro Reihe reduzieren
-4. Warnung loggen mit tatsaechlichem WWR, Wandflaeche und Fensterflaeche
+2. Falls WWR > MAX_WWR (0.60): oberste Reihe(n) entfernen, bis WWR ≤ 60 % oder nur
+   noch eine Reihe uebrig ist
+3. Falls selbst eine Einzelreihe noch > 60 % ergibt: die Reihe **bleibt erhalten**,
+   es wird nur eine Warnung geloggt (tatsaechlicher WWR, Wandflaeche, Fensterflaeche)
+
+> **Bewusste Designentscheidung:** Einzelne Fenster, die laut JSON-Maszen passen,
+> werden vom WWR-Cap **nicht** wieder entfernt — der Cap kappt nur ganze Reihen.
+> So bleibt das Prinzip „so viele Fenster wie passen" erhalten. Sehr kleine Waende
+> mit breiten Fenstern koennen daher im Einzelfall ueber 60 % liegen (nur Warnung).
 
 ### Giebelwaende — Point-in-Polygon-Check
 
@@ -1314,12 +1493,14 @@ Beispiel EE3-Modul (BA.height=2.1, BA.CeHe=0.3, heightGr=0.45m ueber Gelaende):
 |--------|---------------|-----------------|
 | Geschosse | Nur GF | GF + UF + BA |
 | Anzahl pro Wand | Aus Attribut `DoorCount` | **Berechnet** aus Wandlaenge + Params |
-| Polygon-Modifikation | Aeusserer Ring modifiziert | **Innere Ringe** (Loecher) |
+| Polygon-Modifikation | Innerer Ring (Loch), 5cm-Sockel | Innerer Ring (Loch) — gleiche Hilfsmethode |
 | Mehrere Reihen | Nein | **Ja** (wenn Wandhoehe ausreicht) |
-| Giebelwaende | Nicht relevant | **Point-in-Polygon-Check** |
+| Giebelwaende | Kontur-Check (`openingInsideWall2D`) | Point-in-Polygon-Check (pro Reihe) |
 | Tuer-Interaktion | — | Liest Tuerpositionen, splittet links/rechts |
 | BA-Sonderlogik | Keine | Nur oberirdischer Anteil (Z_Max > 0) |
 | Realismus-Check | Nicht noetig (count vorgegeben) | **WWR-Pruefung** (max. Fassadenanteil) |
+| Geteilte Wand (BuildingParts) | Dedup ueber `wallBottomMidKey` (`wallsSkippedCoveredByPart`) | Dedup ueber `wallBottomMidKey` (`coveredByPart`) |
+| Anbau-Verdeckung | Footprint-Check ueber alle Parts (`doorsSkippedCovered`) | Nicht relevant |
 
 ### Beispiel-Ausgabe (WindowGenerator)
 
@@ -1358,15 +1539,14 @@ LoD2_zu_LoD3/
 |-- pom.xml
 |-- README.md
 |-- src/main/java/de/mpsc/lod2tolod3/
-|   |-- Lod2ToLod3Pipeline.java      # Haupt-Pipeline (alle 5 Schritte)
+|   |-- Lod2ToLod3Pipeline.java      # Haupt-Pipeline (Single-Pass, Schritte 1-7)
 |   |-- Lod2ToLod3Promoter.java      # Schritt 1: Geometrie-Hochstufung (LoD2 → LoD3)
+|   |-- AbstractGenerator.java       # Gemeinsame Basis der JSON-parametrisierten Generatoren (Template-Method)
 |   |-- BasementGenerator.java       # Schritt 2: Keller-Generierung
 |   |-- StoreyGenerator.java         # Schritt 3: Geschoss-Unterteilung
 |   |-- DoorGenerator.java           # Schritt 4: Tuer-Generierung
 |   |-- WindowGenerator.java         # Schritt 5: Fenster-Generierung
-|   |-- tools/
-|   |   |-- WallAnalyzer.java        # Analyse-Tool: Wandpolygon-Statistiken
-|   |   |-- MixedRoofAnalyzer.java   # Analyse-Tool: Mischdach-Erkennung
+|   |-- BalconyGenerator.java        # Schritt 6: Balkone — siehe Abschnitt "Schritt 6"
 |   |-- model/
 |   |   |-- ModuleParameters.java    # Datenklasse fuer JSON-Parameter
 |   |-- util/
@@ -1888,6 +2068,125 @@ Die Pipeline liest und schreibt CityGML 1.0 (Namespace `http://www.opengis.net/c
 - `{buildingId}_storey{level}_floor_{polygonIndex}`
 - `{buildingId}_storey{level}_ceiling_{polygonIndex}`
 
+## Topologie-Bereinigung & geometrische Validitaet
+
+Nachdem die Schritte 1–5 die LoD3-Geometrie erzeugt haben, laufen im Pipeline-Modus
+zwei **formneutrale** Nachbearbeitungsschritte. „Formneutral" heisst: es wird **kein
+bestehender Vertex verschoben** — die aus der Befliegung stammende Wandform bleibt
+unveraendert. Ergaenzt werden ausschliesslich fehlende Verbindungspunkte, um die aus
+unabhaengig erzeugten Flaechen (Wand/Boden/Decke/Keller) zusammengesetzte Huelle
+wasserdicht (ISO 19107) zu machen. Ziel ist ein **geschlossenes `lod3Solid` pro
+Gebaeude** — Voraussetzung fuer die Starkregen-/Fluss-Simulation.
+
+### Schritt 7 — Junction-Conforming (`CityGmlUtils.conformJunctions`, Toleranz 5 mm)
+
+Der **einzige** Nachbearbeitungsschritt, und er ist **streng formneutral** (an echter
+Geometrie gemessen: **0** bestehende Vertices verschoben). An T-Stoessen — eine Wand
+endet mitten auf der Kante einer anderen — fehlt dem laengeren Nachbarn der
+Zwischenpunkt, sodass die Huelle formal nicht schliesst. Dieser Schritt fuegt den
+fehlenden Vertex **auf** die bestehende Kante ein (Punkt liegt exakt auf der Geraden →
+keine Formaenderung) und naeht so ausschliesslich **unsere eigenen** unabhaengig
+erzeugten Zusatzflaechen (Geschosse, Keller, Boden-/Deckenslabs) zusammen. Messung an
+der 658er-Kachel: **0 Vertices bewegt, 1.822 Punkte auf bestehenden Kanten eingefuegt**;
+das senkt `NOT_CLOSED` von 83 auf 11 offene Huellen.
+
+> **Vertex-Welding wurde bewusst ENTFERNT.** Das frühere 5-mm-Welding verschmolz nahe
+> Vertices und verschob dabei ~0,3 % der Punkte um bis zu 5 mm — also echtes
+> Geometrie-Reshaping. Da ein nachgelagerter **Healer** solche mm-Naehte ohnehin
+> schliesst, gehoert das nicht in dieses LoD3-Update. Wichtiger Befund: das Entfernen
+> aendert die Zahl der **von uns** gebrochenen Gebaeude **nicht** (22 mit wie ohne
+> Welding); Welding hatte nur zusaetzlich 9 **bereits in der Quelle** offene Gebaeude
+> mitgeheilt — genau die Aufgabe des Healers.
+
+> **Warum keine eigenen BuildingParts fuer Anbauten?** Fuer die Simulation wird ein
+> einziges geschlossenes Solid je Gebaeude benoetigt. Anbauten als separate
+> BuildingParts wuerden zwar `BUILDINGPARTS_OVERLAP` (601) vermeiden, aber das
+> Ein-Solid-Ziel verletzen. Stattdessen wird der Anbau in dieselbe Huelle integriert
+> und per Conforming wasserdicht angeschlossen.
+
+### Validierung (val3dity 2.6 / CityDoctor2)
+
+Gepueft wird ueber `citygml-tools to-cityjson` → `val3dity` (ISO-19107-Solid-Validitaet).
+Ergebnis am Sachsen-Testdatensatz (**658 Gebaeude**):
+
+| Stand | valide Gebaeude | NOT_CLOSED (302) | Self-Int (104) | Geometrie bewegt |
+|-------|-----------------|------------------|----------------|------------------|
+| Ausgangs-LoD2 (Obergrenze) | 607 (92,2 %) | 15 | 1 | — |
+| Multi-Piece-Schnitt (ohne Nachbearbeitung) | 533 (81,0 %) | 83 | 1 | 0 mm |
+| **+ Junction-Conforming (final)** | **586 (89,1 %)** | **11** | **1** | **0 mm** |
+| *(verworfen: zusaetzliches 5-mm-Welding)* | *595 (90,4 %)* | *2* | *3* | *243 Pkt ≤5 mm* |
+
+Der finale Stand ist **586 (89,1 %) bei null Geometriebewegung**. Der Multi-Piece-Schnitt
+(jede Wand korrekt unterteilt, Oeffnungswaende in Einzelstuecke getrennt) haelt Self-Int
+und Shell-Self-Intersection niedrig; Conforming schliesst formneutral die Naehte unserer
+eigenen Zusaetze. Von den 11 verbleibenden offenen Huellen sind **8 aus der Quelle
+geerbt** (die selbst 15 offene hat), nur **2 stammen aus unserer Pipeline** — und wir
+schliessen umgekehrt **7** der quell-offenen. Die letzten mm-Naehte bleiben dem Healer.
+
+**Von uns eingefuehrte Fehler** (gemessen: Gebaeude, die in der Quelle valide sind, bei
+uns aber nicht): **22** — davon `303` T-Stoesse an Anbau-Naehten (11), `601` (5, siehe
+unten Tooling-Hinweis), `206` Fenster-in-Nische (3), Rest Einzelfaelle.
+
+> **Hinweis `601 BUILDINGPARTS_OVERLAP`:** Betrifft 5 Mehr-Part-Gebaeude, ist aber
+> **kein Defekt unseres CityGML** — die Ausgabe ist konform (Standard-LoD3: `lod3Solid`
+> + `boundedBy`-Flaechen mit gemeinsamen, per xlink referenzierten Polygonen). Erst die
+> `citygml-tools`→CityJSON-Konvertierung erzeugt eine Doppel-Darstellung (Solid +
+> MultiSurface), die val3dity als Ueberlapp flaggt. Tooling-Artefakt der Pruefkette.
+
+**Schritt 7a — Faltungs-Schutz beim Wandschnitt:** `cutWallAtMultipleZ` prueft jedes
+erzeugte Segment mit `CityGmlUtils.ringSelfIntersects`. Wuerde der Sutherland-Hodgman-
+Schnitt eine zur Schnittebene konkave/gebogene Wand zu einem self-touching Ring falten,
+wird der Schnitt komplett verworfen und die **valide Original-Wand ungeschnitten**
+behalten (formneutral). Das senkt Self-Int 24→15. Trade-off (an val3dity gemessen):
+eine ganz gehaltene Wand ueber zwei Geschosse kollidiert mit der Geschoss-Bodenplatte an
+der Etagengrenze (Platten-Kante mitten auf der Wandflaeche → NON_MANIFOLD 303: 9→13,
+307: 1→3). Netto +3 valide Gebaeude. Ein zusaetzlich getesteter Weld-Pinch-Schutz war
+netto neutral und wurde wieder entfernt.
+
+**Verbleibende Fehler** (63 Gebaeude) und ihre Ursache:
+
+| Code | Fehler | Anzahl | Ursache |
+|------|--------|--------|---------|
+| 601 | BUILDINGPARTS_OVERLAP | 25 | groesstenteils aus LoD2 geerbt |
+| 104 | RING_SELF_INTERSECTION | 15 | Rest gefalteter Wandschnitte, die der Faltungs-Schutz (noch) nicht abfaengt |
+| 303 | NON_MANIFOLD_CASE | 13 | ganz gehaltene Waende ↔ Geschoss-Bodenplatte (Platten-Kante mitten auf Wandflaeche) + Anbau-Stufen |
+| 203/204 | NON_PLANAR | 7 | aus LoD2 geerbt (Befliegungsgenauigkeit) |
+| 307 | POLYGON_WRONG_ORIENTATION | 3 | Einzelfaelle an ungeschnittenen Waenden |
+| 302 | SHELL_NOT_CLOSED | 2 | Rest-Naehte |
+| 206 | INNER_RING_OUTSIDE | 2 | Einzelfaelle |
+
+**Ursache der Self-Intersections (an echter Geometrie verifiziert, urspr. 24):** Sie sind
+**nicht** aus den Quelldaten geerbt — die LoD2-Eingabe hat nur 1 Self-Intersection von
+775 Primitiven. Sie entstehen in **unserem** Wandschnitt `cutWallPolygonAtZ`
+(Sutherland-Hodgman). Die betroffenen Waende sind **flach und planar** (Ebenen-Abweichung
+≤1,4 mm; 21/24 senkrecht) — **nicht** gebogen. Sie haben aber einen **nicht-konvexen**
+Umriss (gestufte Ober-/Unterkante, viele Ecken; inputPts 11–25), sodass die horizontale
+Schnittlinie den Umriss an >2 Punkten kreuzt. Der klassische Sutherland-Hodgman verbindet
+dann die getrennten Unter-Stuecke zu **einem** self-touching Ring. Verifiziert per
+Instrumentierung: bei **15 von 16** kaputten Waenden ist die **Eingangswand sauber** und
+erst der Schnitt bricht sie (nur 1 Upstream-Fall). Zusaetzlich: 23/24 Ringe tragen die
+Faltungssignatur (≥3 Vertices auf einer Z-Ebene), und die Zahl ist ueber alle
+Ausgabe-Staende identisch — Welding/Conforming erzeugen sie also weder noch beheben sie.
+
+**Umgesetzt (Schritt 7a):** der oben beschriebene Faltungs-Schutz — gefaltete Schnitte
+werden verworfen, die Wand bleibt valide ungeschnitten. Das behebt 9 der 24 Faelle
+(Self-Int 24→15) ohne Formaenderung.
+
+**Noch offen (die verbleibenden 15):** Der saubere Weg ist **kein** Rekonstruieren
+fehlender Quelldaten, sondern die zur Schnittebene konkaven Waende beim Schnitt
+**korrekt zu trennen** statt zu falten. Die dafuer vorbereitete Mehrstueck-Zerlegung
+`splitWallByZ` (CityGmlUtils) trennt die Stuecke sauber, ist aber noch nicht in der
+Pipeline aktiv: allein aktiviert legt sie die offene **vertikale Stufen-Flaeche**
+zwischen den getrennten Stuecken frei (→ NON_MANIFOLD). Zudem muss ein solcher Schnitt
+zur **Geschoss-Bodenplatte** passen, sonst entsteht dort statt 104 ein 303. Offen ist
+daher, den Split mit dem Erzeugen der verbindenden Stufen-Flaeche **und** der Platten-
+Anpassung zu koppeln. Planaritaet (203/204) und der geerbte Anteil von 601 sind bewusst
+nicht adressiert, da sie aus den Eingangsdaten stammen.
+
+> **Hinweis zur Windows-Beta von val3dity 2.6.0b0:** `--report` kann mit `0xC0000409`
+> abstuerzen; die Auswertung liest daher die `SUMMARY`-Zeile aus stdout (valide Zahl +
+> Fehlercodes). Prueflauf per `scratchpad/validate.ps1 <gml>` (GML → CityJSON → val3dity).
+
 ## Geplante Erweiterungen
 
 | Schritt | Funktion | Status |
@@ -1897,7 +2196,7 @@ Die Pipeline liest und schreibt CityGML 1.0 (Namespace `http://www.opengis.net/c
 | 3 | Geschosse (Floor/Ceiling/Wandschnitt) | ✅ Fertig |
 | 2a | GroundSurface-Ersetzung + TIC | ✅ Fertig |
 | 2b | DGM-Reader (ASC + GeoTIFF + ZIP + Mosaik, bilineare Interpolation) | ✅ Fertig |
-| 3a | Sutherland-Hodgman (alle Wandformen) | ✅ Fertig |
+| 3a | Multi-Piece-Wandschnitt (`splitWallByZ`, Oeffnungswaende in Einzelstuecke) | ✅ Fertig |
 | 3b | Flachdach-Erkennung (keine doppelte Decke) | ✅ Fertig |
 | 3c | Newell's Method (3D-Flaechenberechnung) | ✅ Fertig |
 | 3d | Mischdach-Erkennung (Ceiling nur unter geneigtem Dach) | ✅ Fertig |
@@ -1908,7 +2207,11 @@ Die Pipeline liest und schreibt CityGML 1.0 (Namespace `http://www.opengis.net/c
 | 5a | Kellerfenster ab Kellerboden (BA floor fix) | ✅ Fertig |
 | 5b | BuildingPart-Duplizierung verhindern (coveredByPart) | ✅ Fertig |
 | 5c | Dachfenster (RO.window.XXX) | 📋 TODO |
-| 6 | Balkone/Terrassen | Geplant |
+| 3f | Flaechentreue-Fallback (`isFaithfulSplit`, sicherer Schnitt bei Oeffnung+Mischdach → kein 306) | ✅ Fertig |
+| 6 | Junction-Conforming (T-Naht-Vertices, streng formneutral, 0 mm bewegt) | ✅ Fertig |
+| — | Vertex-Welding ENTFERNT (verschob Vertices ≤5 mm → Aufgabe des Healers) | ✅ Entfernt |
+| 7 | Oeffnungs-Kontur-Check (Tuer+Fenster via `openingInsideWall2D`; 206/201 → 0) | ✅ Fertig |
+| 8 | Balkone/Terrassen (`BalconyGenerator`) | ✅ Fertig — seit 2026-08-10 als Schritt 6 in Pipeline verdrahtet, an 14 Testgebäuden + voller 3.801er-Kachel val3dity-verifiziert (0 zusätzliche Fehler) |
 
 ### TODO: Dachfenster (Schritt 5c)
 
@@ -1921,6 +2224,218 @@ Geplante Logik:
 - Firsthöhe (`RO.shape.RiHe`) aus JSON, Traufhöhe aus Geometrie bestimmen
 - Dachfenster als `Opening`/`Window` auf schrägen Flächen platzieren
 - Begrenzung auf maximal zulässigen Flächenanteil (WWR analog zu Wandfenstern)
+
+## Schritt 6: Balkon-Generator (`BalconyGenerator`)
+
+Ersetzt gezielt bestehende, vom `WindowGenerator` bereits platzierte Fenster einer Wand
+durch Balkone — in der Reihenfolge und Anzahl, die das `GA.GaPa`-Muster vorgibt (z.B.
+`"WiGaGaWi"`: 1. Fenster bleibt Fenster, 2.+3. Fenster werden zu Balkonen, 4. Fenster
+bleibt Fenster). Jeder Balkon besteht aus Deck (begehbare Fläche), 3-seitiger Brüstung
+und einer Zugangsöffnung — analog zur Tür-/Fenster-Öffnungslogik (Schritt 4/5) und zur
+Kanten-Extrusion des `BasementGenerator` (Schritt 2). **Kompiliert, an den 14 echten
+Testgebäuden und an der vollen 3.801-Gebäude-Kachel verifiziert (630 Balkone, 0
+zusätzliche val3dity-Fehler gegenüber der Pipeline ohne Balkone — siehe "Serienlauf über
+die volle 3.801-Gebäude-Kachel + val3dity" unten). Seit 2026-08-10 als Schritt 6 in
+`Lod2ToLod3Pipeline` registriert (nach den Fenstern, vor dem Junction-Conforming aus
+Schritt 7) — die drei zuvor identifizierten Blocker (kein val3dity-Lauf, nur 14
+Testgebäude, keine 3801er-Kachel) waren der Grund für die vorherige Zurückhaltung und sind
+ausgeräumt. Die "Offenen Punkte" unten (nicht datenbelegte Positionierungs-Annahmen)
+bleiben unabhängig davon bestehen — sie betreffen die semantische Interpretation einzelner
+GA-Parameter, nicht die Geometrie-Validität.**
+
+### Datengrundlage
+
+Der Parameterblock `GA` (Gallery) ist in `ModuleParameters.Gallery` bereits vollständig
+abgebildet und per PDF-Spezifikation (`Benennung_Parameter_Baukoerpermodule.pdf`,
+Tabelle 3/4) verifiziert: `GA` = Balkon, nicht `UT` (= Hausanschlüsse/Versorgungsschächte
+— siehe Korrektur in [../LoD3_Konzept.md](../LoD3_Konzept.md), das diesen Fehler noch
+enthielt). **`GaPa` und `HDistWiGa` stehen in der PDF-Tabelle gar nicht** — ihre Bedeutung
+war nie spec-verifiziert (siehe unten). Von 33 echten Baukörpermodulen haben 12 tatsächlich
+befüllte GA-Werte (u.a. `ME3_4`, `ME6`, `ME7_4`, `MR5_4`, `MR6_4`, `MRG3_4`/`4_4`/`7_4`,
+`MRO3_4`/`4_4`/`7_4`, `EE3_4`); die restlichen haben den Block, aber alle Felder `null`.
+
+### Geometrie-Prinzip (pro einzelnem Balkon)
+
+```
+Draufsicht (eine Wand, ein Balkon):
+
+  Hauswand ─────P1──────────P2───────── Hauswand      P1-P2 liegt auf der Wand,
+                │  Tuer      │                          KEINE eigene Flaeche hier
+                │            │
+                P4───────────P3    ← Deck (RoofSurface-Approximation), GaWid tief
+
+  Seitenansicht:
+                          ┌───┐  ← Brueestung (WallSurface), Hoehe GaHe
+                Tuer ─┐   │   │
+   Hauswand ══════════╪═══╪═══╪══════   ← Deck-Z = Tuerschwelle (5cm ueber Wand-Fusspunkt)
+```
+
+Deck (P1-P2-P3-P4) und Brüstung (3 Seiten: P1-P4, P4-P3, P3-P2) werden als reale
+`boundedBy`-Flächen angehängt, aber **nicht** in die `lod3Solid`-Hülle aufgenommen
+(`CityGmlUtils.STRUKTUR_BALCONY_DECK`/`STRUKTUR_BALCONY_RAILING`, ausgeschlossen in
+`rebuildSolidShell` und `conformJunctions` — exakt dieselbe Behandlung wie
+`FloorSurface`/`CeilingSurface` an Geschossgrenzen). Grund: Die Balkon-Geometrie ist eine
+offene „Wanne" ohne 4. Wand zur Hauswand hin — ein geschlossenes `gml:Solid` verlangt aber
+einen Kanten-Partner für jede Kante, den es an dieser Seite nicht gibt. Die Zugangsöffnung
+selbst ist Teil der Hülle (schließt das Wandloch), exakt wie eine normale Tür — sie wird
+weiterhin als `DoorSurface` modelliert, siehe "Offene Punkte" Punkt 0.
+
+### Entwicklungsgeschichte: drei Fixes nach Sichttests an echten Gebäuden
+
+**Fix 1 (Kollisionsprüfung) und Fix 2 (Eligibilität über `WindowPreference`)** kamen nach
+einem Screenshot-Review am 14-Gebäude-Testfall: die Erstversion ("jede lange genug
+GF/UF-Wand bekommt unabhängig einen Balkon") erzeugte **77 Balkone**, bis zu **45 an einem
+einzigen Gebäude**, und legte Balkontüren über bereits platzierte Fenster. Fix 2 machte
+Wände mit `WindowPreference=NONE` (Party-Wall/Nachbarbebauung) balkon-unfähig und
+begrenzte zunächst auf einen Balkon pro Geschoss-Tag — dieses "ein Balkon pro Etage" wurde
+später durch das musterbasierte Modell (siehe unten) abgelöst.
+
+**Fix 3 (Auswärts-Normale):** Nach dem Fix der Fenster-Kollision zeigte sich an echten
+Gebäuden: Balkontür saß korrekt in der Wand, aber Deck/Brüstung fehlten sichtbar — sie
+waren von der Gebäudehülle verdeckt. Ursache: die Auswärts-Normale wurde per fester
+90-Grad-Rotation der Wand-Unterkante berechnet (dieselbe Formel wie `CityGmlUtils`'
+`NORMAL_AZI`); diese Formel liefert nur bei konsistenter Ringwicklung die Außenrichtung,
+und genau das ist im Sachsen-LoD2-Quelldatensatz **nicht garantiert** (Original-Wände und
+generierte Kellerwände sind unterschiedlich gewickelt, siehe `CityGmlUtils.isExteriorRingCCW`-
+Javadoc). Verifiziert an echten Koordinaten (Gebäude `000C6Y7`, Wände 1 und 3): die Formel
+zeigte dort exakt 180 Grad falsch — der Schwerpunkt-Check ergab `dot=-7.14` (sollte positiv
+sein). Fix: die Kandidaten-Normale wird gegen den groben Gebäude-Schwerpunkt
+(`computeFootprintCentroid`) geprüft und bei negativem Skalarprodukt umgedreht, statt der
+Wicklung blind zu vertrauen.
+
+### Redesign: GaPa-musterbasierte Fenster-Slot-Ersetzung
+
+Bei der Umsetzung von Fix 2 stellte sich die Frage, ob "ein Balkon pro Etage" wirklich
+richtig ist. Direkte Prüfung der PDF-Spezifikation ergab: `GaPa` steht dort gar nicht.
+Ein Blick in die echten JSON-Module zeigt aber unzweideutig mehrere `Ga`-Token pro Muster:
+
+```
+ME6.json:     GaPa="GaWiGaWiGaWi"   (3 Balkone auf einer Wand)
+MRG7_4.json:  GaPa="GaWiGaWiWiGaWi" (3 Balkone)
+MR6_4.json:   GaPa="WiGaGaWi"       (2 direkt benachbarte Balkone)
+MRO4_4.json:  GaPa="GaWiWiGaWi"     (2 Balkone)
+```
+
+"Ein Balkon pro Etage" war zu restriktiv. Statt einer schnellen "zähle `Ga`-Token, platziere
+unabhängig"-Korrektur wurde das Modell grundlegend neu gebaut:
+
+1. Pro Wand werden die bereits vom `WindowGenerator` platzierten `WindowSurface`-Öffnungen
+   links→rechts sortiert. Das `GaPa`-Muster wird 1:1 mit dieser Liste verzippt: Token `i`
+   entscheidet über Fenster Nr. `i`. `"Wi"` → Fenster bleibt; `"Ga"` → wird durch einen
+   Balkon ersetzt. Jede eligible Wand wird jetzt unabhängig verarbeitet (wie beim
+   `WindowGenerator`) — keine "nur die längste Wand pro Etage"-Gruppierung mehr.
+2. Zusammenhängende `Ga`-Läufe (z.B. die beiden mittleren Token in `"WiGaGaWi"`) werden als
+   **ein Block** behandelt, nicht unabhängig je auf ihr eigenes Fenster zentriert — das
+   würde bei typischen Fensterabständen (~1,85 m) und Balkonbreiten (2,5–5 m) fast immer
+   überlappen. Belegt an `MR6_4.json`: `HDistGaGa=0,01` m — praktisch null, zwei Balkone
+   stoßen fast nahtlos aneinander. Ein Lauf der Länge `k` wird als Block der Breite
+   `k·GaLen+(k-1)·HDistGaGa` platziert, zentriert auf den Mittelpunkt der ersetzten
+   Fenstergruppe.
+3. Jeder einzelne Balkon eines Laufs wird **einzeln** gegen die echte Wandkontur geprüft
+   (nicht der Block als Ganzes) — passt einer nicht (Balkonbreite oft größer als die
+   ersetzte Fensterbreite), wird nur dieser übersprungen, die anderen des Laufs werden
+   trotzdem versucht.
+4. Fenster außerhalb des Laufs, die `"Wi"` bleiben sollen, werden per `HDistWiGa`-
+   Mindestabstand vor Überlappung geschützt — sie werden **nicht** entfernt, anders als im
+   alten Kollisions-Modell.
+
+### Rauchtest (14 echte Testgebäude, nach allen Fixes + Redesign)
+
+| Kennzahl | Wert |
+|---|---|
+| Balkone gesamt | 8 |
+| Wände mit Balkon | 8 |
+| Wände übersprungen | 10 (davon 7: Muster will Balkon, Wand hat aber 0 Fenster) |
+| Fenster durch Balkon ersetzt | 8 |
+| Übersprungen (Türkonflikt) | 0 |
+| Übersprungen (Lauf/Balkon zu breit für Wandkontur) | 0 |
+| Übersprungen (Mindestabstand `HDistWiGa` zu Nachbarfenster) | 0 |
+| Balkone pro Wand (Histogramm) | `{1=8}` |
+| Doppelte `gml:id` | 0 (von 4394) |
+
+Alle 8 Balkone dieses Testsets stammen aus dem `ME3`-Modul (`GaPa="GaWiWi"`, nur 1
+`Ga`-Token) — kein Gebäude der 14 nutzt eines der Mehrfach-`Ga`-Module (`ME6`, `MRG7_4`,
+`MR6_4`, `MRO4_4`). Der Mehrfach-Balkon-Pfad (`HDistGaGa`-Blocklayout) ist an den echten
+`MR6_4`-Werten durchgerechnet und verifiziert, aber an DIESEM Testset nicht in Aktion zu
+sehen — braucht einen Lauf gegen Gebäude, die eines dieser Module nutzen, um auch am
+Endergebnis sichtbar zu werden.
+
+Stichprobe (vor dem Redesign, weiterhin gültig als Beleg für die Fenster-Ersetzungs-
+Mechanik): die Wand `Face_000C6Y7_0_3_GF_3` hatte 5 Fenster; genau das am weitesten links
+liegende wurde entfernt, die übrigen blieben unverändert erhalten, die neue Balkontür wurde
+mit korrektem Innenring ergänzt — kein verwaistes Loch, kein doppelt gezähltes Fenster.
+
+### Serienlauf über die volle 3.801-Gebäude-Kachel + val3dity (2026-08-03)
+
+Um sowohl den Mehrfach-Balkon-Pfad an echten Daten zu sehen als auch die val3dity-Lücke zu
+schließen, lief die volle Kachel (`LoD2_33_416_5656_2_SN_BuildingPreferences.gml`, 3.801
+Gebäude) durch Pipeline + `BalconyGenerator`:
+
+| Kennzahl | Wert |
+|---|---|
+| Balkone gesamt | 630 |
+| Wände mit Balkon | 626 |
+| Balkone pro Wand (Histogramm) | `{0=130, 1=622, 2=4}` |
+| Übersprungen (Lauf/Balkon zu breit für Wandkontur) | 70 |
+| Übersprungen (Mindestabstand `HDistWiGa` zu Nachbarfenster) | 59 |
+| Übersprungen (außerhalb Wandkontur, Tür-Check) | 1 |
+| Übersprungen (Türkonflikt) | 0 |
+| Wände mit Muster, aber ohne vorhandene Fenster | 619 |
+| Doppelte `gml:id` | 0 (von 368.716) |
+| Türen = Decks = Brüstungen/3 | 630 = 630 = 1890 |
+
+**Mehrfach-Balkon-Pfad bestätigt:** 4 Wände bekamen tatsächlich 2 Balkone (`HDistGaGa`-
+Blocklayout) — der bisher nur an `MR6_4.json`-Werten von Hand durchgerechnete Code-Pfad
+läuft nachweislich auch an echten Gebäuden. Die neuen Schutzmechanismen (Punkt 3d/7 im
+Redesign-Abschnitt oben) greifen ebenfalls sichtbar: 70× "Lauf passt nicht in die
+Wandkontur", 59× "Mindestabstand zu Nachbarfenster verletzt" — beide vorher nur theoretisch
+begründet, jetzt mit echten Häufigkeiten belegt.
+
+**val3dity (via `citygml-tools to-cityjson` + `val3dity --ignore204`), Vergleich mit/ohne
+Balkone auf identischer Kachel:**
+
+| | Ohne Balkone | Mit Balkonen |
+|---|---|---|
+| Valide Features | 3.389/3.801 (89,2%) | 3.389/3.801 (89,2%) |
+| Valide Primitive | 7.457/7.576 (98,4%) | 7.457/7.576 (98,4%) |
+| Fehlerverteilung | 102=6, 104=5, 201=2, 302=40, 303=63, 306=2, 307=12, 601=304 | **identisch, Zahl für Zahl** |
+
+Die Balkon-Geometrie erzeugt **null zusätzliche val3dity-Fehler** — jeder invalide Fall
+existiert bereits in der Pipeline-Ausgabe ohne Balkone. Erwartbar, da Deck/Brüstung bewusst
+aus der `lod3Solid`-Hülle ausgeschlossen sind (siehe "Warum Deck/Brüstung NICHT Teil der
+lod3Solid-Hülle sind" oben): val3dity prüft sie gar nicht als Teil der Solid-Validität
+(Primitiv-Anzahl in beiden Läufen exakt 7.576). Der 89,2%-Wert liegt nahtlos beim
+dokumentierten Baseline von 89,1% (README, Schritt 6).
+
+### Offene Punkte (siehe auch Klassen-Javadoc)
+
+0. **Zugangsöffnung bleibt `DoorSurface`**, obwohl die PDF-Spec die GA-Block-Felder
+   `WiLen`/`WiHe`/`HDistWaWi` identisch zu den allgemeinen Fenster-Parametern benennt.
+   Gestützt durch `FD.GalleryDoor` in `ModuleParameters.FacadeDetails` — ein eigener
+   Material-Slot für genau dieses Element, getrennt von `FD.Window` und `FD.Door` — spricht
+   für ein drittes, türartiges Element.
+1. Balkon-Fußabdruck (bzw. Block-Anker) zentriert auf den u-Mittelpunkt des/der ersetzten
+   Fenster — inferiert, kein Datenbeleg.
+2. `HDistWiGa` = Mindestabstand (Clearance) zu überlebenden Nachbarfenstern außerhalb des
+   Laufs, nicht Koordinatenversatz (echte Werte 0,1–1,5 m passen zu einer Clearance).
+3. `DistWiGa` = Versatz der Zugangsöffnung vom linken Rand des jeweils eigenen
+   Balkon-Fußabdrucks, geklemmt (echte Werte 0,0–0,8 m, immer deutlich unter `GaLen`
+   2,5–3,7 m).
+4. Fehlt `GaPa` (aber `GaLen`/`GaWid` gültig): Fallback bleibt 1 Token (`"Ga"`), trifft
+   dadurch deterministisch das am weitesten links liegende Fenster der Wand.
+5. `HDistWaGa`/`HDistMinWaGa`/`HDistWaWi` (GA-Block) werden für die Positionierung nicht
+   mehr gelesen — Positionen kommen jetzt vollständig aus den bestehenden Fensterpositionen
+   plus `HDistGaGa` für den Lauf-Innenabstand. Anders als `GaPa`/`HDistWiGa` sind drei dieser
+   vier Parameter tatsächlich in der PDF-Spec dokumentiert — bewusster Trade-off, kein
+   Übersehen.
+6. Eligible Wände ohne ein einziges bestehendes Fenster bekommen unter diesem Modell keinen
+   Balkon mehr, auch mit gültigen GA-Parametern — bewusste Konsequenz, kein Bug.
+7. Keine Deckendicke (kein GA-Parameter dafür vorhanden) — Deck ist eine einzelne Fläche,
+   wie auch Floor/CeilingSurface keine eigene Dicke haben.
+
+~~8. Kein val3dity-Lauf, keine Serienverarbeitung über alle 3801 Gebäude.~~ — erledigt,
+siehe "Serienlauf über die volle 3.801-Gebäude-Kachel + val3dity" oben: 630 Balkone, 0
+zusätzliche val3dity-Fehler gegenüber der Pipeline ohne Balkone.
 
 ## Beispiel-Ausgabe (Pipeline)
 
@@ -1947,6 +2462,21 @@ Schritt 4 — Tueren:     1340 Tueren, 1321 Waende modifiziert, 1181 uebersprung
 Schritt 5 — Fenster:    44655 Fenster, 20448 Waende, 65659 uebersprungen, 360 Giebel-Drops, 17 WWR-Warn
 Schritt 5 — Skip:       WP0/null=15788, coveredByPart=5752, tooShort=32351, tooLow=8974, noFit=372, noParams=1813
 ```
+
+Dieser Log stammt aus einem Lauf VOR der Balkon-Integration (mit DGM, siehe DGM-Zeile
+oben) und dient hier weiterhin als Referenz für Schritte 1–5. **Verifikation der
+Balkon-Integration (2026-08-10, gleicher Eingabedatensatz, ohne DGM):** Die Pipeline
+druckt seither zusätzlich eine `Schritt 6 — Balkone`-Zeile —
+
+```
+Schritt 6 — Balkone:    630 Balkone, 626 Waende, 630 Fenster ersetzt, 869 uebersprungen
+```
+
+— exakt identisch zu den 630 Balkonen (626 Wände, 630 ersetzte Fenster) aus dem
+Standalone-Lauf oben ("Serienlauf über die volle 3.801-Gebäude-Kachel + val3dity"). Die
+Ausgabedatei enthält dazu 630 `LOD3_BalconyDoor`, 630 `LOD3_BalconyDeck` und 1890
+`LOD3_BalconyRailing`-Flächen (630×3, per `grep -c` gegenprüft) — die Verdrahtung
+reproduziert die Standalone-Ergebnisse 1:1, keine Verhaltensänderung durch die Integration.
 
 ## Anforderungen
 

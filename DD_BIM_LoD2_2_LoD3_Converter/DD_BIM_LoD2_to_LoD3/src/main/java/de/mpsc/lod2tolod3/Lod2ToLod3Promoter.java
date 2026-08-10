@@ -15,7 +15,6 @@ import de.mpsc.lod2tolod3.util.CityGmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
@@ -27,28 +26,9 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Schritt 1: Stuft alle LoD2-Geometrien auf LoD3 hoch (Promotion).
- * 
- * Dieser Promoter nutzt die generischen Basisklassen von citygml4j
- * (AbstractThematicSurface, AbstractSpace), um ALLE LoD2-Geometrien
- * automatisch zu erfassen und in die LoD3-Slots zu verschieben.
- * Die Geometrie selbst wird dabei nicht verändert.
- * 
- * Unterstützte Geometrietypen:
- * - AbstractThematicSurface: lod2MultiSurface → lod3MultiSurface
- *   (WallSurface, RoofSurface, GroundSurface, CeilingSurface, FloorSurface,
- *    OuterCeilingSurface, OuterFloorSurface, InteriorWallSurface, ClosureSurface, etc.)
- * 
- * - AbstractSpace: lod2Solid → lod3Solid, lod2MultiSurface → lod3MultiSurface,
- *                  lod2MultiCurve → lod3MultiCurve
- *   (Building, BuildingPart, etc.)
- * 
- * Zusätzlich werden alle LOD2-Referenzen in gml:name und gen:stringAttribute
- * auf LOD3 umbenannt.
- * 
- * Fügt ein generisches Attribut "lod2ToLod3Promotion" zu jedem Building hinzu,
- * das dokumentiert welche Geometrietypen hochgestuft wurden.
- * 
+ * Schritt 1: Stuft alle LoD2-Geometrien auf LoD3 hoch, unveraendert bis auf den Slot
+ * (siehe Doku.md, Abschnitt "Schritt 1").
+ *
  * Usage:
  *   java -jar lod2-to-lod3-promoter.jar <input.gml> [output.gml]
  */
@@ -78,7 +58,7 @@ public class Lod2ToLod3Promoter {
                     : Paths.get(outputName);
             }
 
-            Files.createDirectories(outputPath.getParent());
+            AbstractGenerator.createParentDirs(outputPath);
 
             log.info("=== LoD2 → LoD3 Promoter (Geometrie-Hochstufung) ===");
             log.info("Input:  {}", inputPath);
@@ -105,44 +85,31 @@ public class Lod2ToLod3Promoter {
         }
     }
 
-    /**
-     * Stuft eine CityGML-Datei von LoD2 auf LoD3 hoch.
-     */
+    /** Stuft eine CityGML-Datei von LoD2 auf LoD3 hoch. */
     public PromotionStats promote(Path inputFile, Path outputFile) throws Exception {
         PromotionStats stats = new PromotionStats();
 
         CityGmlUtils.processGmlFile(inputFile, outputFile, building -> {
             stats.buildingsProcessed++;
-            // Geometrien hochstufen
             BuildingPromotionResult result = promoteBuildingToLod3(building);
             stats.geometriesPromoted += result.promotedCount;
             stats.promotedTypes.addAll(result.promotedTypes);
 
-            // Namen anpassen (LOD2 -> LOD3)
             int namesConverted = renameLod2NamesToLod3(building);
             stats.namesRenamed += namesConverted;
 
-            // Promotion-Metadaten als generisches Attribut hinzufuegen
             addPromotionMetadata(building, result);
         });
 
         return stats;
     }
 
-    /**
-     * Stuft alle LoD2-Geometrien eines Gebäudes auf LoD3 hoch.
-     * Nutzt die generischen Basisklassen AbstractThematicSurface und AbstractSpace.
-     */
+    /** Stuft alle LoD2-Geometrien eines Gebaeudes (AbstractThematicSurface/AbstractSpace) auf LoD3 hoch. */
     public BuildingPromotionResult promoteBuildingToLod3(Building building) {
         BuildingPromotionResult result = new BuildingPromotionResult();
 
         building.accept(new ObjectWalker() {
-            
-            /**
-             * Stuft alle LoD2-Geometrien von AbstractThematicSurface-Unterklassen hoch.
-             * Erfasst: WallSurface, RoofSurface, GroundSurface, CeilingSurface, FloorSurface,
-             *          OuterCeilingSurface, OuterFloorSurface, InteriorWallSurface, ClosureSurface, etc.
-             */
+
             @Override
             public void visit(AbstractThematicSurface surface) {
                 MultiSurfaceProperty lod2MultiSurface = surface.getMultiSurface(2);
@@ -156,14 +123,8 @@ public class Lod2ToLod3Promoter {
                 super.visit(surface);
             }
             
-            /**
-             * Stuft alle LoD2-Geometrien von AbstractSpace-Unterklassen hoch.
-             * Erfasst: Building, BuildingPart, etc.
-             * Geometrietypen: Solid, MultiSurface, MultiCurve
-             */
             @Override
             public void visit(AbstractSpace space) {
-                // lod2Solid -> lod3Solid
                 SolidProperty lod2Solid = space.getSolid(2);
                 if (lod2Solid != null) {
                     space.setSolid(3, lod2Solid);
@@ -200,9 +161,7 @@ public class Lod2ToLod3Promoter {
         return result;
     }
 
-    /**
-     * Fügt Promotion-Metadaten als generisches Attribut zum Building hinzu.
-     */
+    /** Fuegt Promotion-Metadaten als generisches Attribut zum Building hinzu. */
     void addPromotionMetadata(Building building, BuildingPromotionResult result) {
         if (result.promotedCount == 0) {
             return;
@@ -223,10 +182,7 @@ public class Lod2ToLod3Promoter {
         building.getGenericAttributes().add(new AbstractGenericAttributeProperty(promotionAttr));
     }
 
-    /**
-     * Benennt LOD2-Namen in LOD3 um.
-     * Betrifft gml:name und gen:stringAttribute Namen.
-     */
+    /** Benennt LOD2-Namen in LOD3 um (gml:name und gen:stringAttribute). */
     public int renameLod2NamesToLod3(Building building) {
         AtomicInteger convertedCount = new AtomicInteger(0);
 
@@ -249,60 +205,50 @@ public class Lod2ToLod3Promoter {
         return convertedCount.get();
     }
 
-    /**
-     * Benennt gml:name von LOD2 zu LOD3 um.
-     */
+    /** Prueft, ob ein String eine LOD2-Variante (LOD2/LoD2/lod2) enthaelt. */
+    private static boolean containsLod2(String s) {
+        return s != null && (s.contains("LOD2") || s.contains("LoD2") || s.contains("lod2"));
+    }
+
+    /** Ersetzt alle LOD2-Varianten durch die entsprechende LOD3-Schreibweise. */
+    private static String replaceLod2WithLod3(String s) {
+        return s.replace("LOD2", "LOD3").replace("LoD2", "LoD3").replace("lod2", "lod3");
+    }
+
+    /** Benennt gml:name von LOD2 zu LOD3 um. */
     private int renameNames(List<Code> names) {
         if (names == null || names.isEmpty()) return 0;
         int count = 0;
         for (Code name : names) {
             String value = name.getValue();
-            if (value != null && (value.contains("LOD2") || value.contains("LoD2") || value.contains("lod2"))) {
-                String newValue = value
-                    .replace("LOD2", "LOD3")
-                    .replace("LoD2", "LoD3")
-                    .replace("lod2", "lod3");
-                name.setValue(newValue);
+            if (containsLod2(value)) {
+                name.setValue(replaceLod2WithLod3(value));
                 count++;
             }
         }
         return count;
     }
 
-    /**
-     * Benennt gen:stringAttribute Namen von LOD2 zu LOD3 um.
-     */
+    /** Benennt gen:stringAttribute Namen von LOD2 zu LOD3 um. */
     private int renameGenericAttributes(AbstractCityObject cityObject) {
         if (cityObject.getGenericAttributes() == null) return 0;
         int count = 0;
         for (var attrProp : cityObject.getGenericAttributes()) {
-            var attr = attrProp.getObject();
-            if (attr instanceof StringAttribute strAttr) {
-                String attrName = strAttr.getName();
-                if (attrName != null && (attrName.contains("LOD2") || attrName.contains("LoD2") || attrName.contains("lod2"))) {
-                    String newName = attrName
-                        .replace("LOD2", "LOD3")
-                        .replace("LoD2", "LoD3")
-                        .replace("lod2", "lod3");
-                    strAttr.setName(newName);
-                    count++;
-                }
+            if (attrProp.getObject() instanceof StringAttribute strAttr && containsLod2(strAttr.getName())) {
+                strAttr.setName(replaceLod2WithLod3(strAttr.getName()));
+                count++;
             }
         }
         return count;
     }
 
-    /**
-     * Ergebnis der Hochstufung eines einzelnen Buildings.
-     */
+    /** Ergebnis der Hochstufung eines einzelnen Buildings. */
     public static class BuildingPromotionResult {
         public int promotedCount = 0;
         public Set<String> promotedTypes = new HashSet<>();
     }
 
-    /**
-     * Statistiken der Gesamt-Hochstufung.
-     */
+    /** Statistiken der Gesamt-Hochstufung. */
     public static class PromotionStats {
         public int buildingsProcessed = 0;
         public int geometriesPromoted = 0;
