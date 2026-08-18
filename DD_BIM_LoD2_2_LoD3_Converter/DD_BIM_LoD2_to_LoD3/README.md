@@ -54,9 +54,10 @@ java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.WindowGenerator   
 java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.BalconyGenerator     input.gml  jsonDir/  [output.gml]
 ```
 
-`BalconyGenerator` ist seit 2026-08-10 als Schritt 6 fester Teil der Pipeline (läuft nach
-den Fenstern); der Standalone-Aufruf oben bleibt zusätzlich für isolierte Tests möglich —
-siehe Status-Tabelle unten.
+`BalconyGenerator` ist seit 2026-08-10 fester Teil der Pipeline, seit 2026-08-12 zweiphasig
+verdrahtet (Phase 1 vor, Phase 2 nach den Fenstern — siehe "Pipeline-Ablauf" unten); der
+Standalone-Aufruf oben führt beide Phasen direkt nacheinander aus (für isolierte Tests an
+einer bereits Fenster-haltigen Datei) — siehe Status-Tabelle unten.
 
 ---
 
@@ -80,11 +81,17 @@ CityGML LoD2
     ▼  Schritt 4 – DoorGenerator
     │  Türen auf EG-Außenwände platzieren (TIC-basierte Positionierung)
     │
-    ▼  Schritt 5 – WindowGenerator
-    │  Fenster auf alle Geschoss-Außenwände platzieren (TIC-Methode)
+    ▼  Schritt 5a – BalconyGenerator (Phase 1)
+    │  Führender Ga-Lauf pro Wand unabhängig platziert (HDistWaGa-Anker),
+    │  reserviert die belegte Wandspanne für Schritt 5b
     │
-    ▼  Schritt 6 – BalconyGenerator
-    │  Balkone ersetzen gezielt Fenster-Slots aus Schritt 5 gemäß GaPa-Muster
+    ▼  Schritt 5b – WindowGenerator
+    │  Fenster auf alle Geschoss-Außenwände platzieren (TIC-Methode),
+    │  respektiert die Phase-1-Reservierung
+    │
+    ▼  Schritt 5c – BalconyGenerator (Phase 2)
+    │  Restliche Ga-Token eines Musters (falls > 1 Lauf, z.B. "GaWiGaWi")
+    │  gegen die jetzt echten Fenster platziert (HDistWiGa-Anker)
     │
     ▼  Schritt 7 – Junction-Conforming (streng formneutral)
     │  T-Naht-Vertices auf bestehende Kanten einfügen → wasserdichtes lod3Solid
@@ -149,18 +156,20 @@ Format wird automatisch erkannt (`DgmLoader`-Factory).
 |---|---|---|---|
 | 1 | LoD2→LoD3 Promotion | `Lod2ToLod3Promoter` | ✅ Fertig |
 | 2 | Keller | `BasementGenerator` | ✅ Fertig — `WindowPreference`-Zuordnung an Kellerwände 2026-08-03 gefixt (Mittelpunkt- statt Kollinearitätsprüfung ließ ~40% der Kellerwände ohne `WindowPreference`, dadurch fälschlich wie Party-Wand behandelt); siehe [Doku.md](Doku.md#schritt-2-keller-generator-basementgenerator) |
-| 3 | Geschosse | `StoreyGenerator` | ✅ Fertig — 2026-08-04 Bugfix: Wände, die den Mehrfach-Schnitt umgehen (z.B. schräg zulaufende Walmdach-Innenwände), hingen sonst unterhalb `egFloorZ` und überlappten die Kellerwand (`NON_MANIFOLD_CASE`/`SHELL_NOT_CLOSED`, val3dity-verifiziert); jetzt hartes Nachtrimmen auf `egFloorZ` in allen drei betroffenen Codepfaden — siehe [Doku.md](Doku.md#schritt-3-geschoss-generator) |
+| 3 | Geschosse | `StoreyGenerator` | ✅ Fertig — 2026-08-04 Bugfix: Wände, die den Mehrfach-Schnitt umgehen (z.B. schräg zulaufende Walmdach-Innenwände), hingen sonst unterhalb `egFloorZ` und überlappten die Kellerwand (`NON_MANIFOLD_CASE`/`SHELL_NOT_CLOSED`, val3dity-verifiziert); jetzt hartes Nachtrimmen auf `egFloorZ` in allen drei betroffenen Codepfaden — siehe [Doku.md](Doku.md#schritt-3-geschoss-generator). **2026-08-12 Bugfix:** "fliegende" Geschossdecke bei BuildingPart-losen Anbauten (geteiltes Grundpolygon mit dem Hauptbau) behoben — Höhengrenze wird jetzt pro Grundpolygon-Kante statt als ein Gesamtwert berechnet, der Anbau-Anteil wird als Kerbe aus dem Ring geschnitten statt fälschlich eine zusätzliche Etage zu bekommen; val3dity-neutral verifiziert (identische Fehlerverteilung vorher/nachher), siehe [Doku.md](Doku.md#bugfix-fliegendes-stockwerk-bei-anbauten-ohne-eigenes-buildingpart-2026-08-12) |
 | 4 | Türen | `DoorGenerator` | ✅ Fertig |
-| 5 | Fenster | `WindowGenerator` | ✅ Fertig — Fensterblock wird seit 2026-08-03 immer auf den Wandabschnitt zentriert (vorher: `HDistWaWi`-verankert, Zentrierung nur als Fallback); siehe [Doku.md](Doku.md#fensterpositionen) |
-| 6 | Balkone | `BalconyGenerator` | ✅ Fertig — seit 2026-08-10 in `Lod2ToLod3Pipeline` verdrahtet (nach Fenstern). Verifiziert an 14 echten Testgebäuden UND an der vollen 3.801-Gebäude-Kachel (630 Balkone, davon 4 Wände mit 2 Balkonen; 0 doppelte IDs). **val3dity (via `citygml-tools`+`val3dity --ignore204`): 89,2% valide Features, identisch zur Pipeline ohne Balkone — 0 zusätzliche Fehler.** Balkone ersetzen gezielt bestehende Fenster-Plätze gemäß der `GaPa`-Musterreihenfolge (mehrere Balkone pro Wand möglich, `HDistGaGa`-Blocklayout für benachbarte `Ga`-Token); Eligibilität über `WindowPreference` (0/1/2). Mehrere Positionierungs-Annahmen bleiben inferiert statt spec-belegt (u.a. `HDistWiGa`, `DistWiGa`) — Geometrie-Validität ist davon unabhängig bewiesen; siehe [Doku.md](Doku.md#schritt-8-balkon-generator-balconygenerator) und Javadoc der Klasse. |
+| 5 | Fenster | `WindowGenerator` | ✅ Fertig — Fensterblock wird seit 2026-08-03 immer auf den Wandabschnitt zentriert (vorher: `HDistWaWi`-verankert, Zentrierung nur als Fallback); seit 2026-08-11 Kellerfenster (BA) hart auf 1 Reihe begrenzt (vorher konnten vereinzelt 2 Reihen übereinander entstehen); siehe [Doku.md](Doku.md#fensterpositionen) und [Bugfix](Doku.md#bugfix-doppeltegestapelte-kellerfenster-2026-08-11) |
+| 6 | Balkone | `BalconyGenerator` | ✅ Fertig — seit 2026-08-10 in `Lod2ToLod3Pipeline` verdrahtet, seit 2026-08-11 als `BuildingInstallation` (Deck + Brüstung) statt RoofSurface/WallSurface modelliert — CityGML-1.0-XSD-konform verifiziert, kein `boundedBy`/Solid-Ausschluss-Hack mehr nötig. **Seit 2026-08-12 zweiphasig um die Fenster herum** (Phase 1 platziert den führenden `Ga`-Lauf unabhängig VOR den Fenstern über `HDistWaGa` verankert, Phase 2 platziert restliche `Ga`-Token eines Musters NACH den Fenstern über `HDistWiGa` verankert statt zu zentrieren) — hebt die Balkon-Zahl auf der vollen Kachel von 630 auf **1.075** (+70 %), da Balkone nicht mehr von einem bereits vom `WindowGenerator` platzierten Fenster abhängen. Verifiziert an 14 echten Testgebäuden UND an der vollen 3.801-Gebäude-Kachel (1.075 Balkone, 0 doppelte IDs). **val3dity: identisch zur Pipeline ohne Balkone — 0 zusätzliche Fehler; `citygml-tools validate`: schema-valide.** Eligibilität über `WindowPreference` (0/1/2) und eine modulbezogene Mindestwandlänge (`GaLen + HDistMinWaGa`). Einzelne Positionierungs-Annahmen bleiben inferiert statt spec-belegt (u.a. `HDistWiGa` vs. `HDistGaGa` bei durch Fenster getrennten Balkon-Läufen) — Geometrie-Validität ist davon unabhängig bewiesen; siehe [Doku.md](Doku.md#schritt-6-balkon-generator-balconygenerator) (Abschnitt "Redesign 3") und Javadoc der Klasse. **2026-08-18 Bugfix:** Balkon-Eligibilität bei `WindowPreference=2` folgt jetzt exakt derselben `Z_Fenster_ASL`-Höhenlogik wie `WindowGenerator` (kein Balkon unterhalb der Verschattungsgrenze der Nachbarwand) — hebt die Kachel-Zahl auf **1.352** Balkone. Die dabei aufgetretene val3dity-`601`-Zunahme (+23) und CityDoctor-Meldung `SE_POLYGON_WITHOUT_SURFACE` auf allen Fenstern/Türen/Balkonen wurden als Tooling-Limitierungen der Prüfwerkzeuge identifiziert und quellcodebasiert verifiziert (nicht als Fehler unserer Ausgabe) — siehe [Doku.md](Doku.md#citydoctor2-se_polygon_without_surface-ist-ein-mapper-bug-im-tool-kein-fehler-unsererseits-2026-08-18) und [val3dity-Abschnitt](Doku.md#val3dity-601-buildingparts_overlap-bei-mehrteil-gebaeuden-ist-ein-nef-erosions-effekt-kein-reales-volumen-overlap-2026-08-18). |
 | 7 | Junction-Conforming | `CityGmlUtils.conformJunctions` | ✅ Fertig |
 | 8 | Dachfenster | – | 📋 TODO |
 
 Getestet mit **3 801 Gebäuden** (Testdatensatz Sachsen LoD2), Laufzeit ca. **20 s**.
 Geometrische Validität (val3dity, 658-Gebäude-Kachel): **89,1 %** valide Solids bei
 **0 mm** Veränderung bestehender Geometrie; Ausgabe ist CityGML-1.0-schema-valide. Balkone
-(Schritt 6) fügen auf der vollen 3.801-Gebäude-Kachel nachweislich **0 zusätzliche
-val3dity-Fehler** hinzu (89,2 % valide Features, identisch mit/ohne Balkone).
+fügen auf der vollen 3.801-Gebäude-Kachel nachweislich **0 zusätzliche val3dity-Fehler**
+hinzu (A/B-Vergleich mit den aktuellen 1.075 Balkonen: fehlerscharf identische Verteilung
+mit/ohne Balkone, alle 2.150 neuen `BuildingInstallation`-Objekte zu 100 % valide — siehe
+[Doku.md](Doku.md#schritt-6-balkon-generator-balconygenerator), Abschnitt "Redesign 3").
 
 ---
 

@@ -26,9 +26,12 @@ import java.util.function.Consumer;
  *   2. Keller hinzufügen (basierend auf Baukörpermodulen)
  *   3. Geschosse unterteilen (BuildingStorey)
  *   4. Türen hinzufügen (DoorGenerator)
- *   5. Fenster hinzufügen (WindowGenerator)
- *   6. Balkone hinzufügen (BalconyGenerator) — ersetzt gezielt Fenster-Slots aus Schritt 5
- *   7. Junction-Conforming (T-Naht-Vertices, formneutral)
+ *   5a. Balkone, fuehrender Ga-Lauf (BalconyGenerator Phase 1) — unabhaengig ueber HDistWaGa
+ *       verankert, reserviert die belegte Wandspanne fuer Schritt 5b
+ *   5b. Fenster hinzufügen (WindowGenerator) — respektiert die Phase-1-Reservierung
+ *   5c. Balkone, restliche Ga-Token eines Musters (BalconyGenerator Phase 2) — nur falls GaPa
+ *       nach dem fuehrenden Lauf noch weitere Ga-Token enthaelt (z.B. "GaWiGaWi")
+ *   6. Junction-Conforming (T-Naht-Vertices, formneutral)
  * 
  * Usage:
  *   java -jar lod2-zu-lod3.jar <input.gml> [jsonDir] [outputDir] [dgmPath]
@@ -109,16 +112,19 @@ public class Lod2ToLod3Pipeline {
             WindowGenerator.GenerationStats windowStats = new WindowGenerator.GenerationStats();
             BalconyGenerator.GenerationStats balconyStats = new BalconyGenerator.GenerationStats();
 
-            // Generator-Schritte registrieren (Schritte 2–6). Balkone laufen bewusst NACH
-            // Fenster: BalconyGenerator ersetzt gezielt bereits vom WindowGenerator platzierte
-            // Fenster-Slots gemaess GaPa-Muster (siehe BalconyGenerator-Javadoc).
+            // Generator-Schritte registrieren (Schritte 2–5c). Balkone laufen zweiphasig um
+            // Fenster herum: Phase 1 platziert den fuehrenden Ga-Lauf unabhaengig VOR den
+            // Fenstern (reserviert deren Wandspanne), Phase 2 platziert restliche Ga-Token
+            // eines Musters NACH den Fenstern gegen die dann echten Fensterpositionen (siehe
+            // BalconyGenerator-Javadoc und Doku.md, Abschnitt "Schritt 6: Balkon-Generator").
             record PipelineStep(String label, Consumer<Building> action) {}
             List<PipelineStep> buildingSteps = List.of(
-                new PipelineStep("Keller",    b -> { basementStats.buildingsProcessed++; basementGen.processBuilding(b, paramLoader, basementStats); }),
-                new PipelineStep("Geschosse", b -> { storeyStats.buildingsProcessed++;   storeyGen.processBuilding(b, paramLoader, storeyStats); }),
-                new PipelineStep("Tueren",    b -> { doorStats.buildingsProcessed++;     doorGen.processBuilding(b, paramLoader, doorStats); }),
-                new PipelineStep("Fenster",   b -> { windowStats.buildingsProcessed++;   windowGen.processBuilding(b, paramLoader, windowStats); }),
-                new PipelineStep("Balkone",   b -> { balconyStats.buildingsProcessed++;  balconyGen.processBuilding(b, paramLoader, balconyStats); })
+                new PipelineStep("Keller",         b -> { basementStats.buildingsProcessed++; basementGen.processBuilding(b, paramLoader, basementStats); }),
+                new PipelineStep("Geschosse",      b -> { storeyStats.buildingsProcessed++;   storeyGen.processBuilding(b, paramLoader, storeyStats); }),
+                new PipelineStep("Tueren",         b -> { doorStats.buildingsProcessed++;     doorGen.processBuilding(b, paramLoader, doorStats); }),
+                new PipelineStep("Balkone-Phase1", b -> { balconyStats.buildingsProcessed++;  balconyGen.processBuildingLeading(b, paramLoader, balconyStats); }),
+                new PipelineStep("Fenster",        b -> { windowStats.buildingsProcessed++;   windowGen.processBuilding(b, paramLoader, windowStats); }),
+                new PipelineStep("Balkone-Phase2", b -> { balconyGen.processBuildingRemaining(b, paramLoader, balconyStats); })
             );
 
             // ==================== Single-Pass Verarbeitung ====================
@@ -136,12 +142,12 @@ public class Lod2ToLod3Pipeline {
                 promStats.namesRenamed += promoter.renameLod2NamesToLod3(building);
                 promoter.addPromotionMetadata(building, promResult);
 
-                // Schritte 2–6: registrierte Generator-Schritte
+                // Schritte 2–5c: registrierte Generator-Schritte
                 for (var step : buildingSteps) {
                     step.action().accept(building);
                 }
 
-                // Schritt 7: Junction-Conforming — fuegt fehlende T-Naht-Vertices auf
+                // Schritt 6: Junction-Conforming — fuegt fehlende T-Naht-Vertices auf
                 // Huellenkanten ein. STRENG formneutral (an echter Geometrie gemessen: kein
                 // bestehender Vertex wird bewegt; es werden nur Punkte auf bestehende Kanten
                 // eingefuegt). Naeht ausschliesslich UNSERE eigenen, unabhaengig erzeugten
@@ -174,13 +180,13 @@ public class Lod2ToLod3Pipeline {
                     storeyStats.floorsCreated, storeyStats.ceilingsCreated);
             log.info("Schritt 4 — Tueren:     {} Tueren, {} Waende modifiziert, {} uebersprungen",
                     doorStats.doorsCreated, doorStats.wallsModified, doorStats.wallsSkipped);
-            log.info("Schritt 5 — Fenster:    {} Fenster, {} Waende, {} uebersprungen, {} Giebel-Drops, {} WWR-Warn.",
+            log.info("Schritt 5b — Fenster:   {} Fenster, {} Waende, {} uebersprungen, {} Giebel-Drops, {} WWR-Warn.",
                     windowStats.windowsCreated, windowStats.wallsWithWindows,
                     windowStats.wallsSkipped, windowStats.gableWindowsDropped,
                     windowStats.wwrWarnings);
-            log.info("Schritt 5 — {}", windowStats.toSummary());
-            log.info("Schritt 5 — {}", windowStats.toGeschossSummary());
-            log.info("Schritt 6 — Balkone:    {} Balkone, {} Waende, {} Fenster ersetzt, {} uebersprungen",
+            log.info("Schritt 5b — {}", windowStats.toSummary());
+            log.info("Schritt 5b — {}", windowStats.toGeschossSummary());
+            log.info("Schritt 5a+5c — Balkone: {} Balkone, {} Waende, {} Fenster ersetzt, {} uebersprungen",
                     balconyStats.balconiesCreated, balconyStats.wallsWithBalconies,
                     balconyStats.windowsRemovedForBalcony, balconyStats.wallsSkipped);
 

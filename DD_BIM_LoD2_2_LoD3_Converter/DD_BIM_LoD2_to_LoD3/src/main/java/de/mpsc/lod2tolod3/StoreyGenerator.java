@@ -470,18 +470,18 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                     targetId, flatRoofCount, slopedRoofPolygons.size());
         }
 
-        // Per-Polygon Hoehengrenze (Wand- und Dach-basiert) verhindert schwebende Slabs ueber kuerzeren Fluegeln.
+        // Per-Kante Hoehengrenze (Wand- und Dach-basiert) verhindert schwebende Slabs ueber
+        // kuerzeren Anbauten, die sich das Grundpolygon mit dem Hauptbau teilen (kein eigenes
+        // BuildingPart) — siehe Doku.md, Abschnitt "Anbau-Kerben-Entfernung".
         List<WallSurface> cutWalls = CityGmlUtils.collectWallSurfaces(target);
-        List<Double> polyTopZList = new ArrayList<>();
+        List<double[]> edgeLimitsList = new ArrayList<>();
         for (Polygon gp : groundPolygons) {
             List<Point3D> gpts = CityGmlUtils.toPoints(gp);
             if (gpts.size() >= 3) {
-                double wallTopZ = computePolygonTopZ(gpts, cutWalls, slabsTraufeZ);
-                double roofTopZ = computePolygonRoofZ(gpts, roofPolygons, slabsTraufeZ);
-                polyTopZList.add(Math.min(wallTopZ, roofTopZ));
+                edgeLimitsList.add(computeEdgeLimits(gpts, cutWalls, roofPolygons, slabsTraufeZ));
             }
         }
-        // Gestoppte Polygone: einmal gestoppt (floorZ >= polyTopZ) bleibt gestoppt
+        // Gestoppte Polygone: einmal komplett gestoppt (kein aktiver Rand-Rest) bleibt gestoppt
         Set<Integer> stoppedPolygons = new HashSet<>();
 
         // Map: polyIdx → Slab-gml:id des vorherigen Ceiling (fuer XLink im naechsten Floor)
@@ -498,22 +498,30 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                 if (groundPoints.size() < 3) continue;
                 polyIdx++;
 
-                // Per-polygon protrusion check: kein Slab wenn keine Waende fuer dieses
-                // Polygon auf diesem Geschoss-Boden mehr vorhanden (Fluegel endet frueher).
+                // Per-Kante Kerben-Entfernung: kein Slab (mehr) ueber Anbau-Anteilen, deren
+                // eigene Wand-/Dachhoehe unter diesem Geschossboden liegt, auch wenn andere
+                // Kanten desselben (geteilten) Grundpolygons noch aktiv sind. Boden und Decke
+                // EINES Geschosses liegen auf unterschiedlicher Z-Hoehe und werden daher separat
+                // ausgewertet — sonst wuerde die (niedrigere) Boden-Kontur faelschlich auch fuer
+                // die (hoehere) Decke verwendet.
                 if (stoppedPolygons.contains(polyIdx)) continue;
-                if (polyIdx <= polyTopZList.size()) {
-                    double polyTopZ = polyTopZList.get(polyIdx - 1);
-                    if (storey.floorZ >= polyTopZ - CUT_TOLERANCE) {
+                double[] edgeLimits = polyIdx <= edgeLimitsList.size()
+                        ? edgeLimitsList.get(polyIdx - 1) : null;
+
+                List<Point3D> activeAtFloor = groundPoints;
+                if (edgeLimits != null) {
+                    activeAtFloor = computeActiveSubPolygon(groundPoints, edgeLimits,
+                            storey.floorZ, CUT_TOLERANCE);
+                    if (activeAtFloor == null) {
                         stoppedPolygons.add(polyIdx);
-                        log.debug("  PerPolyTopZ {}: Poly {} (idx={}) floorZ={} >= topZ={} → gestoppt",
+                        log.debug("  PerEdgeTopZ {}: Poly {} (idx={}) floorZ={} → komplett gestoppt",
                                 targetId, storey.geschoss, polyIdx,
-                                CityGmlUtils.formatNum(storey.floorZ),
-                                CityGmlUtils.formatNum(polyTopZ));
+                                CityGmlUtils.formatNum(storey.floorZ));
                         continue;
                     }
                 }
 
-                double area = CityGmlUtils.calculatePolygonArea2D(groundPoints);
+                double areaFloor = CityGmlUtils.calculatePolygonArea2D(activeAtFloor);
 
                 // --- FloorSurface ---
                 FloorSurface floor = new FloorSurface();
@@ -529,14 +537,14 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                             CityGmlUtils.createXLinkMultiSurfaceProperty(prevSlabId));
                 } else {
                     // Inline: Kein vorheriges Ceiling → eigene Geometrie
-                    List<Point3D> floorPoints = CityGmlUtils.projectToZ(groundPoints, storey.floorZ);
+                    List<Point3D> floorPoints = CityGmlUtils.projectToZ(activeAtFloor, storey.floorZ);
                     Polygon floorPoly = CityGmlUtils.createPolygon(floorPoints);
                     floor.setLod3MultiSurface(
                             CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(floorPoly));
                 }
 
                 CityGmlUtils.addHorizontalSurfaceAttributes(floor, floorFaceId,
-                        storey.floorZ, hDgm, area, storey.geschoss);
+                        storey.floorZ, hDgm, areaFloor, storey.geschoss);
                 CityGmlUtils.addStringAttribute(floor, "STRUKTUR", "Geschossboden");
 
                 target.getBoundaries().add(new AbstractSpaceBoundaryProperty(floor));
@@ -570,8 +578,24 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                             CityGmlUtils.formatNum(expectedHeight));
                 }
 
+                // Decken-Kontur separat bei storey.ceilingZ auswerten (kann staerker
+                // beschnitten sein als der Boden desselben Geschosses, siehe oben).
+                List<Point3D> activeAtCeiling = groundPoints;
+                if (edgeLimits != null) {
+                    activeAtCeiling = computeActiveSubPolygon(groundPoints, edgeLimits,
+                            storey.ceilingZ, CUT_TOLERANCE);
+                    if (activeAtCeiling == null) {
+                        stoppedPolygons.add(polyIdx);
+                        log.debug("  PerEdgeTopZ {}: Poly {} (idx={}) ceilingZ={} → Decke gestoppt",
+                                targetId, storey.geschoss, polyIdx,
+                                CityGmlUtils.formatNum(storey.ceilingZ));
+                        continue;
+                    }
+                }
+                double areaCeiling = CityGmlUtils.calculatePolygonArea2D(activeAtCeiling);
+
                 // Ceiling-Polygon inline erzeugen mit gml:id fuer XLink-Referenz
-                List<Point3D> ceilingPoints = CityGmlUtils.projectToZ(groundPoints, storey.ceilingZ);
+                List<Point3D> ceilingPoints = CityGmlUtils.projectToZ(activeAtCeiling, storey.ceilingZ);
                 Polygon ceilingPoly = CityGmlUtils.createPolygon(ceilingPoints);
 
                 // gml:id auf dem Polygon setzen (fuer XLink-Referenz vom naechsten Floor)
@@ -586,7 +610,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                         CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(ceilingPoly));
 
                 CityGmlUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
-                        storey.ceilingZ, hDgm, area, storey.geschoss);
+                        storey.ceilingZ, hDgm, areaCeiling, storey.geschoss);
                 CityGmlUtils.addStringAttribute(ceiling, "STRUKTUR", "Geschossdecke");
 
                 target.getBoundaries().add(new AbstractSpaceBoundaryProperty(ceiling));
@@ -895,13 +919,16 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
     // ==================== Per-Polygon Hoehenberechnung ====================
 
-    /** Maximale Wandhoehe fuer ein Grundriss-Polygon anhand passender Wandsegment-Basiskanten. */
-    private double computePolygonTopZ(List<Point3D> groundPts,
-                                      List<WallSurface> walls,
-                                      double defaultZ) {
-        if (groundPts.size() < 3) return defaultZ;
-
-        // Grundriss-Kanten aufbauen (Schlusspunkt ggf. entfernen)
+    /**
+     * Pro Kante des Grundpolygons die lokale Hoehengrenze (Wand-Basiskante + Dachflaeche an der
+     * Kantenmitte), statt eines einzigen Maximums/Schwerpunkt-Werts ueber das ganze Polygon.
+     * Verhindert schwebende Slabs ueber Anbauten, die sich ihr Grundpolygon (kein eigenes
+     * BuildingPart) mit einem hoeheren Hauptbau teilen — siehe Doku.md, Abschnitt
+     * "Anbau-Kerben-Entfernung". Match-Logik pro Wand/Kante identisch zur vormaligen
+     * computePolygonTopZ/computePolygonRoofZ, nur nicht mehr zu einem Gesamtwert aggregiert.
+     */
+    private double[] computeEdgeLimits(List<Point3D> groundPts, List<WallSurface> walls,
+            List<Polygon> roofPolygons, double defaultZ) {
         List<Point3D> edgePts = new ArrayList<>(groundPts);
         Point3D gFirst = edgePts.get(0);
         Point3D gLast  = edgePts.get(edgePts.size() - 1);
@@ -910,8 +937,9 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
         }
         int n = edgePts.size();
 
-        double maxZ    = Double.NEGATIVE_INFINITY;
-        boolean anyMatch = false;
+        // --- Wand-Grenze pro Kante ---
+        double[] wallLimits = new double[n];
+        boolean[] wallMatched = new boolean[n];
 
         for (WallSurface wall : walls) {
             Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
@@ -926,22 +954,20 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                 if (p.z > wallMaxZ) wallMaxZ = p.z;
             }
 
-            // Basis-Punkte des Wandsegments (bei wallMinZ, Toleranz 0.30m)
             List<Point3D> basePts = new ArrayList<>();
             for (Point3D p : wallPts) {
                 if (Math.abs(p.z - wallMinZ) < 0.30) basePts.add(p);
             }
             if (basePts.size() < 2) continue;
 
-            // Pruefen ob eine Basis-Kante der Wand mit einer Grundriss-Kante uebereinstimmt (XY)
-            boolean matched = false;
-            for (int j = 0; j < basePts.size() && !matched; j++) {
-                for (int k = j + 1; k < basePts.size() && !matched; k++) {
-                    Point3D wa = basePts.get(j);
-                    Point3D wb = basePts.get(k);
-                    for (int i = 0; i < n && !matched; i++) {
-                        Point3D ga = edgePts.get(i);
-                        Point3D gb = edgePts.get((i + 1) % n);
+            for (int i = 0; i < n; i++) {
+                Point3D ga = edgePts.get(i);
+                Point3D gb = edgePts.get((i + 1) % n);
+                boolean matched = false;
+                for (int j = 0; j < basePts.size() && !matched; j++) {
+                    for (int k = j + 1; k < basePts.size() && !matched; k++) {
+                        Point3D wa = basePts.get(j);
+                        Point3D wb = basePts.get(k);
                         double d1 = Math.hypot(wa.x - ga.x, wa.y - ga.y);
                         double d2 = Math.hypot(wb.x - gb.x, wb.y - gb.y);
                         double d3 = Math.hypot(wa.x - gb.x, wa.y - gb.y);
@@ -952,45 +978,119 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                         }
                     }
                 }
-            }
-            if (matched) {
-                anyMatch = true;
-                if (wallMaxZ > maxZ) maxZ = wallMaxZ;
+                if (matched) {
+                    if (!wallMatched[i] || wallMaxZ > wallLimits[i]) wallLimits[i] = wallMaxZ;
+                    wallMatched[i] = true;
+                }
             }
         }
 
-        if (anyMatch) {
-            log.trace("  computePolygonTopZ: {} Punkte → topZ={} (defaultZ={})",
-                    groundPts.size(), CityGmlUtils.formatNum(maxZ), CityGmlUtils.formatNum(defaultZ));
+        // --- Dach-Grenze pro Kante (an der Kantenmitte statt am Gesamt-Schwerpunkt) ---
+        double[] limits = new double[n];
+        for (int i = 0; i < n; i++) {
+            double wallLimit = wallMatched[i] ? wallLimits[i] : defaultZ;
+
+            Point3D ga = edgePts.get(i);
+            Point3D gb = edgePts.get((i + 1) % n);
+            double midX = (ga.x + gb.x) / 2.0;
+            double midY = (ga.y + gb.y) / 2.0;
+            double roofLimit = Double.MAX_VALUE;
+            for (Polygon rp : roofPolygons) {
+                List<Point3D> rpts = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(rp));
+                if (rpts.size() < 3) continue;
+                double[][] poly2d = new double[rpts.size()][2];
+                double rMinZ = Double.MAX_VALUE;
+                for (int k = 0; k < rpts.size(); k++) {
+                    poly2d[k][0] = rpts.get(k).x;
+                    poly2d[k][1] = rpts.get(k).y;
+                    rMinZ = Math.min(rMinZ, rpts.get(k).z);
+                }
+                if (CityGmlUtils.pointInPolygon2D(midX, midY, poly2d)) {
+                    roofLimit = Math.min(roofLimit, rMinZ);
+                }
+            }
+            if (roofLimit == Double.MAX_VALUE) roofLimit = defaultZ;
+
+            limits[i] = Math.min(wallLimit, roofLimit);
         }
-        return anyMatch ? maxZ : defaultZ;
+        log.trace("  computeEdgeLimits: {} Kanten, limits={}", n, Arrays.toString(limits));
+        return limits;
     }
 
-    /** Dachhoehe ueber einem Grundriss-Polygon (min. Z der RoofSurfaces am Footprint-Schwerpunkt). */
-    private double computePolygonRoofZ(List<Point3D> groundPts,
-                                       List<Polygon> roofPolygons, double defaultZ) {
-        List<Point3D> open = CityGmlUtils.removeClosingPoint(groundPts);
-        if (open.isEmpty()) return defaultZ;
-        double cx = 0, cy = 0;
-        for (Point3D p : open) { cx += p.x; cy += p.y; }
-        cx /= open.size();
-        cy /= open.size();
+    /**
+     * Liefert den bei floorZ noch aktiven Teil des Rings. Zusammenhaengende Laeufe abgelaufener
+     * Kanten (z.B. ein niedrigerer Anbau ohne eigenes BuildingPart) werden als Kerbe entfernt:
+     * ein Vertex faellt weg, wenn BEIDE anliegenden Kanten abgelaufen sind, die beiden
+     * Lauf-Grenzen (je eine anliegende Kante noch aktiv) bleiben erhalten und bilden dadurch
+     * automatisch eine neue, gerade Schliesskante. Null, wenn der gesamte Ring abgelaufen ist.
+     * Faltungs-Schutz (wie beim Wandschnitt, siehe Doku.md): wuerde die neue Schliesskante bei
+     * einem verwinkelten Anbau den Ring self-touching machen, wird NICHT geschnitten und der
+     * volle Ring unveraendert zurueckgegeben — die alte (dokumentierte) Einschraenkung bleibt in
+     * diesem Sonderfall bestehen, statt einen neuen Geometriefehler einzutauschen. Laengen-Schutz
+     * (Nachtrag nach Regression an einem mehrfluegeligen Gebaeude, siehe Doku.md): geschnitten
+     * wird nur, wenn der LAENGSTE zusammenhaengende abgelaufene Lauf hoechstens die Haelfte der
+     * Ring-Kanten ausmacht — sonst waere die Schliesskante keine kleine Kerbe mehr, sondern
+     * durchquert einen Grossteil des Gebaeudes (z.B. Innenhof-Gebaeude mit mehreren
+     * unterschiedlich hohen Fluegeln im selben Grundpolygon). Beliebig viele kleine Laeufe sind
+     * dabei erlaubt, nur ein dominanter Lauf blockiert. Siehe Doku.md, Abschnitt
+     * "Anbau-Kerben-Entfernung" / "Laengen-Schutz nach Regression".
+     */
+    private List<Point3D> computeActiveSubPolygon(List<Point3D> groundPts, double[] edgeLimits,
+            double floorZ, double tolerance) {
+        List<Point3D> pts = new ArrayList<>(groundPts);
+        Point3D first = pts.get(0);
+        Point3D last  = pts.get(pts.size() - 1);
+        if (Math.hypot(first.x - last.x, first.y - last.y) < 0.01) {
+            pts.remove(pts.size() - 1);
+        }
+        int n = pts.size();
+        if (n != edgeLimits.length) return pts; // Unerwartete Diskrepanz: unveraendert durchreichen
 
-        double minRoofZ = Double.MAX_VALUE;
-        for (Polygon rp : roofPolygons) {
-            List<Point3D> rpts = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(rp));
-            if (rpts.size() < 3) continue;
-            double[][] poly2d = new double[rpts.size()][2];
-            double rMinZ = Double.MAX_VALUE;
-            for (int i = 0; i < rpts.size(); i++) {
-                poly2d[i][0] = rpts.get(i).x;
-                poly2d[i][1] = rpts.get(i).y;
-                rMinZ = Math.min(rMinZ, rpts.get(i).z);
-            }
-            if (CityGmlUtils.pointInPolygon2D(cx, cy, poly2d)) {
-                minRoofZ = Math.min(minRoofZ, rMinZ);
+        boolean[] active = new boolean[n];
+        int activeCount = 0;
+        for (int i = 0; i < n; i++) {
+            active[i] = edgeLimits[i] > floorZ - tolerance;
+            if (active[i]) activeCount++;
+        }
+        if (activeCount == n) return pts;   // haeufigster Fall: alles aktiv, unveraendert
+        if (activeCount == 0) return null;  // komplett abgelaufen
+
+        // Laengsten zusammenhaengenden (zirkulaeren) Lauf abgelaufener Kanten ermitteln. Eine
+        // gerade Schliesskante ist nur eine vertretbare Naeherung, wenn sie einen kleinen
+        // Anbau-Vorsprung abschneidet (Minderheit des Rings) — frisst ein einzelner Lauf MEHR
+        // ALS DIE HAELFTE der Kanten (z.B. ein mehrfluegeliges Gebaeude, bei dem der "Rest" der
+        // eigentlich groessere Gebaeudeteil ist), wuerde die Kante quer durch das Gebaeude
+        // schneiden statt nur eine kleine Kerbe zu entfernen — dann unveraendert durchreichen.
+        int longestRun = 0, currentRun = 0;
+        for (int i = 0; i < 2 * n; i++) {
+            if (!active[i % n]) {
+                currentRun++;
+                longestRun = Math.max(longestRun, currentRun);
+            } else {
+                currentRun = 0;
             }
         }
-        return minRoofZ < Double.MAX_VALUE ? minRoofZ : defaultZ;
+        longestRun = Math.min(longestRun, n); // Deckelung falls Ring komplett abgelaufen waere
+        if (longestRun > n / 2) {
+            log.debug("  computeActiveSubPolygon: laengster abgelaufener Lauf ({} von {} Kanten) "
+                    + "ist mehr als die Haelfte des Rings — ungeschnitten belassen", longestRun, n);
+            return pts;
+        }
+
+        List<Point3D> result = new ArrayList<>();
+        for (int k = 0; k < n; k++) {
+            boolean edgeBefore = active[(k - 1 + n) % n];
+            boolean edgeAfter = active[k];
+            if (!edgeBefore && !edgeAfter) continue; // Kerben-Innen-Vertex: weglassen
+            result.add(pts.get(k));
+        }
+        if (result.size() < 3) return null;
+
+        if (CityGmlUtils.ringSelfIntersects(result)) {
+            log.debug("  computeActiveSubPolygon: Kerben-Schnitt haette Ring self-touching "
+                    + "gemacht, ungeschnitten belassen");
+            return pts;
+        }
+        return result;
     }
 }

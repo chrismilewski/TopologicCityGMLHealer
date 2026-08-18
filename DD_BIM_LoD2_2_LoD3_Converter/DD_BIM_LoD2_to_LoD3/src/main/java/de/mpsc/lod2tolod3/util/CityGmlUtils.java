@@ -59,7 +59,7 @@ public final class CityGmlUtils {
     /** Epsilon fuer Punkt-Gleichheit (XYZ-Vergleich). */
     private static final double POINT_EQUALITY_EPS = 1e-6;
 
-    /** STRUKTUR-Marker fuer Balkon-Flaechen, ausgeschlossen aus der lod3Solid-Huelle (siehe Doku.md Schritt 6). */
+    /** STRUKTUR-Marker fuer Balkon-BuildingInstallations (siehe Doku.md Schritt 6). */
     public static final String STRUKTUR_BALCONY_DECK = "Balkondecke";
     public static final String STRUKTUR_BALCONY_RAILING = "Balkonbruestung";
 
@@ -927,12 +927,6 @@ public final class CityGmlUtils {
         return area2 > 0;
     }
 
-    /** True, wenn die Flaeche per STRUKTUR-Attribut als Balkon-Deck oder -Bruestung markiert ist. */
-    private static boolean isBalconySurface(AbstractThematicSurface surface) {
-        String struktur = getStringAttribute(surface, "STRUKTUR");
-        return STRUKTUR_BALCONY_DECK.equals(struktur) || STRUKTUR_BALCONY_RAILING.equals(struktur);
-    }
-
     /** Baut die lod3Solid-Shell eines Gebaeudes/BuildingParts komplett aus seinen BoundarySurfaces neu auf. */
     public static int rebuildSolidShell(AbstractBuilding target) {
         SolidProperty solidProp = target.getSolid(3);
@@ -954,7 +948,6 @@ public final class CityGmlUtils {
 
             // Floor/Ceiling gehoeren nicht zur aeusseren Solid-Hull (sonst GE_S_NON_MANIFOLD_EDGE).
             if (surface instanceof FloorSurface || surface instanceof CeilingSurface) continue;
-            if (isBalconySurface(ats)) continue;
 
             MultiSurfaceProperty msp = ats.getMultiSurface(3);
             if (msp == null || msp.getObject() == null) continue;
@@ -1105,7 +1098,6 @@ public final class CityGmlUtils {
             var surface = boundary.getObject();
             if (!(surface instanceof AbstractThematicSurface ats)) continue;
             if (surface instanceof FloorSurface || surface instanceof CeilingSurface) continue;
-            if (isBalconySurface(ats)) continue;
             addExteriorRings(ats.getMultiSurface(3), out);
             if (surface instanceof WallSurface wall) {
                 for (AbstractFillingSurfaceProperty fp : wall.getFillingSurfaces()) {

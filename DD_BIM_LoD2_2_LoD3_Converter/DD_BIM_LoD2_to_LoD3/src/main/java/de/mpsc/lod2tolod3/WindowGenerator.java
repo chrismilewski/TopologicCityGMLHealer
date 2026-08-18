@@ -417,8 +417,14 @@ public class WindowGenerator extends AbstractGenerator<WindowGenerator.Generatio
         double rowBottomZ = CityGmlUtils.roundZ(rowStartZ + vDist);
         double rowTopZ = CityGmlUtils.roundZ(rowBottomZ + ctx.wp().windowHeight);
 
+        // BA: hart auf 1 Reihe begrenzt (siehe Doku.md "Spezialfall Kellerfenster") — der
+        // Unterirdisch-Filter faengt nur komplett unterirdische Reihen ab, nicht eine 2.
+        // Reihe, die bei ungewoehnlich hohem oberirdischem Kelleranteil zufaellig noch
+        // sichtbar bleibt.
+        boolean singleRowOnly = "BA".equals(ctx.geschoss());
         while (rowTopZ <= wallTopZ + 0.001) {
             rows.add(new double[]{rowBottomZ, rowTopZ});
+            if (singleRowOnly) break;
             rowBottomZ = CityGmlUtils.roundZ(rowTopZ + vDist);
             rowTopZ = CityGmlUtils.roundZ(rowBottomZ + ctx.wp().windowHeight);
         }
@@ -543,7 +549,9 @@ public class WindowGenerator extends AbstractGenerator<WindowGenerator.Generatio
 
     // ==================== GF Tuer-Aufspaltung ====================
 
-    /** Freie Wandabschnitte einer GF-Wand ausserhalb vorhandener Tueren plus HDistDoWi-Puffer. */
+    /** Freie Wandabschnitte einer GF/UF-Wand ausserhalb vorhandener Tueren (plus HDistDoWi-Puffer)
+     * und ausserhalb einer von Phase 1 des BalconyGenerator reservierten Balkon-Spanne (siehe
+     * Doku.md, "GaReservedSpan" — der HDistWiGa-Puffer ist darin bereits eingerechnet). */
     private List<double[]> extractFreeSections(WallSurface wall, Point3D edgeStart,
             double dirX, double dirY, double wallLength,
             ModuleParameters.WindowParams wp) {
@@ -582,33 +590,41 @@ public class WindowGenerator extends AbstractGenerator<WindowGenerator.Generatio
                 maxProj = Math.max(maxProj, proj);
             }
 
-            doorRanges.add(new double[]{minProj, maxProj});
+            doorRanges.add(new double[]{minProj - hDistDoWi, maxProj + hDistDoWi});
         }
 
-        // Keine Tueren → gesamte Wand als ein Abschnitt
+        // Von Phase 1 des BalconyGenerator reservierte Balkon-Spanne (Puffer schon eingerechnet).
+        String reservedStr = CityGmlUtils.getStringAttribute(wall, "GaReservedSpan");
+        if (reservedStr != null) {
+            String[] parts = reservedStr.split(",");
+            if (parts.length == 2) {
+                try {
+                    doorRanges.add(new double[]{
+                            Double.parseDouble(parts[0]), Double.parseDouble(parts[1])});
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        // Keine Ausschluss-Zonen → gesamte Wand als ein Abschnitt
         if (doorRanges.isEmpty()) {
             return List.of(new double[]{0, wallLength});
         }
 
-        // Tuer-Ranges nach Position sortieren
+        // Ausschluss-Ranges nach Position sortieren (Puffer bereits in jedem Range enthalten)
         doorRanges.sort((a, b) -> Double.compare(a[0], b[0]));
 
-        // --- Freie Abschnitte berechnen ---
+        // --- Freie Abschnitte berechnen (Puffer steckt bereits in jedem Range) ---
         List<double[]> sections = new ArrayList<>();
         double cursor = 0;
 
-        for (double[] door : doorRanges) {
-            double doorLeft = door[0];
-            double doorRight = door[1];
+        for (double[] excl : doorRanges) {
+            double exclLeft = excl[0];
+            double exclRight = excl[1];
 
-            // Abschnitt links der Tuer (mit Puffer)
-            double secEnd = doorLeft - hDistDoWi;
-            if (secEnd > cursor + 0.01) {
-                sections.add(new double[]{cursor, secEnd});
+            if (exclLeft > cursor + 0.01) {
+                sections.add(new double[]{cursor, exclLeft});
             }
-
-            // Cursor hinter Tuer + Puffer
-            cursor = doorRight + hDistDoWi;
+            cursor = Math.max(cursor, exclRight);
         }
 
         // Abschnitt rechts der letzten Tuer

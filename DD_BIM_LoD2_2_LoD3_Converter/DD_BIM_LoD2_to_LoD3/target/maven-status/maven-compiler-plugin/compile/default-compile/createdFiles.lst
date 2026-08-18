@@ -8,6 +8,7 @@ de\mpsc\lod2tolod3\util\DgmMosaic.class
 de\mpsc\lod2tolod3\model\ModuleParameters$Roof.class
 de\mpsc\lod2tolod3\model\ModuleParameters$RoofShape.class
 de\mpsc\lod2tolod3\WindowGenerator$WallCheck.class
+de\mpsc\lod2tolod3\BalconyGenerator$WallGeom.class
 de\mpsc\lod2tolod3\Lod2ToLod3Pipeline$1PipelineStep.class
 de\mpsc\lod2tolod3\model\ModuleParameters$GroundFloor.class
 de\mpsc\lod2tolod3\model\ModuleParameters$2.class
