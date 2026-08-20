@@ -4,6 +4,7 @@ import de.mpsc.lod2tolod3.model.ModuleParameters;
 import de.mpsc.lod2tolod3.model.WindowPreference;
 import de.mpsc.lod2tolod3.util.CityGmlUtils;
 import de.mpsc.lod2tolod3.util.CityGmlUtils.Point3D;
+import de.mpsc.lod2tolod3.util.CityGmlUtils.SlabPiece;
 import de.mpsc.lod2tolod3.util.ModuleParametersLoader;
 import org.citygml4j.core.model.building.AbstractBuilding;
 import org.citygml4j.core.model.building.Building;
@@ -29,9 +30,6 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
     /** Toleranz fuer Flachdach-Erkennung (30cm) — wenn First-Traufe < Wert → Flachdach. */
     private static final double FLAT_ROOF_TOLERANCE = 0.30;
-
-    /** XY-Toleranz fuer Kantenzuordnung von Wandsegmenten zu Grundriss-Polygonen (50cm). */
-    private static final double XY_EDGE_TOLERANCE = 0.50;
 
     /** Mindest-Geschosshoehe (1.2m) – verhindert unrealistisch kurze Geschosse (Fitzelchen). */
     private static final double MIN_STOREY_HEIGHT = 1.20;
@@ -390,13 +388,15 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
         // --- Floor/Ceiling pro Geschoss erzeugen (Ceiling inline, Floor des naechsten Geschosses per XLink) ---
 
-        // Mischdach-Boden-Artefakt nahe EG-Fussboden: Slab-Begrenzung auf slopedRawMinZ umstellen.
+        // Mischdach-Boden-Artefakt: ein niedrigeres Anbau-Flachdach darf nicht die
+        // Slab-Begrenzung des GESAMTEN Gebaeudes auf seine eigene (niedrigere) Hoehe ziehen —
+        // sonst werden obere Geschosse des hoeheren Hauptteils komplett uebersprungen (Boden
+        // UND Decke), nicht nur deren Decke wie bei der regulaeren Mischdach-Erkennung. Bewusst
+        // unabhaengig vom Abstand zum Erdgeschoss (vorher nur "nahe EG" < 2m, siehe Doku.md).
         if (slopedRawMinRoofZ < Double.MAX_VALUE / 2
-                && slopedRawMinRoofZ > rawMinRoofZ + CUT_TOLERANCE
-                && rawMinRoofZ < egFloorZ + 2.0) {
-            log.debug("  Mischdach-Artefakt {}: rawMinRoofZ={} nahe EG={}, verwende slopedRawMinZ={}",
-                    targetId, CityGmlUtils.formatNum(rawMinRoofZ),
-                    CityGmlUtils.formatNum(egFloorZ), CityGmlUtils.formatNum(slopedRawMinRoofZ));
+                && slopedRawMinRoofZ > rawMinRoofZ + CUT_TOLERANCE) {
+            log.debug("  Mischdach-Artefakt {}: rawMinRoofZ={} < slopedRawMinZ={}, verwende slopedRawMinZ",
+                    targetId, CityGmlUtils.formatNum(rawMinRoofZ), CityGmlUtils.formatNum(slopedRawMinRoofZ));
             rawMinRoofZ = slopedRawMinRoofZ;
         }
         double slabsTraufeZ = rawMinRoofZ;
@@ -470,27 +470,20 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                     targetId, flatRoofCount, slopedRoofPolygons.size());
         }
 
-        // Per-Kante Hoehengrenze (Wand- und Dach-basiert) verhindert schwebende Slabs ueber
-        // kuerzeren Anbauten, die sich das Grundpolygon mit dem Hauptbau teilen (kein eigenes
-        // BuildingPart) — siehe Doku.md, Abschnitt "Anbau-Kerben-Entfernung".
-        List<WallSurface> cutWalls = CityGmlUtils.collectWallSurfaces(target);
-        List<double[]> edgeLimitsList = new ArrayList<>();
-        for (Polygon gp : groundPolygons) {
-            List<Point3D> gpts = CityGmlUtils.toPoints(gp);
-            if (gpts.size() >= 3) {
-                edgeLimitsList.add(computeEdgeLimits(gpts, cutWalls, roofPolygons, slabsTraufeZ));
-            }
+        // Anbau-Zuschnitt: Slab endet dort, wo eine niedrigere Dachflaeche schon auf/unter dieser
+        // Hoehe liegt (Anbauten ohne eigenes BuildingPart, die sich das Grundpolygon mit einem
+        // hoeheren Hauptbau teilen) — siehe Doku.md, Abschnitt "Anbau-Zuschnitt". Boden und Decke
+        // EINES Geschosses liegen auf unterschiedlicher Z-Hoehe und werden daher separat
+        // zugeschnitten; ein Zuschnitt kann das Grundpolygon in mehrere Teilstuecke trennen
+        // (z.B. ein niedriger Mitteltrakt zwischen zwei Fluegeln).
+        Map<Integer, List<String>> previousCeilingSlabIds = new HashMap<>();
+        for (var e : baCeilingSlabIds.entrySet()) {
+            previousCeilingSlabIds.put(e.getKey(), List.of(e.getValue()));
         }
-        // Gestoppte Polygone: einmal komplett gestoppt (kein aktiver Rand-Rest) bleibt gestoppt
-        Set<Integer> stoppedPolygons = new HashSet<>();
-
-        // Map: polyIdx → Slab-gml:id des vorherigen Ceiling (fuer XLink im naechsten Floor)
-        // Initialisierung: BA-Ceiling-IDs falls Keller vorhanden
-        Map<Integer, String> previousCeilingSlabIds = new HashMap<>(baCeilingSlabIds);
 
         for (StoreyInfo storey : slabStoreys) {
             // Slab-IDs die in DIESEM Geschoss als Ceiling erzeugt werden
-            Map<Integer, String> currentCeilingSlabIds = new HashMap<>();
+            Map<Integer, List<String>> currentCeilingSlabIds = new HashMap<>();
 
             int polyIdx = 0;
             for (Polygon groundPoly : groundPolygons) {
@@ -498,57 +491,46 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                 if (groundPoints.size() < 3) continue;
                 polyIdx++;
 
-                // Per-Kante Kerben-Entfernung: kein Slab (mehr) ueber Anbau-Anteilen, deren
-                // eigene Wand-/Dachhoehe unter diesem Geschossboden liegt, auch wenn andere
-                // Kanten desselben (geteilten) Grundpolygons noch aktiv sind. Boden und Decke
-                // EINES Geschosses liegen auf unterschiedlicher Z-Hoehe und werden daher separat
-                // ausgewertet — sonst wuerde die (niedrigere) Boden-Kontur faelschlich auch fuer
-                // die (hoehere) Decke verwendet.
-                if (stoppedPolygons.contains(polyIdx)) continue;
-                double[] edgeLimits = polyIdx <= edgeLimitsList.size()
-                        ? edgeLimitsList.get(polyIdx - 1) : null;
+                List<SlabPiece> floorPieces = CityGmlUtils.clipSlabAtZ(
+                        groundPoints, roofPolygons, storey.floorZ, CUT_TOLERANCE);
+                if (floorPieces.isEmpty()) continue; // an dieser Hoehe traegt hier nichts (mehr)
 
-                List<Point3D> activeAtFloor = groundPoints;
-                if (edgeLimits != null) {
-                    activeAtFloor = computeActiveSubPolygon(groundPoints, edgeLimits,
-                            storey.floorZ, CUT_TOLERANCE);
-                    if (activeAtFloor == null) {
-                        stoppedPolygons.add(polyIdx);
-                        log.debug("  PerEdgeTopZ {}: Poly {} (idx={}) floorZ={} → komplett gestoppt",
-                                targetId, storey.geschoss, polyIdx,
-                                CityGmlUtils.formatNum(storey.floorZ));
-                        continue;
+                List<String> prevSlabIds = previousCeilingSlabIds.get(polyIdx);
+                List<String> currentSlabIds = new ArrayList<>();
+
+                for (int pieceIdx = 0; pieceIdx < floorPieces.size(); pieceIdx++) {
+                    SlabPiece floorPiece = floorPieces.get(pieceIdx);
+                    String pieceSuffix = floorPieces.size() > 1 ? "_" + (pieceIdx + 1) : "";
+                    double areaFloor = CityGmlUtils.calculateNetArea2D(floorPiece);
+
+                    // --- FloorSurface ---
+                    FloorSurface floor = new FloorSurface();
+                    String floorFaceId = targetId + "_" + storey.geschoss + "_Floor_" + polyIdx + pieceSuffix;
+                    floor.setId("Face_" + floorFaceId);
+                    CityGmlUtils.setGmlName(floor, "LOD3_Floor");
+
+                    // XLink-Referenz: passendes vorheriges Ceiling-Teilstueck (gleiche Teilstueck-
+                    // Zahl vorausgesetzt) → referenzieren, sonst eigene Geometrie inline.
+                    String prevSlabId = (prevSlabIds != null && prevSlabIds.size() == floorPieces.size())
+                            ? prevSlabIds.get(pieceIdx) : null;
+                    if (prevSlabId != null) {
+                        // XLink mit umgekehrter Normale (Decke ist fest auf unten erzwungen, Boden
+                        // braucht oben — siehe Doku.md, Abschnitt Boden/Decke-Normalen).
+                        floor.setLod3MultiSurface(
+                                CityGmlUtils.createReversedXLinkMultiSurfaceProperty(prevSlabId));
+                    } else {
+                        Polygon floorPoly = buildSlabPolygon(floorPiece, true);
+                        floor.setLod3MultiSurface(
+                                CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(floorPoly));
                     }
+
+                    CityGmlUtils.addHorizontalSurfaceAttributes(floor, floorFaceId,
+                            storey.floorZ, hDgm, areaFloor, storey.geschoss);
+                    CityGmlUtils.addStringAttribute(floor, "STRUKTUR", "Geschossboden");
+
+                    target.getBoundaries().add(new AbstractSpaceBoundaryProperty(floor));
+                    floorsAdded++;
                 }
-
-                double areaFloor = CityGmlUtils.calculatePolygonArea2D(activeAtFloor);
-
-                // --- FloorSurface ---
-                FloorSurface floor = new FloorSurface();
-                String floorFaceId = targetId + "_" + storey.geschoss + "_Floor_" + polyIdx;
-                floor.setId("Face_" + floorFaceId);
-                CityGmlUtils.setGmlName(floor, "LOD3_Floor");
-
-                // XLink-Referenz: Wenn ein vorheriges Ceiling-Slab existiert → referenzieren
-                String prevSlabId = previousCeilingSlabIds.get(polyIdx);
-                if (prevSlabId != null) {
-                    // XLink: Referenziert das Ceiling-Polygon des vorherigen Geschosses
-                    floor.setLod3MultiSurface(
-                            CityGmlUtils.createXLinkMultiSurfaceProperty(prevSlabId));
-                } else {
-                    // Inline: Kein vorheriges Ceiling → eigene Geometrie
-                    List<Point3D> floorPoints = CityGmlUtils.projectToZ(activeAtFloor, storey.floorZ);
-                    Polygon floorPoly = CityGmlUtils.createPolygon(floorPoints);
-                    floor.setLod3MultiSurface(
-                            CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(floorPoly));
-                }
-
-                CityGmlUtils.addHorizontalSurfaceAttributes(floor, floorFaceId,
-                        storey.floorZ, hDgm, areaFloor, storey.geschoss);
-                CityGmlUtils.addStringAttribute(floor, "STRUKTUR", "Geschossboden");
-
-                target.getBoundaries().add(new AbstractSpaceBoundaryProperty(floor));
-                floorsAdded++;
 
                 // --- CeilingSurface --- (Flachdach/Slab-Begrenzung: RoofSurface bildet bereits die Decke)
                 if (storey.isTopStorey && (isFlachdach || slabsAreLimited)) {
@@ -578,46 +560,43 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                             CityGmlUtils.formatNum(expectedHeight));
                 }
 
-                // Decken-Kontur separat bei storey.ceilingZ auswerten (kann staerker
-                // beschnitten sein als der Boden desselben Geschosses, siehe oben).
-                List<Point3D> activeAtCeiling = groundPoints;
-                if (edgeLimits != null) {
-                    activeAtCeiling = computeActiveSubPolygon(groundPoints, edgeLimits,
-                            storey.ceilingZ, CUT_TOLERANCE);
-                    if (activeAtCeiling == null) {
-                        stoppedPolygons.add(polyIdx);
-                        log.debug("  PerEdgeTopZ {}: Poly {} (idx={}) ceilingZ={} → Decke gestoppt",
-                                targetId, storey.geschoss, polyIdx,
-                                CityGmlUtils.formatNum(storey.ceilingZ));
-                        continue;
-                    }
+                // Decken-Kontur separat bei storey.ceilingZ zuschneiden (kann staerker beschnitten
+                // sein als der Boden desselben Geschosses, siehe oben).
+                List<SlabPiece> ceilingPieces = CityGmlUtils.clipSlabAtZ(
+                        groundPoints, roofPolygons, storey.ceilingZ, CUT_TOLERANCE);
+
+                for (int pieceIdx = 0; pieceIdx < ceilingPieces.size(); pieceIdx++) {
+                    SlabPiece ceilingPiece = ceilingPieces.get(pieceIdx);
+                    String pieceSuffix = ceilingPieces.size() > 1 ? "_" + (pieceIdx + 1) : "";
+                    double areaCeiling = CityGmlUtils.calculateNetArea2D(ceilingPiece);
+
+                    // Normale nach unten erzwungen (CityDoctor IsCeilingCheck, siehe Doku.md).
+                    Polygon ceilingPoly = buildSlabPolygon(ceilingPiece, false);
+
+                    // gml:id auf dem Polygon setzen (fuer XLink-Referenz vom naechsten Floor)
+                    String slabGmlId = "Slab_" + targetId + "_" + storey.geschoss + "_" + polyIdx + pieceSuffix;
+                    ceilingPoly.setId(slabGmlId);
+
+                    CeilingSurface ceiling = new CeilingSurface();
+                    String ceilingFaceId = targetId + "_" + storey.geschoss + "_Ceiling_" + polyIdx + pieceSuffix;
+                    ceiling.setId("Face_" + ceilingFaceId);
+                    CityGmlUtils.setGmlName(ceiling, "LOD3_Ceiling");
+                    ceiling.setLod3MultiSurface(
+                            CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(ceilingPoly));
+
+                    CityGmlUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
+                            storey.ceilingZ, hDgm, areaCeiling, storey.geschoss);
+                    CityGmlUtils.addStringAttribute(ceiling, "STRUKTUR", "Geschossdecke");
+
+                    target.getBoundaries().add(new AbstractSpaceBoundaryProperty(ceiling));
+                    ceilingsAdded++;
+
+                    // Slab-IDs merken fuer den Floor des naechsten Geschosses
+                    currentSlabIds.add(slabGmlId);
                 }
-                double areaCeiling = CityGmlUtils.calculatePolygonArea2D(activeAtCeiling);
-
-                // Ceiling-Polygon inline erzeugen mit gml:id fuer XLink-Referenz
-                List<Point3D> ceilingPoints = CityGmlUtils.projectToZ(activeAtCeiling, storey.ceilingZ);
-                Polygon ceilingPoly = CityGmlUtils.createPolygon(ceilingPoints);
-
-                // gml:id auf dem Polygon setzen (fuer XLink-Referenz vom naechsten Floor)
-                String slabGmlId = "Slab_" + targetId + "_" + storey.geschoss + "_" + polyIdx;
-                ceilingPoly.setId(slabGmlId);
-
-                CeilingSurface ceiling = new CeilingSurface();
-                String ceilingFaceId = targetId + "_" + storey.geschoss + "_Ceiling_" + polyIdx;
-                ceiling.setId("Face_" + ceilingFaceId);
-                CityGmlUtils.setGmlName(ceiling, "LOD3_Ceiling");
-                ceiling.setLod3MultiSurface(
-                        CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(ceilingPoly));
-
-                CityGmlUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
-                        storey.ceilingZ, hDgm, areaCeiling, storey.geschoss);
-                CityGmlUtils.addStringAttribute(ceiling, "STRUKTUR", "Geschossdecke");
-
-                target.getBoundaries().add(new AbstractSpaceBoundaryProperty(ceiling));
-                ceilingsAdded++;
-
-                // Slab-ID merken fuer den Floor des naechsten Geschosses
-                currentCeilingSlabIds.put(polyIdx, slabGmlId);
+                if (!currentSlabIds.isEmpty()) {
+                    currentCeilingSlabIds.put(polyIdx, currentSlabIds);
+                }
             }
 
             // --- Mischdach: CeilingSurface aus den auf ceilingZ projizierten geneigten Dachflaechen ---
@@ -628,7 +607,8 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                     List<Point3D> roofPts = CityGmlUtils.toPoints(slopedPoly);
                     if (roofPts.size() < 3) continue;
 
-                    List<Point3D> ceilingPoints = CityGmlUtils.projectToZ(roofPts, storey.ceilingZ);
+                    List<Point3D> ceilingPoints = CityGmlUtils.orientForNormalZ(
+                            CityGmlUtils.projectToZ(roofPts, storey.ceilingZ), false);
                     double roofArea = CityGmlUtils.calculatePolygonArea2D(ceilingPoints);
 
                     Polygon ceilingPoly = CityGmlUtils.createPolygon(ceilingPoints);
@@ -917,180 +897,17 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
         public int ceilingsCreated = 0;
     }
 
-    // ==================== Per-Polygon Hoehenberechnung ====================
+    // ==================== Slab-Geometrie ====================
 
-    /**
-     * Pro Kante des Grundpolygons die lokale Hoehengrenze (Wand-Basiskante + Dachflaeche an der
-     * Kantenmitte), statt eines einzigen Maximums/Schwerpunkt-Werts ueber das ganze Polygon.
-     * Verhindert schwebende Slabs ueber Anbauten, die sich ihr Grundpolygon (kein eigenes
-     * BuildingPart) mit einem hoeheren Hauptbau teilen — siehe Doku.md, Abschnitt
-     * "Anbau-Kerben-Entfernung". Match-Logik pro Wand/Kante identisch zur vormaligen
-     * computePolygonTopZ/computePolygonRoofZ, nur nicht mehr zu einem Gesamtwert aggregiert.
-     */
-    private double[] computeEdgeLimits(List<Point3D> groundPts, List<WallSurface> walls,
-            List<Polygon> roofPolygons, double defaultZ) {
-        List<Point3D> edgePts = new ArrayList<>(groundPts);
-        Point3D gFirst = edgePts.get(0);
-        Point3D gLast  = edgePts.get(edgePts.size() - 1);
-        if (Math.hypot(gFirst.x - gLast.x, gFirst.y - gLast.y) < 0.01) {
-            edgePts.remove(edgePts.size() - 1);
+    /** Baut aus einem {@link SlabPiece} (bereits auf Ziel-Z) ein Polygon mit erzwungener
+     * Normalenrichtung; Innenringe (seltene Anbau-Loecher) bekommen die entgegengesetzte
+     * Windung, wie bei Fenster-/Tueroeffnungen ueblich. */
+    private Polygon buildSlabPolygon(SlabPiece piece, boolean wantUpward) {
+        List<Point3D> exterior = CityGmlUtils.orientForNormalZ(piece.exterior(), wantUpward);
+        List<List<Point3D>> interiors = new ArrayList<>();
+        for (List<Point3D> hole : piece.interiors()) {
+            interiors.add(CityGmlUtils.orientForNormalZ(hole, !wantUpward));
         }
-        int n = edgePts.size();
-
-        // --- Wand-Grenze pro Kante ---
-        double[] wallLimits = new double[n];
-        boolean[] wallMatched = new boolean[n];
-
-        for (WallSurface wall : walls) {
-            Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
-            if (wallPoly == null) continue;
-            List<Point3D> wallPts = CityGmlUtils.toPoints(wallPoly);
-            if (wallPts.size() < 4) continue;
-
-            double wallMinZ = Double.MAX_VALUE;
-            double wallMaxZ = -Double.MAX_VALUE;
-            for (Point3D p : wallPts) {
-                if (p.z < wallMinZ) wallMinZ = p.z;
-                if (p.z > wallMaxZ) wallMaxZ = p.z;
-            }
-
-            List<Point3D> basePts = new ArrayList<>();
-            for (Point3D p : wallPts) {
-                if (Math.abs(p.z - wallMinZ) < 0.30) basePts.add(p);
-            }
-            if (basePts.size() < 2) continue;
-
-            for (int i = 0; i < n; i++) {
-                Point3D ga = edgePts.get(i);
-                Point3D gb = edgePts.get((i + 1) % n);
-                boolean matched = false;
-                for (int j = 0; j < basePts.size() && !matched; j++) {
-                    for (int k = j + 1; k < basePts.size() && !matched; k++) {
-                        Point3D wa = basePts.get(j);
-                        Point3D wb = basePts.get(k);
-                        double d1 = Math.hypot(wa.x - ga.x, wa.y - ga.y);
-                        double d2 = Math.hypot(wb.x - gb.x, wb.y - gb.y);
-                        double d3 = Math.hypot(wa.x - gb.x, wa.y - gb.y);
-                        double d4 = Math.hypot(wb.x - ga.x, wb.y - ga.y);
-                        if ((d1 < XY_EDGE_TOLERANCE && d2 < XY_EDGE_TOLERANCE)
-                                || (d3 < XY_EDGE_TOLERANCE && d4 < XY_EDGE_TOLERANCE)) {
-                            matched = true;
-                        }
-                    }
-                }
-                if (matched) {
-                    if (!wallMatched[i] || wallMaxZ > wallLimits[i]) wallLimits[i] = wallMaxZ;
-                    wallMatched[i] = true;
-                }
-            }
-        }
-
-        // --- Dach-Grenze pro Kante (an der Kantenmitte statt am Gesamt-Schwerpunkt) ---
-        double[] limits = new double[n];
-        for (int i = 0; i < n; i++) {
-            double wallLimit = wallMatched[i] ? wallLimits[i] : defaultZ;
-
-            Point3D ga = edgePts.get(i);
-            Point3D gb = edgePts.get((i + 1) % n);
-            double midX = (ga.x + gb.x) / 2.0;
-            double midY = (ga.y + gb.y) / 2.0;
-            double roofLimit = Double.MAX_VALUE;
-            for (Polygon rp : roofPolygons) {
-                List<Point3D> rpts = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(rp));
-                if (rpts.size() < 3) continue;
-                double[][] poly2d = new double[rpts.size()][2];
-                double rMinZ = Double.MAX_VALUE;
-                for (int k = 0; k < rpts.size(); k++) {
-                    poly2d[k][0] = rpts.get(k).x;
-                    poly2d[k][1] = rpts.get(k).y;
-                    rMinZ = Math.min(rMinZ, rpts.get(k).z);
-                }
-                if (CityGmlUtils.pointInPolygon2D(midX, midY, poly2d)) {
-                    roofLimit = Math.min(roofLimit, rMinZ);
-                }
-            }
-            if (roofLimit == Double.MAX_VALUE) roofLimit = defaultZ;
-
-            limits[i] = Math.min(wallLimit, roofLimit);
-        }
-        log.trace("  computeEdgeLimits: {} Kanten, limits={}", n, Arrays.toString(limits));
-        return limits;
-    }
-
-    /**
-     * Liefert den bei floorZ noch aktiven Teil des Rings. Zusammenhaengende Laeufe abgelaufener
-     * Kanten (z.B. ein niedrigerer Anbau ohne eigenes BuildingPart) werden als Kerbe entfernt:
-     * ein Vertex faellt weg, wenn BEIDE anliegenden Kanten abgelaufen sind, die beiden
-     * Lauf-Grenzen (je eine anliegende Kante noch aktiv) bleiben erhalten und bilden dadurch
-     * automatisch eine neue, gerade Schliesskante. Null, wenn der gesamte Ring abgelaufen ist.
-     * Faltungs-Schutz (wie beim Wandschnitt, siehe Doku.md): wuerde die neue Schliesskante bei
-     * einem verwinkelten Anbau den Ring self-touching machen, wird NICHT geschnitten und der
-     * volle Ring unveraendert zurueckgegeben — die alte (dokumentierte) Einschraenkung bleibt in
-     * diesem Sonderfall bestehen, statt einen neuen Geometriefehler einzutauschen. Laengen-Schutz
-     * (Nachtrag nach Regression an einem mehrfluegeligen Gebaeude, siehe Doku.md): geschnitten
-     * wird nur, wenn der LAENGSTE zusammenhaengende abgelaufene Lauf hoechstens die Haelfte der
-     * Ring-Kanten ausmacht — sonst waere die Schliesskante keine kleine Kerbe mehr, sondern
-     * durchquert einen Grossteil des Gebaeudes (z.B. Innenhof-Gebaeude mit mehreren
-     * unterschiedlich hohen Fluegeln im selben Grundpolygon). Beliebig viele kleine Laeufe sind
-     * dabei erlaubt, nur ein dominanter Lauf blockiert. Siehe Doku.md, Abschnitt
-     * "Anbau-Kerben-Entfernung" / "Laengen-Schutz nach Regression".
-     */
-    private List<Point3D> computeActiveSubPolygon(List<Point3D> groundPts, double[] edgeLimits,
-            double floorZ, double tolerance) {
-        List<Point3D> pts = new ArrayList<>(groundPts);
-        Point3D first = pts.get(0);
-        Point3D last  = pts.get(pts.size() - 1);
-        if (Math.hypot(first.x - last.x, first.y - last.y) < 0.01) {
-            pts.remove(pts.size() - 1);
-        }
-        int n = pts.size();
-        if (n != edgeLimits.length) return pts; // Unerwartete Diskrepanz: unveraendert durchreichen
-
-        boolean[] active = new boolean[n];
-        int activeCount = 0;
-        for (int i = 0; i < n; i++) {
-            active[i] = edgeLimits[i] > floorZ - tolerance;
-            if (active[i]) activeCount++;
-        }
-        if (activeCount == n) return pts;   // haeufigster Fall: alles aktiv, unveraendert
-        if (activeCount == 0) return null;  // komplett abgelaufen
-
-        // Laengsten zusammenhaengenden (zirkulaeren) Lauf abgelaufener Kanten ermitteln. Eine
-        // gerade Schliesskante ist nur eine vertretbare Naeherung, wenn sie einen kleinen
-        // Anbau-Vorsprung abschneidet (Minderheit des Rings) — frisst ein einzelner Lauf MEHR
-        // ALS DIE HAELFTE der Kanten (z.B. ein mehrfluegeliges Gebaeude, bei dem der "Rest" der
-        // eigentlich groessere Gebaeudeteil ist), wuerde die Kante quer durch das Gebaeude
-        // schneiden statt nur eine kleine Kerbe zu entfernen — dann unveraendert durchreichen.
-        int longestRun = 0, currentRun = 0;
-        for (int i = 0; i < 2 * n; i++) {
-            if (!active[i % n]) {
-                currentRun++;
-                longestRun = Math.max(longestRun, currentRun);
-            } else {
-                currentRun = 0;
-            }
-        }
-        longestRun = Math.min(longestRun, n); // Deckelung falls Ring komplett abgelaufen waere
-        if (longestRun > n / 2) {
-            log.debug("  computeActiveSubPolygon: laengster abgelaufener Lauf ({} von {} Kanten) "
-                    + "ist mehr als die Haelfte des Rings — ungeschnitten belassen", longestRun, n);
-            return pts;
-        }
-
-        List<Point3D> result = new ArrayList<>();
-        for (int k = 0; k < n; k++) {
-            boolean edgeBefore = active[(k - 1 + n) % n];
-            boolean edgeAfter = active[k];
-            if (!edgeBefore && !edgeAfter) continue; // Kerben-Innen-Vertex: weglassen
-            result.add(pts.get(k));
-        }
-        if (result.size() < 3) return null;
-
-        if (CityGmlUtils.ringSelfIntersects(result)) {
-            log.debug("  computeActiveSubPolygon: Kerben-Schnitt haette Ring self-touching "
-                    + "gemacht, ungeschnitten belassen");
-            return pts;
-        }
-        return result;
+        return CityGmlUtils.createPolygonWithHoles(exterior, interiors);
     }
 }

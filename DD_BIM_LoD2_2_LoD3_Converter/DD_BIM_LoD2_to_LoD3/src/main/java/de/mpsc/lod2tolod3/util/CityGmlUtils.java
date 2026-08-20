@@ -21,6 +21,7 @@ import org.citygml4j.xml.reader.ChunkOptions;
 import org.citygml4j.xml.writer.CityGMLChunkWriter;
 import org.citygml4j.xml.writer.CityGMLOutputFactory;
 import org.xmlobjects.gml.model.basictypes.Code;
+import org.xmlobjects.gml.model.basictypes.Sign;
 import org.xmlobjects.gml.model.geometry.DirectPositionList;
 import org.xmlobjects.gml.model.geometry.aggregates.MultiCurve;
 import org.xmlobjects.gml.model.geometry.aggregates.MultiCurveProperty;
@@ -30,6 +31,7 @@ import org.xmlobjects.gml.model.geometry.primitives.AbstractRingProperty;
 import org.xmlobjects.gml.model.geometry.primitives.CurveProperty;
 import org.xmlobjects.gml.model.geometry.primitives.LinearRing;
 import org.xmlobjects.gml.model.geometry.primitives.LineString;
+import org.xmlobjects.gml.model.geometry.primitives.OrientableSurface;
 import org.xmlobjects.gml.model.geometry.primitives.Polygon;
 import org.xmlobjects.gml.model.geometry.primitives.SolidProperty;
 import org.xmlobjects.gml.model.geometry.primitives.SurfaceProperty;
@@ -132,6 +134,22 @@ public final class CityGmlUtils {
             area += current.x * next.y - next.x * current.y;
         }
         return Math.abs(area) / 2.0;
+    }
+
+    /** Kehrt die Punktreihenfolge um, falls die Newell-Normale nicht in die gewuenschte
+     * Z-Richtung zeigt (z.B. Kellerboden soll immer nach unten zeigen, siehe Doku.md). */
+    public static List<Point3D> orientForNormalZ(List<Point3D> ring, boolean wantUpward) {
+        double nz = 0;
+        int n = ring.size();
+        for (int i = 0; i < n; i++) {
+            Point3D a = ring.get(i), b = ring.get((i + 1) % n);
+            nz += (a.x - b.x) * (a.y + b.y);
+        }
+        boolean pointsUpward = nz >= 0;
+        if (pointsUpward == wantUpward) return ring;
+        List<Point3D> rev = new ArrayList<>(ring);
+        Collections.reverse(rev);
+        return rev;
     }
 
     /** Azimut der Wandnormalen (Grad, 0=Nord) fuer eine vertikale Wand entlang Kante A->B. */
@@ -597,6 +615,141 @@ public final class CityGmlUtils {
         return false;
     }
 
+    // ==================== Slab-Zuschnitt bei Anbauten (JTS) ====================
+
+    /** Ein Teilstueck einer Geschossflaeche bei fester Hoehe: offener Aussenring + (selten)
+     * offene Innenringe. Mehrere Teilstuecke entstehen, wenn ein niedriger Anbau in der Mitte
+     * das Gebaeude in getrennte Fluegel teilt. */
+    public record SlabPiece(List<Point3D> exterior, List<List<Point3D>> interiors) {}
+
+    /** Kleinere Zuschnitt-Ergebnisse sind Artefakte (Rundungsschlieren), keine echten Raeume. */
+    private static final double MIN_SLAB_AREA = 0.50;
+
+    /**
+     * Grundpolygon auf Hoehe z, abzueglich aller Dachanteile die auf/unter z liegen — verhindert
+     * schwebende Slabs ueber Anbauten, die sich das Grundpolygon mit einem hoeheren Hauptbau
+     * teilen (kein eigenes BuildingPart), siehe Doku.md. Ergebnispunkte liegen bereits auf z.
+     * Leere Liste = an dieser Hoehe traegt nichts (mehr).
+     */
+    public static List<SlabPiece> clipSlabAtZ(List<Point3D> groundPts, List<Polygon> roofPolygons,
+            double z, double tolerance) {
+        List<Point3D> ground = removeClosingPoint(groundPts);
+        if (ground.size() < 3) return List.of();
+
+        org.locationtech.jts.geom.Geometry excluded = roofAreaBelowZ(roofPolygons, z, tolerance);
+        if (excluded == null) {
+            return List.of(new SlabPiece(projectToZ(ground, z), List.of()));
+        }
+
+        org.locationtech.jts.geom.Polygon footprint = toJts(ground, List.of());
+        if (footprint == null || !excluded.intersects(footprint)) {
+            return List.of(new SlabPiece(projectToZ(ground, z), List.of()));
+        }
+
+        try {
+            return toSlabPieces(footprint.difference(excluded), z);
+        } catch (RuntimeException e) {
+            log.warn("  clipSlabAtZ: JTS-Differenz fehlgeschlagen bei z={} ({}), Flaeche unveraendert",
+                    formatNum(z), e.toString());
+            return List.of(new SlabPiece(projectToZ(ground, z), List.of()));
+        }
+    }
+
+    /** 2D-Nettoflaeche eines Teilstuecks (Aussenring minus Loecher). */
+    public static double calculateNetArea2D(SlabPiece piece) {
+        double area = calculatePolygonArea2D(piece.exterior());
+        for (List<Point3D> hole : piece.interiors()) {
+            area -= calculatePolygonArea2D(hole);
+        }
+        return area;
+    }
+
+    /** Wie {@link #createPolygon}, zusaetzlich mit Innenringen (gml:interior). */
+    public static Polygon createPolygonWithHoles(List<Point3D> exterior, List<List<Point3D>> interiors) {
+        Polygon poly = createPolygon(exterior);
+        for (List<Point3D> hole : interiors) {
+            poly.getInterior().add(new AbstractRingProperty(createLinearRing(hole)));
+        }
+        return poly;
+    }
+
+    /** Vereinigte 2D-Flaeche aller Dachanteile auf/unter z (jeweils per {@link #splitWallByZ}
+     * aus dem, ggf. geneigten, Dachpolygon herausgeschnitten). Null = kein Dach reicht so tief. */
+    private static org.locationtech.jts.geom.Geometry roofAreaBelowZ(
+            List<Polygon> roofPolygons, double z, double tolerance) {
+        org.locationtech.jts.geom.Geometry union = null;
+        for (Polygon roof : roofPolygons) {
+            List<Point3D> pts = removeClosingPoint(toPoints(roof));
+            if (pts.size() < 3) continue;
+            double minZ = Double.MAX_VALUE;
+            for (Point3D p : pts) minZ = Math.min(minZ, p.z);
+            if (minZ > z + tolerance) continue; // Fast-Path: Dach liegt komplett oberhalb z
+
+            for (List<Point3D> piece : splitWallByZ(pts, z, tolerance).lower()) {
+                org.locationtech.jts.geom.Polygon jtsPoly = toJts(piece, List.of());
+                if (jtsPoly == null) continue;
+                union = (union == null) ? jtsPoly : union.union(jtsPoly);
+            }
+        }
+        return union;
+    }
+
+    /** Baut ein JTS-Polygon (2D, Z wird verworfen) aus offenen Punktlisten; null bei Entartung. */
+    private static org.locationtech.jts.geom.Polygon toJts(List<Point3D> exterior,
+            List<List<Point3D>> holes) {
+        org.locationtech.jts.geom.GeometryFactory gf = new org.locationtech.jts.geom.GeometryFactory();
+        org.locationtech.jts.geom.LinearRing shell = toJtsRing(gf, exterior);
+        if (shell == null) return null;
+        org.locationtech.jts.geom.LinearRing[] jtsHoles = new org.locationtech.jts.geom.LinearRing[holes.size()];
+        for (int i = 0; i < holes.size(); i++) {
+            org.locationtech.jts.geom.LinearRing h = toJtsRing(gf, holes.get(i));
+            if (h == null) return null;
+            jtsHoles[i] = h;
+        }
+        return gf.createPolygon(shell, jtsHoles);
+    }
+
+    private static org.locationtech.jts.geom.LinearRing toJtsRing(
+            org.locationtech.jts.geom.GeometryFactory gf, List<Point3D> pts) {
+        List<Point3D> open = removeClosingPoint(dedupConsecutive(pts, POINT_MERGE_TOL));
+        if (open.size() < 3) return null;
+        org.locationtech.jts.geom.Coordinate[] coords = new org.locationtech.jts.geom.Coordinate[open.size() + 1];
+        for (int i = 0; i < open.size(); i++) {
+            coords[i] = new org.locationtech.jts.geom.Coordinate(open.get(i).x, open.get(i).y);
+        }
+        coords[open.size()] = coords[0];
+        return gf.createLinearRing(coords);
+    }
+
+    /** Zerlegt ein JTS-Differenz-Ergebnis (Polygon oder MultiPolygon) in {@link SlabPiece}s auf
+     * Hoehe z; zu kleine Teilstuecke/Loecher (Zuschnitt-Artefakte) werden verworfen. */
+    private static List<SlabPiece> toSlabPieces(org.locationtech.jts.geom.Geometry result, double z) {
+        List<SlabPiece> pieces = new ArrayList<>();
+        for (int i = 0; i < result.getNumGeometries(); i++) {
+            if (!(result.getGeometryN(i) instanceof org.locationtech.jts.geom.Polygon jtsPoly)) continue;
+            List<Point3D> exterior = toOpenRing(jtsPoly.getExteriorRing(), z);
+            if (exterior.size() < 3 || calculatePolygonArea2D(exterior) < MIN_SLAB_AREA) continue;
+
+            List<List<Point3D>> interiors = new ArrayList<>();
+            for (int h = 0; h < jtsPoly.getNumInteriorRing(); h++) {
+                List<Point3D> hole = toOpenRing(jtsPoly.getInteriorRingN(h), z);
+                if (hole.size() >= 3 && calculatePolygonArea2D(hole) >= MIN_SLAB_AREA) interiors.add(hole);
+            }
+            pieces.add(new SlabPiece(exterior, interiors));
+        }
+        return pieces;
+    }
+
+    /** JTS-Ring (geschlossen) als offene Punktliste auf Hoehe z. */
+    private static List<Point3D> toOpenRing(org.locationtech.jts.geom.LineString jtsRing, double z) {
+        org.locationtech.jts.geom.Coordinate[] coords = jtsRing.getCoordinates();
+        List<Point3D> pts = new ArrayList<>(Math.max(0, coords.length - 1));
+        for (int i = 0; i < coords.length - 1; i++) { // letzter == erster (geschlossen): weglassen
+            pts.add(new Point3D(coords[i].x, coords[i].y, z));
+        }
+        return pts;
+    }
+
     /** Projiziert einen Grundriss auf eine neue Z-Hoehe (X/Y bleiben, Z wird ersetzt). */
     public static List<Point3D> projectToZ(List<Point3D> points, double newZ) {
         List<Point3D> projected = new ArrayList<>(points.size());
@@ -631,6 +784,19 @@ public final class CityGmlUtils {
         ms.setSrsName(SRS_NAME);
         ms.setSrsDimension(SRS_DIMENSION);
         ms.getSurfaceMember().add(new SurfaceProperty("#" + polygonGmlId));
+        return new MultiSurfaceProperty(ms);
+    }
+
+    /** Wie {@link #createXLinkMultiSurfaceProperty}, aber mit umgekehrter Normale
+     * (gml:OrientableSurface orientation="-") — fuer geteilte Boden/Decke-Geometrie, deren
+     * Eigentuemer-Polygon (Decke) fest auf eine Richtung erzwungen ist, siehe Doku.md. */
+    public static MultiSurfaceProperty createReversedXLinkMultiSurfaceProperty(String polygonGmlId) {
+        MultiSurface ms = new MultiSurface();
+        ms.setSrsName(SRS_NAME);
+        ms.setSrsDimension(SRS_DIMENSION);
+        OrientableSurface os = new OrientableSurface(new SurfaceProperty("#" + polygonGmlId));
+        os.setOrientation(Sign.MINUS);
+        ms.getSurfaceMember().add(new SurfaceProperty(os));
         return new MultiSurfaceProperty(ms);
     }
 

@@ -186,7 +186,9 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             floorCount++;
 
             // ── Kellerboden als GroundSurface (physische Bodenplatte) ──
-            List<Point3D> floorPoints = CityGmlUtils.projectToZ(groundPoints, basementFloorZ);
+            // Normale muss nach unten zeigen (CityDoctor IsGroundCheck, siehe Doku.md).
+            List<Point3D> floorPoints = CityGmlUtils.orientForNormalZ(
+                    CityGmlUtils.projectToZ(groundPoints, basementFloorZ), false);
             Polygon floorPoly = CityGmlUtils.createPolygon(floorPoints);
 
             GroundSurface ground = new GroundSurface();
@@ -238,7 +240,10 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             }
 
             // ── Kellerdecke (CeilingSurface), Z=basementTopZ, gml:id fuer XLink vom GF-Floor ──
-            List<Point3D> ceilingPoints = CityGmlUtils.projectToZ(groundPoints, basementTopZ);
+            // Normale nach unten erzwungen (CityDoctor IsCeilingCheck, siehe Doku.md); der GF-Boden
+            // referenziert dieses Polygon per umgekehrtem XLink (StoreyGenerator).
+            List<Point3D> ceilingPoints = CityGmlUtils.orientForNormalZ(
+                    CityGmlUtils.projectToZ(groundPoints, basementTopZ), false);
             Polygon ceilingPoly = CityGmlUtils.createPolygon(ceilingPoints);
 
             // gml:id auf dem Polygon setzen (fuer XLink-Referenz vom GF-Floor)

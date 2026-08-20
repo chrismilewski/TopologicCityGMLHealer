@@ -940,6 +940,11 @@ Aufgabe des nachgelagerten Healers, nicht dieser Pipeline).
 
 ### Bugfix: Fliegendes Stockwerk bei Anbauten ohne eigenes BuildingPart (2026-08-12)
 
+> **UEBERHOLT (2026-08-20):** der hier beschriebene Kanten-Matching-Mechanismus
+> (`computeEdgeLimits`/`computeActiveSubPolygon`) wurde vollstaendig durch echte 2D-Polygon-
+> Differenz (JTS) ersetzt — siehe Abschnitt "Anbau-Zuschnitt: JTS-basierte Polygon-Differenz"
+> weiter unten. Als historischer Hintergrund belassen.
+
 Vom Nutzer beim Sichttest gefunden (Gebaeude `DESNALK0pF001fYq`, 2026-08-11): eine Geschossdecke/
 -boden wird ueber einem einstoeckigen, flachdach Anbau erzeugt, obwohl an dieser Stelle keine
 Wand so hoch reicht — die Decke "schwebt" ueber dem Anbau. Zunaechst nur dokumentiert (siehe
@@ -2403,6 +2408,298 @@ einer kleinen `--overlap_tol` (1–2 cm) fahren, aber **nur auf handhabbaren Tei
 aktuellen val3dity-2.6.0b0-Windows-Beta praktisch nicht nutzbar (haengt/stuerzt ab). Ohne
 diese Option ist die reine `601`-Zahl **kein** verlaessliches Qualitaetsmass fuer
 Mehrteil-Gebaeude in unserer Pipeline.
+
+### Bugfix: `SE_BS_NOT_GROUND` — Kellerboden-Normale zeigte nicht nach unten (2026-08-19)
+
+CityDoctors `IsGroundCheck` verlangt fuer `GroundSurface`-Polygone eine nach unten zeigende
+Normale (`normal.z < 0`). Unser Kellerboden (`BasementGenerator`, `BA_Ground_*`) wurde direkt
+aus der promoten Grundpolygon-Punktreihenfolge erzeugt, ohne die Richtung zu erzwingen — bei
+mind. einem Gebaeude (`iaq`, neue Kachel) zeigte sie nach oben.
+
+**Fix:** neuer wiederverwendbarer Helfer `CityGmlUtils.orientForNormalZ(ring, wantUpward)`
+(Newell-Methode wie bereits `BalconyGenerator.orientUpward`, jetzt zentral), angewendet auf
+den Kellerboden-Punktezug vor `createPolygon`.
+
+**Wichtige Nebenwirkung entdeckt (empirisch bestaetigt, kein Bug):** `StoreyGenerator` liest
+sein Grundpolygon fuer alle Geschosse eines Gebaeudes ueber `CityGmlUtils.collectGroundPolygons`
+direkt aus den Gebaeude-Boundaries — und zwar **nachdem** `BasementGenerator` die
+urspruengliche LoD2-GroundSurface bereits durch seine eigene ersetzt hat. Die Umkehrung des
+Kellerboden-Umlaufs vererbt sich dadurch automatisch auf die Grundform, aus der alle
+Geschossboeden/-decken dieses Gebaeudes abgeleitet werden. Das aendert bei betroffenen
+Gebaeuden die Verteilung zwischen `SE_BS_NOT_FLOOR`/`SE_BS_NOT_CEILING` (welche der beiden
+Seiten "falsch" ist, kippt), aber nicht deren Summe — siehe unten, Abschnitt zu Boden/Decke-
+Normalen (offene Design-Entscheidung).
+
+**Verifiziert:** Einzelgebaeude `iaq` und volle 14-Testgebaeude-Menge (`SE_BS_NOT_GROUND`
+1→0, `SE_BS_NOT_FLOOR`/`NOT_CEILING`-Summe unveraendert 114, alle anderen Fehlercodes exakt
+identisch); volle 3.801-Gebaeude-Kachel schema-valide, alle Pipeline-Statistiken (Boeden,
+Decken, Fenster, Balkone etc.) exakt identisch zum Stand vor dem Fix (reine Punkt-Umordnung,
+keine Flaechen-/Zaehlaenderung).
+
+**Offen (siehe `SE_BS_NOT_FLOOR`/`SE_BS_NOT_CEILING`):** Boden und Decke eines Geschosses
+teilen sich per XLink dieselbe Geometrie (siehe Schritt 3) und haben daher zwangslaeufig
+dieselbe Normalenrichtung — CityDoctor verlangt aber engegengesetzte Richtungen fuer Boden
+(oben) und Decke (unten). Nachweis: `LinkedPolygon.calculateNormalNormalized()` in
+CityDoctor2 delegiert immer an das Original-Polygon, es gibt keine Unterstuetzung fuer eine
+umgekehrte XLink-Orientierung bei einem NACKTEN href — siehe Loesung unten.
+
+### Bugfix: `SE_BS_NOT_FLOOR`/`SE_BS_NOT_CEILING` behoben mit `gml:OrientableSurface` (2026-08-19)
+
+Geloest ohne die XLink-Vorteile (garantiert nahtlos, kleinere Datei) aufzugeben: CityGML 1.0
+kennt genau fuer diesen Fall `gml:OrientableSurface orientation="-"` — eine XLink-Referenz mit
+umgekehrter Normale, ohne die Geometrie zu duplizieren. Empirisch am CityDoctor2-Report bestaetigt
+(nicht nur laut Spezifikation): ein reales Boden/Decke-Paar manuell auf `OrientableSurface`
+umgestellt, `SE_BS_NOT_FLOOR` ging exakt fuer dieses eine Polygon von 2 auf 1 zurueck.
+
+**Umsetzung** (zwei Teile, damit deterministisch statt fallabhaengig):
+1. Jede **eigenstaendig deklarierte** Decke (StoreyGenerator: normale Geschossdecke UND die
+   Mischdach-Decke aus projizierten geneigten Dachflaechen; BasementGenerator: Kellerdecke) wird
+   per neuem Helfer `CityGmlUtils.orientForNormalZ(punkte, wantUpward)` (Newell-Methode, wie
+   bereits `BalconyGenerator.orientUpward`, jetzt zentral in `CityGmlUtils`) fest auf Normale
+   nach UNTEN erzwungen.
+2. Jeder Boden ohne eigene Geometrie (XLink auf die vorherige Decke) referenziert sie ueber den
+   neuen `CityGmlUtils.createReversedXLinkMultiSurfaceProperty` (`OrientableSurface
+   orientation="-"`) statt eines nackten hrefs — dadurch garantiert nach OBEN, unabhaengig von
+   der (beliebigen) natuerlichen Umlaufrichtung des geteilten Grundpolygons. Der allererste Boden
+   eines Gebaeudes (keine vorherige Decke) wird stattdessen direkt per `orientForNormalZ(...,
+   true)` erzwungen.
+
+**Verifiziert:** volle 14-Testgebaeude-Menge — `SE_BS_NOT_FLOOR`/`SE_BS_NOT_CEILING`/
+`SE_BS_NOT_GROUND` vollstaendig auf 0 (vorher 71/43/1), alle anderen Fehlercodes exakt
+unveraendert (`GE_S_NOT_CLOSED`=6, `SE_POLYGON_WITHOUT_SURFACE`=678, `GE_S_NON_MANIFOLD_EDGE`=3).
+Volle 3.801-Gebaeude-Kachel schema-valide.
+
+### Bugfix: Obergeschosse komplett uebersprungen bei Mischdach mit niedrigerem Anbau-Flachdach (2026-08-19)
+
+**Problem** (Nutzer-Fund an Gebaeude `hWM`): bei einem Mischdach-Gebaeude mit einem niedrigeren
+Anbau-Flachdach wurden nicht nur (korrekterweise) keine Decken ueber dem Flachdach-Bereich
+erzeugt (siehe "Mischdach-Erkennung" oben, funktioniert), sondern ein ganzes oberes Geschoss des
+HOEHEREN Hauptteils fehlte komplett — kein Boden, keine Decke, keine Fenster. Sichtbar am
+tatsaechlichen 3D-Modell mit ausgeblendetem Dach: 1.OG "komisch geschnitten", 2.OG gar nicht
+gebaut, obwohl die Waende dort klar vorhanden sind.
+
+**Ursache:** die Zahl der Geschosse, die UeBERHAUPT Boden/Decke bekommen (`slabStoreys`), wird
+durch `slabsTraufeZ` begrenzt — abgeleitet aus `rawMinRoofZ`, dem GLOBALEN Minimum ueber ALLE
+RoofSurface-Polygone des Gebaeudes (inkl. kleiner Anbau-Flachdaecher), nicht aus der dominanten
+(groessten/Haupt-)Dachflaeche wie `traufeZ` selbst. Ein niedrigeres Anbau-Flachdach zieht dadurch
+die Slab-Grenze fuer das GESAMTE Gebaeude auf seine eigene, niedrigere Hoehe herunter — nicht nur
+dessen eigene Decke wird uebersprungen (das waere richtig), sondern alle Geschosse DARUEBER
+werden komplett aus der Erzeugungsschleife entfernt. Ein bereits vorhandener Korrekturmechanismus
+(`slopedRawMinRoofZ` statt `rawMinRoofZ` verwenden) griff nur "nahe Erdgeschoss" (<2m) — bei
+`hWM` liegt das Anbau-Flachdach aber 4,7m ueber dem Erdgeschossboden, also ausserhalb dieser
+Schwelle.
+
+**Fix:** die Bedingung "nahe Erdgeschoss" aus der bestehenden Korrektur entfernt — sie greift
+jetzt immer, wenn ein echtes Mischdach-Missverhaeltnis vorliegt (geneigte Hauptdachflaeche
+existiert UND liegt hoeher als das globale Minimum), unabhaengig vom Abstand zum Erdgeschoss.
+Nutzt ausschliesslich bereits vorhandene, fuer die dominante Traufe (`traufeZ`) bereits bewaehrte
+Werte — kein neuer Algorithmus.
+
+**Verifiziert:** `hWM` isoliert (3 statt 2 Boeden, alle Fenster/Waende jetzt korrekt); betrifft auf
+der vollen Kachel deutlich mehr als nur dieses eine Gebaeude (Boeden 6.154→6.454, Decken
+4.613→6.668 nach Fix); volle Kachel schema-valide.
+
+### Bugfix: `computeEdgeLimits` verlor Kanten-Zuordnung bei geknickter Wandbasis (2026-08-19)
+
+> **UEBERHOLT (2026-08-20):** siehe Abschnitt "Anbau-Zuschnitt: JTS-basierte Polygon-Differenz" —
+> `computeEdgeLimits` existiert nicht mehr, dieser Fix ist mit der Methode zusammen entfallen.
+
+**Problem** (Nutzer-Fund an Gebaeude `gjj`): ein Gebaeude mit zwei unterschiedlichen Flachdaechern
+bekam nur 1 statt der erwarteten 2 sichtbaren Geschosse — die Kanten-basierte Hoehengrenze (siehe
+"Anbau-Kerben-Entfernung" oben) fiel fuer alle 8 Grundpolygon-Kanten einheitlich auf denselben, zu
+niedrigen Wert.
+
+**Ursache:** `computeEdgeLimits` wurde mit den bereits in Geschoss-Stuecke GESCHNITTENEN
+Wandsegmenten aufgerufen (Sammlung erfolgte nach der Schnitt-Schleife). Hat eine `WallSurface` im
+Original eine "geknickte" Basis (mehr als 2 Punkte auf Bodenhoehe, weil eine Wand mehrere
+Grundpolygon-Kanten auf einmal abdeckt), geht dieser innere Knick-Punkt beim Schneiden in die
+oberen Geschoss-Stuecke (z.B. `_UF_1_1`, `_UF_2_1`) verloren — nur das ungeschnittene GF-Stueck
+behaelt ihn. Die Paar-basierte Kanten-zu-Wand-Zuordnung in `computeEdgeLimits` fand dadurch fuer
+die hoeheren Wandstuecke keinen Treffer mehr, sodass nur noch die (niedrigere) GF-Wand pro Kante
+matchte.
+
+**Fix:** Schnappschuss der ungeschnittenen Original-Waende (`originalWalls`, per
+`CityGmlUtils.collectWallSurfaces(target)`) VOR Beginn der Schnitt-Schleife angelegt und fuer den
+`computeEdgeLimits`-Aufruf verwendet statt der Nachher-Sammlung.
+
+**Verifiziert:** `gjj` isoliert (2→3 Geschosse); 14-Testgebaeude-Menge und volle 3.801-Gebaeude-
+Kachel schema-valide, val3dity-Fehlerprofil byte-identisch zur Baseline
+(102=6/104=5/201=2/204=31/302=38/303=13/306=2/307=8/601=322).
+
+### Bugfix: Isolierte 1-Kanten-Kerbe erzeugte schwebende Stockwerk-Ecke (2026-08-19)
+
+> **UEBERHOLT (2026-08-20):** siehe Abschnitt "Anbau-Zuschnitt: JTS-basierte Polygon-Differenz" —
+> `computeActiveSubPolygon` existiert nicht mehr, dieser Fix ist mit der Methode zusammen entfallen.
+
+**Problem** (Nutzer-Fund an Gebaeude `g4s`): ein Geschoss ragte an einer Ecke minimal ueber die
+eigentliche Gebaeudekontur hinaus — eine kleine "schwebende" Ecke, die nicht zur Wandgeometrie
+passte.
+
+**Ursache:** die Vertex-Entfernungsregel der Kerben-Entfernung (`computeActiveSubPolygon`)
+entfernt einen Vertex nur, wenn BEIDE angrenzenden Kanten inaktiv sind (Kante bereits "abgelaufen"
+laut Hoehengrenze). Fuer eine isolierte einzelne inaktive Kante (Laenge-1-Lauf, auf beiden Seiten
+von aktiven Kanten umgeben) hat aber KEIN Endpunkt zwei inaktive Nachbarkanten — beide Endpunkte
+bleiben erhalten, die eigentlich abgelaufene Kante bleibt unveraendert im Ring stehen. Ergebnis:
+ein kleiner, ungeschnittener Vorsprung genau an dieser Stelle — exakt das vom Nutzer im Screenshot
+markierte Symptom.
+
+**Fix:** zusaetzliche Bedingung in der Ergebnis-Schleife: fuer den Endpunkt eines isolierten
+Laenge-1-Laufs (vorige Kante inaktiv, aktuelle Kante aktiv, UND die Kante davor bereits aktiv —
+also eindeutig ein isolierter Einzel-Lauf) wird der Endpunkt zusaetzlich verworfen, sodass der Ring
+direkt vom Vorgaenger- zum Nachfolger-Vertex durchverbunden wird und die Kerbe vollstaendig
+entfaellt.
+
+**Verifiziert:** `g4s` isoliert — Vertex-Zahl der betroffenen `UF_2`-Decke exakt um 1 reduziert
+(27→26 Punkte, passend zur erwarteten Wirkung fuer genau einen isolierten Lauf); 14-Testgebaeude-
+Menge und volle 3.801-Gebaeude-Kachel schema-valide, val3dity-Fehlerprofil byte-identisch zur
+Baseline (102=6/104=5/201=2/204=31/302=38/303=13/306=2/307=8/601=322).
+
+### Bugfix: Dach-Kanten-Abdeckung verfehlte Anbau bei winzigem Wand-Ruecksprung (2026-08-19)
+
+> **UEBERHOLT (2026-08-20):** siehe Abschnitt "Anbau-Zuschnitt: JTS-basierte Polygon-Differenz" —
+> `pointNearOrInPolygon2D` existiert nicht mehr, dieser Fix ist mit der Methode zusammen entfallen.
+> Trotz dieses Fixes blieb bei `g4s` noch eine schwebende Restflaeche (zweisegmentige Anbau-
+> Kontur, die eine einzelne gerade Schliesskante strukturell nicht abbilden kann) — der eigentliche
+> Anlass fuer die vollstaendige Ablösung.
+
+**Problem** (Nutzer-Fund an Gebaeude `g4s`, nach dem obigen Fix weiterhin sichtbar): eine
+schwebende Deckenflaeche blieb ueber einem Flachdach-Anbau bestehen — aehnlich dem `iaq`-Symptom,
+diesmal aber bei genau dem Anbau-Kerben-Entfernung-Fall, den der Mechanismus eigentlich abdecken
+soll.
+
+**Ursache:** das Dach des Anbaus (`Face_0003H5B_0_4`, 4 Eckpunkte A-B-C-D) beruehrt den
+Grundpolygon-Ring nur an 3 der 4 Ecken (A, B, D) — an der vierten Ecke (C) macht die Wand einen
+winzigen ~13-15cm-Ruecksprung, sodass der Ring dort zwei fast deckungsgleiche Zwischenpunkte hat.
+Fuer die beiden dadurch entstehenden, sehr kurzen Kanten liegt der Kantenmittelpunkt (der bisher
+einzige Abfrage-Punkt fuer die Dach-Abdeckung) hauchduenn (7-21cm) ausserhalb des Dachpolygons —
+der strikte `pointInPolygon2D`-Containment-Test verfehlt das knapp. Diese beiden Kanten blieben
+dadurch faelschlich "aktiv" (hoch), obwohl sie eindeutig zum Anbau gehoeren — nur die eine echte
+isolierte Nachbarkante (siehe vorheriger Fix) wurde erkannt, der Rest des Anbaus nicht.
+
+**Fix:** neuer Helfer `CityGmlUtils.pointNearOrInPolygon2D(px, py, poly, buffer)` — wie
+`pointInPolygon2D`, aber zusaetzlich "getroffen" wenn der Punkt bis auf einen Puffer nah am
+Polygonrand liegt (kuerzeste Distanz zu jedem Kantensegment). In `computeEdgeLimits` fuer die
+Dach-Abdeckungspruefung verwendet, mit derselben Toleranz wie die bestehende Wand-Kanten-Zuordnung
+(`XY_EDGE_TOLERANCE`=0,50m) — konsistent mit der bereits etablierten Snapping-Toleranz-Philosophie
+des Projekts (kleine Zentimeter-Abweichungen zwischen Wand- und Dachpolygon derselben realen Kante
+sind im LoD2-Quelldatensatz keine Seltenheit).
+
+**Verifiziert:** `g4s` isoliert — `UF_2`-Deckenflaeche schrumpft von 212,83 auf 202,10 m² (−10,7 m²,
+passend zur Anbau-Dachflaeche von 8,7 m²); 14-Testgebaeude-Menge (84→84 Boeden/131→131 Decken,
+unveraendert in der Zaehlung, nur Flaechen kleiner) und volle 3.801-Gebaeude-Kachel schema-valide
+(Boeden 6.480→6.477, Decken 6.702→6.699 — kleine, gezielte Reduktion, keine breite Verschiebung);
+val3dity-Fehlerprofil weiterhin byte-identisch zur Baseline.
+
+### Ablösung: Anbau-Zuschnitt durch echte 2D-Polygon-Differenz statt Kanten-Matching (JTS, 2026-08-20)
+
+**Warum ein vollstaendiger Umbau statt eines weiteren Patches:** trotz drei aufeinanderfolgender
+Fixes an der Kanten-Kerben-Entfernung (oben) fand der Nutzer zwei weitere reale, kaputte Faelle und
+bat ausdruecklich um "die wirklich gute, perfekte Loesung" statt eines vierten Patches:
+
+- **`DESNALK0pF001g4s`:** die Anbau-Dachflaeche `Face_0003H5B_0_4` hat 4 Ecken A-B-C-D; nur A, B, D
+  liegen auf dem Grundriss-Ring, Eckpunkt C (417950,792 / 5657225,204) NICHT. Die korrekte
+  Schliessgrenze braucht also ZWEI Segmente (ueber C), aber `computeActiveSubPolygon` konnte
+  strukturell nur EINE gerade Schliesskante zwischen zwei Ring-Vertices erzeugen — sie schnitt
+  daher zwangslaeufig durch eine noch stehende Wand oder liess ein Rest-Dreieck uebrig. Beweisbar
+  kein Toleranz-Problem, sondern eine strukturelle Grenze des Ein-Segment-Ansatzes.
+- **`DESNALK0pF001imo`:** Anbau-Dach bei Z=235,2804, Geschossdecke/-boden bei Z=235,30 — nur 2cm
+  Differenz, innerhalb der bestehenden `CUT_TOLERANCE`(5cm)-Toleranz, wurde daher als "noch aktiv"
+  behandelt. Volle 120,92 m² Deckenflaeche lag praktisch direkt auf dem Anbau-Dach.
+
+**Neuer Algorithmus** (pro Geschoss-Hoehe z, pro Grundpolygon):
+
+```
+excluded(z) = Vereinigung ueber alle RoofSurface-Polygone R:
+                  2D-Fussabdruck des Teils von R mit R.z <= z + CUT_TOLERANCE
+                  (per CityGmlUtils.splitWallByZ(R, z, tolerance).lower() — dieselbe Methode, die
+                   schon den Wandschnitt an einer Z-Ebene beliebig konkav zerlegt, jetzt auf ein
+                   Dachpolygon statt eine Wand angewendet)
+slab(z)     = Grundriss-Footprint MINUS excluded(z)     [JTS Polygon.difference()]
+```
+
+Kein Wand-Hoehen-Matching mehr noetig: ein LoD2-Gebaeude ist ein geschlossenes Solid aus
+Ground+Wall+Roof, die Dachflaechen kacheln bereits den gesamten Grundriss — `footprint −
+(Dachanteile ≤ z)` IST der tatsaechliche horizontale Querschnitt. `difference` (nicht
+`intersection`) gewaehlt: ein fehlendes/falsch klassifiziertes Dach degradiert dann zu "nicht
+clippen" (heutiges Alt-Verhalten als Fallback), nicht zu "Decke verschwindet ganz".
+
+**Neue Abhaengigkeit:** `org.locationtech.jts:jts-core:1.20.0` (Maven Central, EDL/EPL-Lizenz, rein
+Java, keine eigenen Abhaengigkeiten). Bewusste Abkehr von der urspruenglichen Entscheidung gegen
+eine Clipping-Bibliothek (siehe oben, "Warum kein einfacher MAX→MIN-Fix") — die drei aufeinander-
+folgenden Patch-Runden haben gezeigt, dass eine Handrollung der 2D-Boolean-Geometrie fuer beliebig
+komplexe Anbau-Konturen strukturell nicht robust zu bekommen ist; JTS ist der Industriestandard
+fuer genau dieses Problem auf der JVM.
+
+**Neue Helfer in `CityGmlUtils.java`** (Abschnitt "Slab-Zuschnitt bei Anbauten (JTS)", direkt nach
+dem `splitWallByZ`/`isRealPiece`-Block, da dieselben Bausteine wiederverwendet werden):
+- `SlabPiece` (record): ein Teilstueck einer Geschossflaeche — offener Aussenring + (seltene)
+  offene Innenringe (Loecher).
+- `clipSlabAtZ(groundPts, roofPolygons, z, tolerance)`: liefert `List<SlabPiece>` auf Hoehe z
+  (leer = an dieser Hoehe traegt hier nichts (mehr)). Zwei Fast-Paths erhalten das "0 Overhead im
+  Normalfall"-Verhalten: kein Dach mit `minZ <= z+tolerance` → Ring unveraendert; Ausschluss-Union
+  schneidet das Grundpolygon nicht → Ring unveraendert (kein JTS-Aufruf noetig).
+- `calculateNetArea2D(SlabPiece)`, `createPolygonWithHoles(exterior, interiors)` (wiederverwendet
+  `createPolygon`/`createLinearRing`, analog zum bestehenden Fenster-/Tueroeffnungs-Muster).
+- Privat: `roofAreaBelowZ`, `toJts`/`toJtsRing` (Punktliste → JTS-Polygon), `toSlabPieces`/
+  `toOpenRing` (JTS-Ergebnis → `SlabPiece`s, kleinere Teilstuecke/Loecher < `MIN_SLAB_AREA`=0,5m²
+  als Zuschnitt-Artefakte verworfen). JTS-Typen werden im ganzen Block voll qualifiziert
+  (`org.locationtech.jts.geom....`), da der Kurzname `Polygon` schon an den citygml4j-Typ gebunden
+  ist.
+
+**`StoreyGenerator.java`:** `computeEdgeLimits`, `computeActiveSubPolygon`, die
+`XY_EDGE_TOLERANCE`-Konstante und der `originalWalls`-Schnappschuss (nur fuer `computeEdgeLimits`
+gebraucht) vollstaendig entfernt. Die Floor/Ceiling-Schleife ruft pro Geschoss × Grundpolygon
+`CityGmlUtils.clipSlabAtZ(...)` auf und erzeugt **pro zurueckgegebenem Teilstueck** eine eigene
+Floor-/CeilingSurface (Face-/Slab-Id-Suffix `_2`, `_3`, ... nur wenn `pieces.size() > 1` —
+Standardfall bleibt id-stabil). Neuer privater Helfer `buildSlabPolygon(SlabPiece, wantUpward)`
+kapselt Normalen-Erzwingung (`orientForNormalZ`, unveraendert wiederverwendet — die Methode leitet
+die Windung selbst aus der Newell-Normalen ab, ist also unabhaengig von JTS' Ring-Windungs-
+Konvention) + Loch-Behandlung (Innenringe bekommen `!wantUpward`, wie bei Fenster-/Tueroeffnungen).
+
+Die Boden↔Decke-XLink-Verkettung (`previousCeilingSlabIds`) wechselt von `Map<Integer,String>` zu
+`Map<Integer,List<String>>` (Key bleibt `polyIdx`, Value jetzt eine Liste in Teilstueck-Reihenfolge)
+— bei Groessen-Mismatch zur vorherigen Deckenliste (kann nur bei der BA-Decke passieren) bekommt
+der Boden inline-Geometrie statt XLink, bleibt trotzdem korrekt. Der `stoppedPolygons`-Fast-Path
+entfaellt ersatzlos: der Ausschluss ist monoton in z, "einmal leer bleibt leer" ist damit
+automatisch (jeder `clipSlabAtZ`-Aufruf ist ohnehin durch die beiden Fast-Paths oben guenstig).
+
+**Bewusst NICHT angefasst** (Abgrenzung): die Mischdach-Boden-Artefakt-Korrektur (`slabsTraufeZ`/
+`slabsAreLimited`, begrenzt WIE VIELE Geschosse ueberhaupt Slabs bekommen, gebaeudeweit) und die
+Mischdach-Decke aus `slopedRoofPolygons` (oberstes Geschoss) — beide orthogonal zur Form EINES
+Slabs, laufen unveraendert weiter. Ein Hauptdach kann laut `slabsTraufeZ`-Logik ohnehin nur mit der
+OBERSTEN Decke kollidieren, die bereits durch einen bestehenden Guard uebersprungen wird — ein Dach,
+das mit einer NICHT-obersten Decke kollidiert, ist per Konstruktion ein niedriger Anbau, also genau
+das, was jetzt ausgeschnitten wird.
+
+**Weggefallene Sicherheitsnetze — bewusst, nicht vergessen:** der Faltungs-Schutz (self-touching-
+Check) und der Laengen-Schutz (`longestRun > n/2`, siehe "Nachtrag" oben) betrafen ausschliesslich
+die alte Ein-Segment-Schliesskante; JTS' `difference()` kennt dieses Problem nicht (beliebig
+komplexe, auch mehrteilige Ergebnisse sind ein normaler Fall, siehe `SlabPiece`-Liste). Das bedeutet
+insbesondere: `DESNALK0pF001iMM` (siehe "Nachtrag" oben, bisher bewusst ungeschnitten belassen, da
+sein laengster abgelaufener Lauf mehr als die Haelfte des Rings ausmachte) wird jetzt **tatsaechlich
+korrekt geschnitten** statt wie bisher als Kompromiss unveraendert durchgereicht — eine echte,
+sichtbare Verbesserung, aber auch die groesste Verhaltensaenderung dieses Umbaus.
+
+**Verifiziert:**
+- `imo` isoliert: `UF_1_Ceiling`/`UF_2_Floor` (Z=235,30) 120,92 m² → **95,68 m²** — exakt passend
+  zur bereits korrekten Mischdach-Decke (95,68 m²), der Schwellwert-Fall ist behoben.
+- `g4s` isoliert: die neue `UF_2`-Deckenkontur enthaelt jetzt **beide** vorher fehlenden Eckpunkte
+  (417950,792/5657225,204 und 417949,39/5657228,606) direkt im `posList` — die zweisegmentige
+  Anbau-Kontur wird jetzt exakt nachgezeichnet, keine Rest-Flaeche, kein Schnitt durch eine Wand.
+- `fYq` (Ursprungsfall 2026-08-12): unveraendert (97,877 m², < 0,001 m² Abweichung zur Baseline vor
+  diesem Umbau — reine Gleitkomma-Rauschen aus dem anderen Rechenweg).
+- `iMM` (Laengen-Schutz-Regressionsfall): Boden/Decke von Polygon 2 bei UF_1 sinken von 452,04 auf
+  449,86 m² (−2,18 m², < 0,5 % — ein kleiner, plausibler echter Zuschnitt, keine grosse Verwerfung);
+  **braucht trotzdem eine visuelle Bestaetigung durch den Nutzer**, da eine Flaechenzahl allein die
+  architektonische Korrektheit nicht vollstaendig beweist.
+- Alle vier Einzelgebaeude zusammen: schema-valide, keine `TopologyException`-Fallbacks im Log.
+- 14-Testgebaeude-Menge: 62 Geschosse/1.244 Wandsegmente/84 Boeden/131 Decken — Zahlen unveraendert
+  zum Stand vor diesem Umbau; schema-valide.
+- Volle 3.801-Gebaeude-Kachel: Geschosse/Wandsegmente exakt unveraendert (6.524/66.875 — die
+  Storey-Einteilung selbst wird durch diesen Umbau nicht beruehrt); Boeden 6.477→6.478, Decken
+  6.699→6.700 (minimale, plausible Verschiebung); Laufzeit unveraendert (~18s); **val3dity-
+  Fehlerprofil byte-identisch zur Baseline** (102=6/104=5/201=2/204=31/302=38/303=13/306=2/307=8/
+  601=322) trotz des vollstaendigen Mechanismus-Austauschs; keine `TopologyException`-Fallbacks.
 
 ## Geplante Erweiterungen
 
