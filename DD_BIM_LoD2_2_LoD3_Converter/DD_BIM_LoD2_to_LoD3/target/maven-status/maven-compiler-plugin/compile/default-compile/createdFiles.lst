@@ -15,6 +15,7 @@ de\mpsc\lod2tolod3\model\ModuleParameters$2.class
 de\mpsc\lod2tolod3\model\ModuleParameters$Interior.class
 de\mpsc\lod2tolod3\util\CityGmlUtils$WallCut.class
 de\mpsc\lod2tolod3\AbstractGenerator.class
+de\mpsc\lod2tolod3\util\CityGmlUtils$SlabPiece.class
 de\mpsc\lod2tolod3\util\DgmProvider.class
 de\mpsc\lod2tolod3\model\ModuleParameters$3.class
 de\mpsc\lod2tolod3\StoreyGenerator$GenerationStats.class
