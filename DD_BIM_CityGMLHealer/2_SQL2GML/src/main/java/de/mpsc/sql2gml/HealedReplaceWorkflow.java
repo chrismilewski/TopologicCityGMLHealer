@@ -3,7 +3,6 @@ package de.mpsc.sql2gml;
 import org.citygml4j.core.model.CityGMLVersion;
 import org.citygml4j.core.model.building.AbstractBuilding;
 import org.citygml4j.core.model.building.Building;
-import org.citygml4j.core.model.building.BuildingPart;
 import org.citygml4j.core.model.building.BuildingPartProperty;
 import org.citygml4j.core.model.construction.GroundSurface;
 import org.citygml4j.core.model.construction.RoofSurface;
@@ -265,7 +264,7 @@ public class HealedReplaceWorkflow {
                         // ── Building nicht in DB: unverändert übernehmen ──
                         stats.buildingsUnchanged++;
                         logger.debug("Unchanged building: {}", buildingId);
-                    } else if (!isFullyValid(dbBuilding)) {
+                    } else if (!isFullyValid(dbBuilding, gmlBuilding)) {
                         // Valid-Gate: Original-Geometrie vollstaendig erhalten.
                         stats.buildingsSkippedInvalid++;
                         logger.warn("Building {} is not fully valid in DB — original geometry preserved",
@@ -288,7 +287,6 @@ public class HealedReplaceWorkflow {
         logger.info("Buildings replaced:       {}", stats.buildingsReplaced);
         logger.info("Buildings unchanged:      {}", stats.buildingsUnchanged);
         logger.info("Buildings kept (invalid): {}", stats.buildingsSkippedInvalid);
-        logger.info("New BuildingParts:        {}", stats.newPartsCreated);
         logger.info("Superseded parts removed: {}", stats.partsRemoved);
         logger.info("Surfaces written:         {} ({} thereof TIN)", stats.surfacesWritten, stats.tinSurfacesWritten);
 
@@ -322,7 +320,7 @@ public class HealedReplaceWorkflow {
 
     private static class Stats {
         int featuresRead, buildingsReplaced, buildingsUnchanged, buildingsSkippedInvalid;
-        int newPartsCreated, partsRemoved, surfacesWritten, tinSurfacesWritten;
+        int partsRemoved, surfacesWritten, tinSurfacesWritten;
         /** Nur im Modus ALWAYS_POLYGON: Anzahl Polygone, die aus TINs entstanden sind. */
         int polygonsFromTin;
 
@@ -370,7 +368,7 @@ public class HealedReplaceWorkflow {
     // ─────────────────────────────────────────────────────────────────────────
 
     /** Prueft die gesamte Hierarchie eines DB-Buildings auf Validitaet (Valid-Gate, siehe Doku.md). */
-    private static boolean isFullyValid(de.mpsc.sql2gml.model.Building dbBuilding) {
+    private static boolean isFullyValid(de.mpsc.sql2gml.model.Building dbBuilding, Building gmlBuilding) {
         if (!dbBuilding.isValid()) return false;
         for (de.mpsc.sql2gml.model.BuildingPart part : dbBuilding.getBuildingParts()) {
             if (!part.isValid()) return false;
@@ -383,7 +381,31 @@ public class HealedReplaceWorkflow {
                 }
             }
         }
-        return !dbBuilding.getBuildingParts().isEmpty();
+        if (dbBuilding.getBuildingParts().isEmpty()) return false;
+
+        // Solid-Merge-Gate: der Healer ist bei Party-Wall-Merges/-Splits (mehrere Original-
+        // BuildingParts zu einem Solid verschmolzen, oder ein Teil in mehrere Solids
+        // aufgespalten) noch nicht ausgereift genug — beobachtete Faelle mit sichtbar
+        // kaputter Geometrie (fehlende Waende, schwebendes Dach). Bis der Healer-Code dafuer
+        // reif ist, akzeptieren wir nur eine 1:1-Zuordnung zu bereits vorhandenen GML-
+        // BuildingParts; jede von der Healer-DB neu vergebene PartIdGml ohne bestehende
+        // Entsprechung disqualifiziert das gesamte Building (Original-Geometrie bleibt erhalten).
+        Set<String> gmlPartIds = new HashSet<>();
+        if (gmlBuilding.isSetBuildingParts()) {
+            for (BuildingPartProperty partProp : gmlBuilding.getBuildingParts()) {
+                AbstractBuilding gmlPart = partProp.getObject();
+                if (gmlPart != null && gmlPart.getId() != null) {
+                    gmlPartIds.add(gmlPart.getId());
+                }
+            }
+        }
+        for (de.mpsc.sql2gml.model.BuildingPart part : dbBuilding.getBuildingParts()) {
+            String partGmlId = part.getPartIdGml();
+            if (partGmlId != null && !partGmlId.isBlank() && !gmlPartIds.contains(partGmlId)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -412,7 +434,6 @@ public class HealedReplaceWorkflow {
 
         // ── 2. Ziele bestimmen und Geometrie einfügen ───────────────────────
         Map<AbstractBuilding, List<String>> geomIdsByTarget = new LinkedHashMap<>();
-        boolean buildingGeometryMovedToParts = false;
 
         for (de.mpsc.sql2gml.model.BuildingPart dbPart : dbBuilding.getBuildingParts()) {
             String partGmlId = dbPart.getPartIdGml();
@@ -425,30 +446,12 @@ public class HealedReplaceWorkflow {
                 // Existierendes GML-BuildingPart in-place ersetzen
                 target = gmlPartsById.get(partGmlId);
             } else {
-                // Neues BuildingPart: der Healer hat einen Solid erzeugt, der keinem
-                // einzelnen Original-BuildingPart 1:1 entspricht (Party-Wall-Merge
-                // mehrerer Teile oder Aufspaltung eines Teils in mehrere Solids).
-                // Laut Healer-Doku ist die vergebene PartIdGml bereits die vollständige,
-                // dateiweit eindeutige Ziel-Id ("{Building.GmlId}_{PartIndex}_Part") —
-                // NICHT mehr ein kurzes Kürzel wie das frühere "solid1", das wir selbst
-                // hätten präfixen müssen. Wir übernehmen sie daher direkt.
-                String newPartId = partGmlId.startsWith(dbBuilding.getBuildingIdGml())
-                        ? partGmlId
-                        : dbBuilding.getBuildingIdGml() + "_" + partGmlId;
-                if (!partGmlId.startsWith(dbBuilding.getBuildingIdGml())) {
-                    logger.warn("New BuildingPart id '{}' for building {} is not fully-qualified "
-                            + "per the current Healer naming convention — prefixing defensively",
-                            partGmlId, dbBuilding.getBuildingIdGml());
-                }
-                BuildingPart newPart = new BuildingPart();
-                newPart.setId(newPartId);
-                applyAttributes(newPart, "Log_Part", dbPart.getLog(), null);
-                gmlBuilding.getBuildingParts().add(new BuildingPartProperty(newPart));
-                stats.newPartsCreated++;
-                buildingGeometryMovedToParts = true;
-                target = newPart;
-                logger.debug("Created new BuildingPart {} for building {}",
-                        newPart.getId(), gmlBuilding.getId());
+                // Solid-Merge-Gate (siehe isFullyValid) haette dieses Building bereits vorher
+                // aussortiert — ein Erreichen dieses Zweigs waere ein Gate/Logik-Widerspruch.
+                // Defensiv ueberspringen statt einen unreifen Healer-Merge-Solid zu schreiben.
+                logger.error("Building {}: dbPart references unknown PartIdGml '{}' despite "
+                        + "Solid-Merge-Gate — skipping this part", gmlBuilding.getId(), partGmlId);
+                continue;
             }
 
             List<String> targetGeomIds = geomIdsByTarget.get(target);
@@ -461,13 +464,7 @@ public class HealedReplaceWorkflow {
             appendBoundaries(target, dbPart, targetGeomIds, stats, dbBuilding.getBuildingIdGml());
         }
 
-        // ── 3. Building-Geometrie entfernen, wenn sie in neue Parts gewandert ist ──
-        if (buildingGeometryMovedToParts && !geomIdsByTarget.containsKey(gmlBuilding)) {
-            gmlBuilding.getBoundaries().clear();
-            gmlBuilding.setLod2Solid(null);
-        }
-
-        // ── 4. Überholte GML-Parts entfernen (Healer-Merge/Split, siehe Doku.md) ──
+        // ── 3. Ueberholte GML-Parts entfernen (vom Healer in der DB weggelassen) ──
         if (gmlBuilding.isSetBuildingParts()) {
             int before = gmlBuilding.getBuildingParts().size();
             gmlBuilding.getBuildingParts().removeIf(partProp -> {
@@ -481,9 +478,8 @@ public class HealedReplaceWorkflow {
             int removed = before - gmlBuilding.getBuildingParts().size();
             if (removed > 0) {
                 stats.partsRemoved += removed;
-                logger.info("Building {}: {} superseded BuildingPart(s) removed "
-                        + "(healer merged/split them into {} new part(s))",
-                        gmlBuilding.getId(), removed, stats.newPartsCreated);
+                logger.info("Building {}: {} BuildingPart(s) not present in Healer DB output removed",
+                        gmlBuilding.getId(), removed);
             }
         }
 

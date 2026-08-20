@@ -18,8 +18,8 @@
 Strategie: „Kompletter Replace auf Building-Ebene" wie beim alten `ReplaceWorkflow`, aber mit drei Neuerungen (siehe Klassen-Javadoc):
 
 1. **Geometrie-Typen**: Eine Surface trägt genau EINE `SurfaceGeometry`, die entweder ein klassisches `gml:Polygon` (PosList-Index 0 = Außenring, >0 = Löcher) oder eine `gml:TriangulatedSurface` (jede PosList = ein unabhängiges `gml:Triangle` — Notlösung des Healers für nicht planarisierbare Flächen) ist.
-2. **Neue BuildingParts**: `PartIdGml` entscheidet über das Ziel jedes DB-Parts — `null` → Geometrie gehört direkt zum Building; existierende GML-Part-ID → In-place-Ersatz; jede andere ID → der Healer hat einen Solid erzeugt, der keinem Original-Part 1:1 entspricht (Party-Wall-Merge mehrerer Teile oder Aufspaltung), ein NEUES BuildingPart wird angelegt, überholte alte Parts werden entfernt.
-3. **Valid-Gate (strenger als beim alten ReplaceWorkflow)**: Ein Building wird NUR ersetzt, wenn das Building UND alle seine Parts/Surfaces/Geometrien/PosLists in der DB vollständig valide sind. Sonst bleibt die Original-Geometrie unverändert — kein teilweiser Ersatz, keine Hüllen-Lücke.
+2. **BuildingPart-Ziel, nur 1:1**: `PartIdGml` entscheidet über das Ziel jedes DB-Parts — `null` → Geometrie gehört direkt zum Building; existierende GML-Part-ID → In-place-Ersatz. Jede andere ID (Healer hat per Party-Wall-Merge/Split einen Solid erzeugt, der keinem Original-Part 1:1 entspricht) disqualifiziert das GESAMTE Building ueber das Solid-Merge-Gate (s.u.) — Healer-Merges/-Splits werden aktuell NICHT geschrieben, der Healer-Code dafuer ist noch nicht ausgereift genug (beobachtete Faelle mit sichtbar kaputter Geometrie).
+3. **Valid-Gate (strenger als beim alten ReplaceWorkflow)**: Ein Building wird NUR ersetzt, wenn das Building UND alle seine Parts/Surfaces/Geometrien/PosLists in der DB vollständig valide sind, UND jeder DB-Part 1:1 einem bestehenden GML-Building/-Part entspricht (Solid-Merge-Gate). Sonst bleibt die Original-Geometrie unverändert — kein teilweiser Ersatz, keine Hüllen-Lücke.
 
 Weitere Eigenschaften (wie beim alten ReplaceWorkflow): Attribut-Erhalt, Unverändert-Garantie für Buildings ohne DB-Eintrag, Header-Fix, Auto-Batch aus `CityGmlFiles`. Zusätzlich: ausführliche TIN-Statistik (wie viele Flächen je Typ — Ground/Wall/Roof — trianguliert sind; triangulierte WÄNDE werden gesondert gewarnt, weil sie eine spätere LoD3-Fensterableitung praktisch unmöglich machen).
 
@@ -147,12 +147,24 @@ Building.isValid()
   UND deren SurfaceGeometry:    geometry != null, geometry.isValid(), mind. 1 PosList
   UND für JEDE PosList:         posList.isValid()
   UND mindestens 1 BuildingPart vorhanden
+  UND Solid-Merge-Gate:         JEDER DB-Part mit gesetzter PartIdGml referenziert ein
+                                 BEREITS bestehendes GML-BuildingPart (1:1) — keine vom
+                                 Healer neu erzeugten Party-Wall-Merge/Split-Solids
 ```
 
 Ist IRGENDEIN Teil invalide, bleibt das **gesamte** Building unverändert (Original-Geometrie
 komplett erhalten) — es gibt keinen Teil-Ersatz mehr. Grund: ein teilweiser Ersatz könnte
 eine Lücke in der Hülle hinterlassen (`SHELL_NOT_CLOSED`), wenn ausgerechnet die fehlende
 Fläche gebraucht würde, um die Hülle zu schließen.
+
+**Solid-Merge-Gate (2026-08-20):** der Healer erzeugt bei einem Party-Wall-Merge (mehrere
+Original-BuildingParts zu einem Solid verschmolzen) oder -Split (ein Teil in mehrere Solids
+aufgespalten) eine `PartIdGml`, die zu keinem bestehenden GML-BuildingPart passt. Frueher
+wurde dafuer automatisch ein NEUES BuildingPart angelegt (siehe Git-Historie). Das ist
+bewusst deaktiviert: der Healer-Code fuer diesen Fall ist noch nicht ausgereift genug und hat
+sichtbar kaputte Geometrie produziert (fehlende Waende, schwebendes Dach). Bis der
+Healer-Code dafuer reif ist, disqualifiziert jede solche PartIdGml das gesamte Building —
+Original-Geometrie bleibt vollstaendig erhalten, wie bei jedem anderen Valid-Gate-Fehlschlag.
 
 ### Tabellen
 
@@ -325,9 +337,9 @@ java -cp target/sql2gml-complete.jar de.mpsc.sql2gml.ExtractBuildings `
 Die Standard-Hauptklasse (Main-Class des Fat-JARs), für das neue Healer-Schema
 (`SurfaceGeometries`+`PosLists` statt `Polygons`+`LinearRings`). Strategie: „Kompletter
 Replace auf Building-Ebene" wie beim alten `legacy.ReplaceWorkflow` — aber mit drei
-Neuerungen (siehe Übersicht oben): Geometrie-Typen (Polygon/TIN je Surface), automatische
-Erzeugung/Entfernung von BuildingParts bei Party-Wall-Merge/Split, und ein strengeres
-All-or-Nothing-Valid-Gate.
+Neuerungen (siehe Übersicht oben): Geometrie-Typen (Polygon/TIN je Surface), ein
+Solid-Merge-Gate das Party-Wall-Merge/Split-Ergebnisse des Healers noch NICHT akzeptiert
+(dessen Code dafuer ist noch nicht ausgereift), und ein strengeres All-or-Nothing-Valid-Gate.
 
 #### Ablauf pro Building (`replaceBuilding`)
 
@@ -346,12 +358,13 @@ All-or-Nothing-Valid-Gate.
 │       • Nicht in DB: unverändert durchreichen                       │
 │       • In DB, aber NICHT vollständig valide (Valid-Gate): Original │
 │         komplett erhalten, Warnung loggen                           │
-│       • In DB UND vollständig valide:                                │
+│       • In DB UND vollständig valide (inkl. Solid-Merge-Gate):       │
 │           1. DB-Attribute + Log als generische Attribute schreiben  │
 │           2. Je DB-BuildingPart Ziel bestimmen (PartIdGml: null/     │
-│              existierend/neu) und dessen Boundaries neu aufbauen     │
+│              existierend — s.u.) und dessen Boundaries neu aufbauen  │
 │              (Surfaces → SurfaceGeometry → Polygon ODER TIN)        │
-│           3. Überholte GML-Parts entfernen (Healer hat sie gemerged)│
+│           3. Ueberholte GML-Parts entfernen (Healer hat sie in der   │
+│              DB weggelassen, ohne sie in etwas Neues zu mergen)      │
 │           4. lod2Solid JE ZIEL komplett neu aus Geometrie-IDs        │
 │              (xlink:href) — fehlt Geometrie, wird das Solid entfernt│
 │    → Header-Fix (Namespaces/schemaLocation aus der Eingabe)         │
@@ -361,10 +374,10 @@ All-or-Nothing-Valid-Gate.
 **Was erhalten bleibt:** Building-eigene CityGML-Attribute (measuredHeight, function,
 Adresse, …) — nur die Geometrie und die DB-Attribute werden ersetzt.
 
-**Ergebnis-Statistik:** Features read, Buildings replaced/unchanged/kept-invalid, New
-BuildingParts, Superseded parts removed, Surfaces written (davon TIN), sowie eine
-Aufschlüsselung der Triangulierung je Flächentyp (Ground/Wall/Roof) — triangulierte
-WÄNDE werden gesondert als Building-Liste ausgegeben (siehe unten).
+**Ergebnis-Statistik:** Features read, Buildings replaced/unchanged/kept-invalid, Superseded
+parts removed, Surfaces written (davon TIN), sowie eine Aufschlüsselung der Triangulierung
+je Flächentyp (Ground/Wall/Roof) — triangulierte WÄNDE werden gesondert als Building-Liste
+ausgegeben (siehe unten).
 
 #### BuildingPart-Zielbestimmung (Kernstück, `replaceBuilding`)
 
@@ -372,18 +385,23 @@ WÄNDE werden gesondert als Building-Liste ausgegeben (siehe unten).
 |---|---|---|
 | `null`/leer | das Building selbst | Geometrie gehört direkt zum Building |
 | existierende GML-Part-ID | das bestehende `BuildingPart` (in-place) | 1:1-Fall, keine Aufspaltung/Merge für dieses Teil |
-| jede andere ID | neues `BuildingPart` (Id wird direkt übernommen, nur defensiv präfixt falls sie nicht mit der `BuildingIdGml` beginnt) | Healer hat einen Solid erzeugt, der keinem Original-Part 1:1 entspricht (Merge mehrerer Teile oder Split eines Teils) |
 
-Alte GML-Parts, in die NICHT geschrieben wurde, werden anschließend entfernt (der Healer
-liefert laut Konvention immer den vollständigen neuen Satz an Solid-Komponenten für ein
-geheiltes Building — bleiben alte Parts stehen, kollidieren ihre `gml:id`s mit denen der
-neuen Parts).
+Jede andere ID (Healer hat per Party-Wall-Merge/Split einen Solid erzeugt, der keinem
+Original-Part 1:1 entspricht) darf diesen Punkt gar nicht erst erreichen — das Solid-Merge-
+Gate in `isFullyValid` sortiert das gesamte Building vorher aus. Erreicht der Code diesen
+Zweig trotzdem (Gate/Logik-Widerspruch), wird der betroffene DB-Part defensiv uebersprungen
+und ein Fehler geloggt, statt einen unreifen Healer-Merge-Solid zu schreiben.
+
+Alte GML-Parts, in die NICHT geschrieben wurde, werden anschließend entfernt — das betrifft
+jetzt nur noch den Fall, dass der Healer einen Part ganz aus der DB weggelassen hat, ohne ihn
+in einen neuen Part zu mergen.
 
 #### Valid-Gate (`isFullyValid`)
 
 Siehe Abschnitt „Datenbankstruktur" oben — ALLE Ebenen (Building, jeder Part, jede
-Surface, jede Geometrie, jede PosList) müssen valide sein, sonst bleibt das gesamte
-Building unverändert.
+Surface, jede Geometrie, jede PosList) müssen valide sein, UND das Solid-Merge-Gate muss
+bestehen (jeder DB-Part mit gesetzter PartIdGml muss ein bestehendes GML-BuildingPart 1:1
+referenzieren), sonst bleibt das gesamte Building unverändert.
 
 #### GeometryMode (`buildGeometries`)
 
