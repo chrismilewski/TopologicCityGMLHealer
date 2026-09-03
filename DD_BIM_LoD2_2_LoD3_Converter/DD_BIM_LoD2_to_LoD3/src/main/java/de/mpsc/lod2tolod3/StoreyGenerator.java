@@ -2,9 +2,14 @@ package de.mpsc.lod2tolod3;
 
 import de.mpsc.lod2tolod3.model.ModuleParameters;
 import de.mpsc.lod2tolod3.model.WindowPreference;
+import de.mpsc.lod2tolod3.util.BuildingQueryUtils;
 import de.mpsc.lod2tolod3.util.CityGmlUtils;
-import de.mpsc.lod2tolod3.util.CityGmlUtils.Point3D;
-import de.mpsc.lod2tolod3.util.CityGmlUtils.SlabPiece;
+import de.mpsc.lod2tolod3.util.GeometryUtils;
+import de.mpsc.lod2tolod3.util.Point3D;
+import de.mpsc.lod2tolod3.util.SlabClippingUtils;
+import de.mpsc.lod2tolod3.util.SlabClippingUtils.SlabPiece;
+import de.mpsc.lod2tolod3.util.SolidShellUtils;
+import de.mpsc.lod2tolod3.util.WallCuttingUtils;
 import de.mpsc.lod2tolod3.util.ModuleParametersLoader;
 import org.citygml4j.core.model.building.AbstractBuilding;
 import org.citygml4j.core.model.building.Building;
@@ -74,9 +79,9 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
         if (hDgm == null) return;
 
         // Solid-Shell immer neu aufbauen, auch bei vorzeitigem Abbruch.
-        for (var target : CityGmlUtils.getBuildingTargets(building)) {
+        for (var target : BuildingQueryUtils.getBuildingTargets(building)) {
             processAbstractBuilding(target, bp.sst(), hDgm, bp.params(), stats);
-            CityGmlUtils.rebuildSolidShell(target);
+            SolidShellUtils.rebuildSolidShell(target);
         }
     }
 
@@ -84,7 +89,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
     private void processAbstractBuilding(AbstractBuilding target, String sst, double hDgm,
             ModuleParameters params, GenerationStats stats) {
 
-        double[] roofZRange = CityGmlUtils.getRoofZRange(target);
+        double[] roofZRange = BuildingQueryUtils.getRoofZRange(target);
         if (roofZRange == null) {
             log.debug("Keine RoofSurface fuer Gebaeude/Part {}", target.getId());
             return;
@@ -103,7 +108,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
         double ufHeight = params.getUpperFloor() != null ? params.getUpperFloor().getTotalHeight() : 0;
 
         // egFloorZ = Oberkante Sockel/Fundament; nur Keller-Gebaeude schneiden Waende hier.
-        double egFloorZ = CityGmlUtils.roundZ(hDgm + heightGr);
+        double egFloorZ = GeometryUtils.roundZ(hDgm + heightGr);
 
         if (gfHeight <= 0) {
             log.warn("GF.height fehlt/ungueltig fuer sst={}, ueberspringe Geschossteilung", sst);
@@ -112,7 +117,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
         if (traufeZ <= egFloorZ + CUT_TOLERANCE) {
             log.warn("Traufe ({}) <= EG-Floor ({}) fuer sst={}, ueberspringe",
-                    CityGmlUtils.formatNum(traufeZ), CityGmlUtils.formatNum(egFloorZ), sst);
+                    GeometryUtils.formatNum(traufeZ), GeometryUtils.formatNum(egFloorZ), sst);
             return;
         }
 
@@ -128,7 +133,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
         log.debug("Verarbeite sst={} (gml:id={}): {} Geschosse, EG-Floor={}, Traufe={}",
                 sst, targetId, storeys.size(),
-                CityGmlUtils.formatNum(egFloorZ), CityGmlUtils.formatNum(traufeZ));
+                GeometryUtils.formatNum(egFloorZ), GeometryUtils.formatNum(traufeZ));
 
         // --- Waende schneiden: egFloorZ (nur Keller) + Geschoss-Ceilings ---
         List<Double> cutZValues = new ArrayList<>();
@@ -154,13 +159,13 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
             String geschoss = CityGmlUtils.getStringAttribute(wall, "Geschoss");
             if (geschoss != null) continue;
 
-            Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
+            Polygon wallPoly = BuildingQueryUtils.getWallPolygon(wall);
             if (wallPoly == null) continue;
 
-            List<Point3D> wallPoints = CityGmlUtils.toPoints(wallPoly);
+            List<Point3D> wallPoints = GeometryUtils.toPoints(wallPoly);
             if (wallPoints.size() < 3) continue;
 
-            double[] zRange = CityGmlUtils.getZRange(wallPoints);
+            double[] zRange = GeometryUtils.getZRange(wallPoints);
             double wallMinZ = zRange[0];
             double wallMaxZ = zRange[1];
 
@@ -209,8 +214,8 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                 if (params.hasBasement() && wallMinZ < egFloorZ - CUT_TOLERANCE) {
                     wallPoly = trimWallBelowEgFloor(wallPoly, egFloorZ, wall.getId());
                     wall.setLod3MultiSurface(CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(wallPoly));
-                    wallPoints = CityGmlUtils.toPoints(wallPoly);
-                    zRange = CityGmlUtils.getZRange(wallPoints);
+                    wallPoints = GeometryUtils.toPoints(wallPoly);
+                    zRange = GeometryUtils.getZRange(wallPoints);
                     wallMinZ = zRange[0];
                     wallMaxZ = zRange[1];
                 }
@@ -241,20 +246,21 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                     try {
                         double zFensterAsl = Double.parseDouble(origZMinAsl)
                                            + Double.parseDouble(zFensterStr);
-                        zFensterAslStr = CityGmlUtils.formatNum(zFensterAsl);
+                        zFensterAslStr = GeometryUtils.formatNum(zFensterAsl);
                     } catch (NumberFormatException ignored) {}
                 }
             }
             if (innenwand == null) innenwand = "0";
 
-            // Iteratives Schneiden von unten nach oben
-            List<Polygon> segments = cutWallAtMultipleZ(wallPoly, applicableCuts);
+            // Bandweises Schneiden mit JTS (robust auch bei Anbau-Kerben, siehe Doku.md)
+            List<Polygon> segments = WallCuttingUtils.cutWallAtMultipleZJTS(
+                    GeometryUtils.toPoints(wallPoly), applicableCuts);
             if (segments == null || segments.isEmpty()) {
                 // Schnitt fehlgeschlagen → nur Tag setzen, aber wie oben auf egFloorZ trimmen.
                 if (params.hasBasement() && wallMinZ < egFloorZ - CUT_TOLERANCE) {
                     wallPoly = trimWallBelowEgFloor(wallPoly, egFloorZ, wall.getId());
                     wall.setLod3MultiSurface(CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(wallPoly));
-                    double[] trimmedZRange = CityGmlUtils.getZRange(CityGmlUtils.toPoints(wallPoly));
+                    double[] trimmedZRange = GeometryUtils.getZRange(GeometryUtils.toPoints(wallPoly));
                     wallMinZ = trimmedZRange[0];
                     wallMaxZ = trimmedZRange[1];
                 }
@@ -270,13 +276,18 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
             toRemove.add(boundary);
             wallsCut++;
 
-            // Segmente unterhalb egFloorZ bzw. oberhalb traufeZ verwerfen.
+            // Segmente unterhalb egFloorZ bzw. oberhalb traufeZ verwerfen. Das Kellerband wird
+            // ueber die OBERKANTE geprueft (nicht den Mittelpunkt): ein Segment, dessen Oberkante
+            // egFloorZ nicht um mehr als CUT_TOLERANCE ueberragt, liegt komplett im Kellerbereich —
+            // exakt dieselbe Toleranz wie cutWallPolygonAtZ's eigener "zCut nahe maxZ"-Schutz
+            // (siehe trimWallBelowEgFloor), so dass ein hier nicht verworfenes Segment garantiert
+            // trimmbar bleibt (kein Randfall, bei dem beide Schwellen knapp aneinander vorbeilaufen).
             double keptMaxTop = Double.NEGATIVE_INFINITY;
             for (Polygon seg : segments) {
-                double[] z = CityGmlUtils.getZRange(CityGmlUtils.toPoints(seg));
+                double[] z = GeometryUtils.getZRange(GeometryUtils.toPoints(seg));
                 double midZ = (z[0] + z[1]) / 2.0;
-                if (hasEgFloorCut && midZ < egFloorZ - CUT_TOLERANCE) continue;
-                if (hasTraufeCut && midZ > traufeZ + CUT_TOLERANCE) continue;
+                if (hasEgFloorCut && z[1] <= egFloorZ + CUT_TOLERANCE) continue;
+                if (hasTraufeCut && midZ > traufeZ + FLAT_ROOF_TOLERANCE) continue;
                 if (z[1] > keptMaxTop) keptMaxTop = z[1];
             }
 
@@ -285,28 +296,34 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                 // Segment entduplizieren (1mm) → gegen CONSECUTIVE_POINTS_SAME (kein kollineares
                 // Mergen, sonst brechen geteilte Kanten auf). Polygon neu aufbauen.
                 List<Point3D> segPoints =
-                        CityGmlUtils.dedupConsecutive(CityGmlUtils.toPoints(segments.get(i)), CityGmlUtils.POINT_MERGE_TOL);
+                        GeometryUtils.dedupConsecutive(GeometryUtils.toPoints(segments.get(i)), GeometryUtils.POINT_MERGE_TOL);
                 if (segPoints.size() < 3) continue; // nach Dedup degeneriert
-                double[] segZ = CityGmlUtils.getZRange(segPoints);
+                double[] segZ = GeometryUtils.getZRange(segPoints);
                 double segMidZ = (segZ[0] + segZ[1]) / 2.0;
 
-                // Rand-Segmente Z-basiert verwerfen
-                if (hasEgFloorCut && segMidZ < egFloorZ - CUT_TOLERANCE) continue;
-                if (hasTraufeCut && segMidZ > traufeZ + CUT_TOLERANCE) continue;
+                // Rand-Segmente Z-basiert verwerfen (Oberkante statt Mittelpunkt, siehe oben).
+                // Traufe-Schwelle bewusst FLAT_ROOF_TOLERANCE (nicht CUT_TOLERANCE): dieselbe
+                // Toleranz, mit der ein Dach ueberhaupt erst als "flach" (isFlachdach) klassifiziert
+                // wird, muss auch hier gelten — sonst wird ein einzelnes lokales First-/Grat-Detail
+                // (z.B. 19cm ueber traufeZ, von der Flachdach-Klassifikation noch als "flach"
+                // durchgehen gelassen) an GENAU DER Wand verworfen, deren zugehoerige Dachflaechen
+                // dieses Detail (unveraendert) weiterhin erwarten — GE_S_NOT_CLOSED. Siehe Doku.md.
+                if (hasEgFloorCut && segZ[1] <= egFloorZ + CUT_TOLERANCE) continue;
+                if (hasTraufeCut && segMidZ > traufeZ + FLAT_ROOF_TOLERANCE) continue;
 
                 // Auch ein "erfolgreich" geschnittenes Segment kann unter egFloorZ haengen bleiben
                 // (uebersprungener Einzelschnitt in cutWallSinglePieceGuarded) — notfalls nachtrimmen.
                 if (params.hasBasement() && segZ[0] < egFloorZ - CUT_TOLERANCE) {
                     Polygon trimmed = trimWallBelowEgFloor(
-                            CityGmlUtils.createPolygon(segPoints), egFloorZ, originalWallId);
-                    segPoints = CityGmlUtils.dedupConsecutive(
-                            CityGmlUtils.toPoints(trimmed), CityGmlUtils.POINT_MERGE_TOL);
+                            GeometryUtils.createPolygon(segPoints), egFloorZ, originalWallId);
+                    segPoints = GeometryUtils.dedupConsecutive(
+                            GeometryUtils.toPoints(trimmed), GeometryUtils.POINT_MERGE_TOL);
                     if (segPoints.size() < 3) continue;
-                    segZ = CityGmlUtils.getZRange(segPoints);
+                    segZ = GeometryUtils.getZRange(segPoints);
                     segMidZ = (segZ[0] + segZ[1]) / 2.0;
                 }
 
-                Polygon segPoly = CityGmlUtils.createPolygon(segPoints);
+                Polygon segPoly = GeometryUtils.createPolygon(segPoints);
 
                 StoreyInfo storey = findStoreyForZ(storeys, segMidZ);
                 if (storey == null) storey = storeys.get(storeys.size() - 1);
@@ -327,13 +344,13 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
                 // Alle Standard-Wand-Attribute berechnen und setzen
                 String struktur = "1".equals(innenwand) ? "Innenwand" : "Aussenwand";
-                CityGmlUtils.addWallAttributes(segWall, segPoints,
+                GeometryUtils.addWallAttributes(segWall, segPoints,
                         segFaceId, hDgm, storey.geschoss, null, struktur,
                         originalWallId);
 
                 // Geschossdecke-Z schreiben (fuer WindowGenerator: Obergrenze fuer Fensterplatzierung)
                 CityGmlUtils.addStringAttribute(segWall, "GeschossDeckeZ",
-                        CityGmlUtils.formatNum(storey.ceilingZ));
+                        GeometryUtils.formatNum(storey.ceilingZ));
 
                 // Innenwand-Wert vom Original uebernehmen (addWallAttributes setzt immer "0")
                 if ("1".equals(innenwand)) {
@@ -396,7 +413,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
         if (slopedRawMinRoofZ < Double.MAX_VALUE / 2
                 && slopedRawMinRoofZ > rawMinRoofZ + CUT_TOLERANCE) {
             log.debug("  Mischdach-Artefakt {}: rawMinRoofZ={} < slopedRawMinZ={}, verwende slopedRawMinZ",
-                    targetId, CityGmlUtils.formatNum(rawMinRoofZ), CityGmlUtils.formatNum(slopedRawMinRoofZ));
+                    targetId, GeometryUtils.formatNum(rawMinRoofZ), GeometryUtils.formatNum(slopedRawMinRoofZ));
             rawMinRoofZ = slopedRawMinRoofZ;
         }
         double slabsTraufeZ = rawMinRoofZ;
@@ -404,7 +421,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
         if (slabsTraufeZ <= egFloorZ + CUT_TOLERANCE) {
             // Terrain-Niveau-Artefakt: keine Decken/Boeden erzeugen
             log.debug("Part/Building {} rawMinRoofZ={} <= egFloorZ={}, ueberspringe Decken/Boeden",
-                    targetId, CityGmlUtils.formatNum(slabsTraufeZ), CityGmlUtils.formatNum(egFloorZ));
+                    targetId, GeometryUtils.formatNum(slabsTraufeZ), GeometryUtils.formatNum(egFloorZ));
             stats.storeysCreated += storeys.size();
             stats.wallsCut += wallsCut;
             stats.wallSegmentsCreated += segmentsCreated;
@@ -418,7 +435,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
             boolean isFlachdachSlabs = (firstZ - slabsTraufeZ) < FLAT_ROOF_TOLERANCE;
             slabStoreys = calculateStoreys(egFloorZ, gfHeight, ufHeight, slabsTraufeZ, sst, isFlachdachSlabs);
             log.debug("  Slab-Begrenzung {}: slabsTraufeZ={} < traufeZ={}, {} statt {} Slab-Geschosse",
-                    targetId, CityGmlUtils.formatNum(slabsTraufeZ), CityGmlUtils.formatNum(traufeZ),
+                    targetId, GeometryUtils.formatNum(slabsTraufeZ), GeometryUtils.formatNum(traufeZ),
                     slabStoreys.size(), storeys.size());
         } else {
             slabStoreys = storeys;
@@ -430,7 +447,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
             return;
         }
 
-        List<Polygon> groundPolygons = CityGmlUtils.collectGroundPolygons(target);
+        List<Polygon> groundPolygons = BuildingQueryUtils.collectGroundPolygons(target);
         int floorsAdded = 0;
         int ceilingsAdded = 0;
 
@@ -449,12 +466,12 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
             }
         }
         // Mischdach-Erkennung: bei Flachdach+Schraegdach-Mix braucht nur die geneigte Flaeche eine CeilingSurface.
-        List<Polygon> roofPolygons = CityGmlUtils.collectRoofPolygons(target);
+        List<Polygon> roofPolygons = BuildingQueryUtils.collectRoofPolygons(target);
         List<Polygon> slopedRoofPolygons = new ArrayList<>();
         int flatRoofCount = 0;
 
         for (Polygon roofPoly : roofPolygons) {
-            List<Point3D> pts = CityGmlUtils.toPoints(roofPoly);
+            List<Point3D> pts = GeometryUtils.toPoints(roofPoly);
             if (pts.isEmpty()) continue;
             double maxZ = pts.stream().mapToDouble(p -> p.z).max().orElse(0);
             if ((maxZ - traufeZ) < 0.30) {
@@ -487,11 +504,11 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
             int polyIdx = 0;
             for (Polygon groundPoly : groundPolygons) {
-                List<Point3D> groundPoints = CityGmlUtils.toPoints(groundPoly);
+                List<Point3D> groundPoints = GeometryUtils.toPoints(groundPoly);
                 if (groundPoints.size() < 3) continue;
                 polyIdx++;
 
-                List<SlabPiece> floorPieces = CityGmlUtils.clipSlabAtZ(
+                List<SlabPiece> floorPieces = SlabClippingUtils.clipSlabAtZ(
                         groundPoints, roofPolygons, storey.floorZ, CUT_TOLERANCE);
                 if (floorPieces.isEmpty()) continue; // an dieser Hoehe traegt hier nichts (mehr)
 
@@ -501,7 +518,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                 for (int pieceIdx = 0; pieceIdx < floorPieces.size(); pieceIdx++) {
                     SlabPiece floorPiece = floorPieces.get(pieceIdx);
                     String pieceSuffix = floorPieces.size() > 1 ? "_" + (pieceIdx + 1) : "";
-                    double areaFloor = CityGmlUtils.calculateNetArea2D(floorPiece);
+                    double areaFloor = SlabClippingUtils.calculateNetArea2D(floorPiece);
 
                     // --- FloorSurface ---
                     FloorSurface floor = new FloorSurface();
@@ -524,7 +541,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                                 CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(floorPoly));
                     }
 
-                    CityGmlUtils.addHorizontalSurfaceAttributes(floor, floorFaceId,
+                    GeometryUtils.addHorizontalSurfaceAttributes(floor, floorFaceId,
                             storey.floorZ, hDgm, areaFloor, storey.geschoss);
                     CityGmlUtils.addStringAttribute(floor, "STRUKTUR", "Geschossboden");
 
@@ -551,24 +568,24 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                     double expectedHeight = storey.geschoss.equals("GF") ? gfHeight : ufHeight;
                     if (topStoreyHeight < expectedHeight - CUT_TOLERANCE) {
                         log.debug("  Giebel-Merge: {} hat {}m < erwartet {}m → keine Decke bei Traufe",
-                                storey.geschoss, CityGmlUtils.formatNum(topStoreyHeight),
-                                CityGmlUtils.formatNum(expectedHeight));
+                                storey.geschoss, GeometryUtils.formatNum(topStoreyHeight),
+                                GeometryUtils.formatNum(expectedHeight));
                         continue;
                     }
                     log.debug("  Giebel-Stockwerk: {} hat {}m >= erwartet {}m → Decke bei Traufe bleibt",
-                            storey.geschoss, CityGmlUtils.formatNum(topStoreyHeight),
-                            CityGmlUtils.formatNum(expectedHeight));
+                            storey.geschoss, GeometryUtils.formatNum(topStoreyHeight),
+                            GeometryUtils.formatNum(expectedHeight));
                 }
 
                 // Decken-Kontur separat bei storey.ceilingZ zuschneiden (kann staerker beschnitten
                 // sein als der Boden desselben Geschosses, siehe oben).
-                List<SlabPiece> ceilingPieces = CityGmlUtils.clipSlabAtZ(
+                List<SlabPiece> ceilingPieces = SlabClippingUtils.clipSlabAtZ(
                         groundPoints, roofPolygons, storey.ceilingZ, CUT_TOLERANCE);
 
                 for (int pieceIdx = 0; pieceIdx < ceilingPieces.size(); pieceIdx++) {
                     SlabPiece ceilingPiece = ceilingPieces.get(pieceIdx);
                     String pieceSuffix = ceilingPieces.size() > 1 ? "_" + (pieceIdx + 1) : "";
-                    double areaCeiling = CityGmlUtils.calculateNetArea2D(ceilingPiece);
+                    double areaCeiling = SlabClippingUtils.calculateNetArea2D(ceilingPiece);
 
                     // Normale nach unten erzwungen (CityDoctor IsCeilingCheck, siehe Doku.md).
                     Polygon ceilingPoly = buildSlabPolygon(ceilingPiece, false);
@@ -584,7 +601,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                     ceiling.setLod3MultiSurface(
                             CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(ceilingPoly));
 
-                    CityGmlUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
+                    GeometryUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
                             storey.ceilingZ, hDgm, areaCeiling, storey.geschoss);
                     CityGmlUtils.addStringAttribute(ceiling, "STRUKTUR", "Geschossdecke");
 
@@ -604,14 +621,14 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                 int roofIdx = 0;
                 for (Polygon slopedPoly : slopedRoofPolygons) {
                     roofIdx++;
-                    List<Point3D> roofPts = CityGmlUtils.toPoints(slopedPoly);
+                    List<Point3D> roofPts = GeometryUtils.toPoints(slopedPoly);
                     if (roofPts.size() < 3) continue;
 
-                    List<Point3D> ceilingPoints = CityGmlUtils.orientForNormalZ(
-                            CityGmlUtils.projectToZ(roofPts, storey.ceilingZ), false);
-                    double roofArea = CityGmlUtils.calculatePolygonArea2D(ceilingPoints);
+                    List<Point3D> ceilingPoints = GeometryUtils.orientForNormalZ(
+                            GeometryUtils.projectToZ(roofPts, storey.ceilingZ), false);
+                    double roofArea = GeometryUtils.calculatePolygonArea2D(ceilingPoints);
 
-                    Polygon ceilingPoly = CityGmlUtils.createPolygon(ceilingPoints);
+                    Polygon ceilingPoly = GeometryUtils.createPolygon(ceilingPoints);
 
                     CeilingSurface ceiling = new CeilingSurface();
                     String ceilingFaceId = targetId + "_" + storey.geschoss + "_Ceiling_R" + roofIdx;
@@ -620,7 +637,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                     ceiling.setLod3MultiSurface(
                             CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(ceilingPoly));
 
-                    CityGmlUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
+                    GeometryUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
                             storey.ceilingZ, hDgm, roofArea, storey.geschoss);
                     CityGmlUtils.addStringAttribute(ceiling, "STRUKTUR", "Geschossdecke");
 
@@ -657,15 +674,15 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
             double ufHeight, double traufeZ, String sst, boolean isFlachdach) {
 
         List<StoreyInfo> storeys = new ArrayList<>();
-        traufeZ = CityGmlUtils.roundZ(traufeZ);
+        traufeZ = GeometryUtils.roundZ(traufeZ);
 
         // --- GF ---
-        double gfCeilingZ = CityGmlUtils.roundZ(egFloorZ + gfHeight);
+        double gfCeilingZ = GeometryUtils.roundZ(egFloorZ + gfHeight);
 
         // Sicherheitscheck: GF-Ceiling darf nicht ueber Traufe liegen
         if (gfCeilingZ >= traufeZ - CUT_TOLERANCE) {
             log.debug("GF-Ceiling ({}) >= Traufe ({}) fuer sst={}, nur GF erzeugt",
-                    CityGmlUtils.formatNum(gfCeilingZ), CityGmlUtils.formatNum(traufeZ), sst);
+                    GeometryUtils.formatNum(gfCeilingZ), GeometryUtils.formatNum(traufeZ), sst);
             storeys.add(new StoreyInfo("GF", egFloorZ, traufeZ, true));
             return storeys;
         }
@@ -697,16 +714,16 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
                         String geschoss = "UF_" + ufNum;
                         storeys.add(new StoreyInfo(geschoss, currentFloorZ, traufeZ, true));
                         log.debug("Flachdach: Fitzelchen-Geschoss {} mit {}m erzeugt (Merge haette {}m > {}m ergeben)",
-                                geschoss, CityGmlUtils.formatNum(remainingHeight),
-                                CityGmlUtils.formatNum(mergedHeight),
-                                CityGmlUtils.formatNum(MAX_STOREY_HEIGHT_FLACHDACH));
+                                geschoss, GeometryUtils.formatNum(remainingHeight),
+                                GeometryUtils.formatNum(mergedHeight),
+                                GeometryUtils.formatNum(MAX_STOREY_HEIGHT_FLACHDACH));
                     } else {
                         // Standard: vorheriges Geschoss bis Traufe erweitern
                         storeys.set(storeys.size() - 1,
                                 new StoreyInfo(prev.geschoss, prev.floorZ, traufeZ, true));
                         log.debug("UF uebersprungen: Resthoehe {}m < {}m, {} bis Traufe erweitert",
-                                CityGmlUtils.formatNum(remainingHeight),
-                                CityGmlUtils.formatNum(MIN_STOREY_HEIGHT), prev.geschoss);
+                                GeometryUtils.formatNum(remainingHeight),
+                                GeometryUtils.formatNum(MIN_STOREY_HEIGHT), prev.geschoss);
                     }
                 }
                 break;
@@ -714,7 +731,7 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
             ufNum++;
             String geschoss = "UF_" + ufNum;
-            double ceilingZ = CityGmlUtils.roundZ(currentFloorZ + ufHeight);
+            double ceilingZ = GeometryUtils.roundZ(currentFloorZ + ufHeight);
 
             // Ceiling erreicht oder uebersteigt Traufe → letztes UF
             if (ceilingZ >= traufeZ - CUT_TOLERANCE) {
@@ -748,8 +765,8 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
             double lastHeight = last.ceilingZ - last.floorZ;
             if (lastHeight > 1.5 * ufHeight && !last.geschoss.equals("GF")) {
                 log.debug("Letztes Geschoss {} = {}m (erwartet ~{}m) fuer sst={} (Traufe-Auffuellung)",
-                        last.geschoss, CityGmlUtils.formatNum(lastHeight),
-                        CityGmlUtils.formatNum(ufHeight), sst);
+                        last.geschoss, GeometryUtils.formatNum(lastHeight),
+                        GeometryUtils.formatNum(ufHeight), sst);
             }
         }
 
@@ -760,104 +777,24 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
 
     /** Trimmt eine Wand, die unter egFloorZ haengt, auf einen Einzelschnitt (siehe Doku.md Schritt 3). */
     private Polygon trimWallBelowEgFloor(Polygon wallPoly, double egFloorZ, String wallId) {
-        Polygon[] cut = CityGmlUtils.cutWallPolygonAtZ(wallPoly, egFloorZ, CUT_TOLERANCE);
+        Polygon[] cut = WallCuttingUtils.cutWallPolygonAtZ(wallPoly, egFloorZ, CUT_TOLERANCE);
         if (cut == null || cut[1] == null) {
             log.warn("Wand {} reicht unter egFloorZ ({}), Einzelschnitt dort aber nicht moeglich "
                     + "— Kontur bleibt unveraendert (moegliche Ueberlappung mit Kellerwand).",
-                    wallId, CityGmlUtils.formatNum(egFloorZ));
+                    wallId, GeometryUtils.formatNum(egFloorZ));
             return wallPoly;
         }
-        List<Point3D> upperPts = CityGmlUtils.toPoints(cut[1]);
-        if (CityGmlUtils.ringSelfIntersects(upperPts)) {
+        List<Point3D> upperPts = GeometryUtils.toPoints(cut[1]);
+        if (GeometryUtils.ringSelfIntersects(upperPts)) {
             log.warn("Wand {} reicht unter egFloorZ ({}), Einzelschnitt dort erzeugt aber ein "
                     + "selbstschneidendes Stueck — Kontur bleibt unveraendert.",
-                    wallId, CityGmlUtils.formatNum(egFloorZ));
+                    wallId, GeometryUtils.formatNum(egFloorZ));
             return wallPoly;
         }
         return cut[1];
     }
 
     /** Schneidet ein Wand-Polygon an mehreren Z-Hoehen in Geschoss-Segmente (siehe Doku.md Schritt 3). */
-    private List<Polygon> cutWallAtMultipleZ(Polygon wallPoly, List<Double> cutZValues) {
-        if (cutZValues.isEmpty()) return null;
-
-        List<Polygon> multi = cutWallMultiPiece(wallPoly, cutZValues);
-        if (multi != null && isFaithfulSplit(wallPoly, multi)) {
-            return multi;
-        }
-        return cutWallSinglePieceGuarded(wallPoly, cutZValues);
-    }
-
-    /** True, wenn die Split-Stuecke die Original-Wand flaechentreu kacheln und keines selbstschneidend ist. */
-    private boolean isFaithfulSplit(Polygon wallPoly, List<Polygon> segments) {
-        double origA = CityGmlUtils.calculateWallArea(CityGmlUtils.toPoints(wallPoly));
-        if (origA <= 0) return false;
-        double sumA = 0;
-        for (Polygon seg : segments) {
-            if (CityGmlUtils.ringSelfIntersects(CityGmlUtils.toPoints(seg))) return false;
-            sumA += CityGmlUtils.calculateWallArea(CityGmlUtils.toPoints(seg));
-        }
-        return Math.abs(sumA - origA) <= Math.max(0.05, 0.01 * origA);
-    }
-
-    /** Konservativer Fallback: iterativer Einzelstueck-Schnitt, faltende Schnitte werden uebersprungen. */
-    private List<Polygon> cutWallSinglePieceGuarded(Polygon wallPoly, List<Double> cutZValues) {
-        List<Polygon> segments = new ArrayList<>();
-        Polygon remaining = wallPoly;
-        for (double cutZ : cutZValues) {
-            Polygon[] result = CityGmlUtils.cutWallPolygonAtZ(remaining, cutZ, CUT_TOLERANCE);
-            if (result == null) break;
-            boolean folds = CityGmlUtils.ringSelfIntersects(CityGmlUtils.toPoints(result[0]))
-                    || CityGmlUtils.ringSelfIntersects(CityGmlUtils.toPoints(result[1]));
-            if (folds) continue;
-            segments.add(result[0]);
-            remaining = result[1];
-        }
-        segments.add(remaining);
-        return segments;
-    }
-
-    /** Schneidet ein Wand-Polygon an mehreren Z-Hoehen in echte Einzelstuecke (siehe Doku.md Schritt 3). */
-    private List<Polygon> cutWallMultiPiece(Polygon wallPoly, List<Double> cutZValues) {
-        if (cutZValues.isEmpty()) return null;
-        final double eps = 0.001;
-
-        List<Double> cuts = new ArrayList<>(cutZValues);
-        java.util.Collections.sort(cuts);
-
-        // Wand als ein offenes Stueck; iterativ von unten nach oben an jeder Hoehe trennen.
-        // current = noch weiter zu schneidende (obere) Stuecke, done = fertige Baender.
-        List<List<Point3D>> current = new ArrayList<>();
-        current.add(CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(wallPoly)));
-        List<List<Point3D>> done = new ArrayList<>();
-
-        for (double cutZ : cuts) {
-            List<List<Point3D>> next = new ArrayList<>();
-            for (List<Point3D> piece : current) {
-                double pMin = Double.POSITIVE_INFINITY, pMax = Double.NEGATIVE_INFINITY;
-                for (Point3D p : piece) { if (p.z < pMin) pMin = p.z; if (p.z > pMax) pMax = p.z; }
-                if (cutZ <= pMin + eps) {            // Schnitt unter dem Stueck → ganz nach oben tragen
-                    next.add(piece);
-                } else if (cutZ >= pMax - eps) {     // Schnitt ueber dem Stueck → Band ist fertig
-                    done.add(piece);
-                } else {                             // Schnitt kreuzt → in Einzelstuecke trennen
-                    CityGmlUtils.WallCut wc = CityGmlUtils.splitWallByZ(piece, cutZ, eps);
-                    done.addAll(wc.lower());
-                    next.addAll(wc.upper());
-                }
-            }
-            current = next;
-        }
-        done.addAll(current); // oberste Baender
-
-        List<Polygon> segments = new ArrayList<>();
-        for (List<Point3D> piece : done) {
-            List<Point3D> dd = CityGmlUtils.dedupConsecutive(piece, CityGmlUtils.POINT_MERGE_TOL);
-            if (dd.size() >= 3) segments.add(CityGmlUtils.createPolygon(dd));
-        }
-        return segments.isEmpty() ? null : segments;
-    }
-
     /** Findet das Geschoss fuer eine gegebene Z-Hoehe (exakt, sonst naechstliegend). */
     private StoreyInfo findStoreyForZ(List<StoreyInfo> storeys, double z) {
         // Exakte Zuordnung: Z liegt innerhalb der Geschossgrenzen
@@ -903,11 +840,11 @@ public class StoreyGenerator extends AbstractGenerator<StoreyGenerator.Generatio
      * Normalenrichtung; Innenringe (seltene Anbau-Loecher) bekommen die entgegengesetzte
      * Windung, wie bei Fenster-/Tueroeffnungen ueblich. */
     private Polygon buildSlabPolygon(SlabPiece piece, boolean wantUpward) {
-        List<Point3D> exterior = CityGmlUtils.orientForNormalZ(piece.exterior(), wantUpward);
+        List<Point3D> exterior = GeometryUtils.orientForNormalZ(piece.exterior(), wantUpward);
         List<List<Point3D>> interiors = new ArrayList<>();
         for (List<Point3D> hole : piece.interiors()) {
-            interiors.add(CityGmlUtils.orientForNormalZ(hole, !wantUpward));
+            interiors.add(GeometryUtils.orientForNormalZ(hole, !wantUpward));
         }
-        return CityGmlUtils.createPolygonWithHoles(exterior, interiors);
+        return SlabClippingUtils.createPolygonWithHoles(exterior, interiors);
     }
 }

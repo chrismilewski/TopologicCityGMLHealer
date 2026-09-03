@@ -1,0 +1,5 @@
+# Created at 2026-09-02T10:23:06.150
+Boot Manifest-JAR contains absolute paths in classpath 'D:\02_Projekte\02_MPSC_digitaler_Starkregenzwilling\TopologicCityGMLHealer\DD_BIM_LoD2_2_LoD3_Converter\DD_BIM_LoD2_to_LoD3\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

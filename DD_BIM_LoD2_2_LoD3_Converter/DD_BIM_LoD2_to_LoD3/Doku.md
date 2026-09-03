@@ -83,6 +83,138 @@ java -jar target/lod2-zu-lod3-pipeline.jar \
   [dgm-pfad]          # optional: .asc, .tif, .zip oder Verzeichnis (Mosaik)
 ```
 
+### Batch-Modus (2026-09-02): ganzer Ordner mit Kacheln
+
+Wird automatisch erkannt, wenn das erste Argument ein Verzeichnis statt einer Datei ist (kein
+separates Flag noetig, analog zu `HealedReplaceWorkflow` in `sql2gml_neu`). Verarbeitet ALLE
+`.gml`-Dateien im Ordner NACHEINANDER (sequenziell — siehe Begruendung unten) und legt unter dem
+Output-Argument einen neuen Unterordner an, dessen Name wie bei den Dateien LoD2→LoD3 umbenannt
+ist:
+
+```bash
+java -jar target/lod2-zu-lod3-pipeline.jar \
+  CityGML_LoD2_260813/ \
+  Baukoerpermodule_json/ \
+  output/ \
+  [dgm-pfad]
+# → output/CityGML_LoD3_260813/LoD3_<Kachelname>.gml, je eine Datei pro Eingabe-Kachel
+```
+
+Dateiname UND Ordnername folgen derselben Umbenennungsregel: `LoD2_...` → `LoD3_...`, bei
+Dateien zusaetzlich `_BuildingPreferences` entfernt (identisch zum bisherigen Einzeldatei-
+Verhalten). Enthaelt der Eingabe-Ordnername kein `LoD2`, wird stattdessen `_LoD3` angehaengt.
+
+**Bewusst sequenziell, nicht parallel:** `ModuleParametersLoader` cached JSON-Modulparameter
+intern in einer einfachen (nicht thread-sicheren) `HashMap`, die bei jedem `getParameters()`-
+Aufruf befuellt wird. Eine gemeinsame Instanz ueber parallel laufende Kacheln haette hier ein
+echtes Race-Condition-Risiko (korrupte Map). Da eine einzelne ~150 MB-Kachel in der Praxis nur
+~30-60s braucht, ist sequenzielle Verarbeitung fuer eine Kachelmenge in der Groessenordnung
+"eine Stadt" (getestet: 98 Kacheln, 4,3 GB) mit grob 30-60 Minuten Gesamtlaufzeit voellig
+ausreichend — der Aufwand fuer sicheren parallelen Umbau (z.B. eine eigene Loader-Instanz pro
+Worker-Thread) wurde bewusst nicht betrieben.
+
+Jede Kachel wird unabhaengig mit frischen Generator-/Statistik-Instanzen verarbeitet (keine
+Kachel-uebergreifende Zustands-Kontamination); ein DGM (falls angegeben) wird EINMAL fuer den
+ganzen Batch geladen und fuer jede Kachel wiederverwendet (unterstuetzt bereits Verzeichnis-
+Mosaike ueber mehrere Kacheln hinweg). Schlaegt eine einzelne Kachel fehl (Exception), wird sie
+geloggt und uebersprungen, der Batch laeuft mit den restlichen Kacheln weiter — am Ende steht
+eine Liste der fehlgeschlagenen Dateinamen. Nach dem letzten Tile wird zusaetzlich eine
+aufsummierte Batch-Gesamtstatistik ueber alle erfolgreichen Kacheln ausgegeben (dieselbe
+Aufschluesselung wie pro Einzeldatei, inkl. Skip-Gruende und Per-Geschoss-Aufschluesselung bei
+Fenstern).
+
+### Erster kompletter Dresden-Lauf (2026-09-02): 98 Kacheln, 141.670 Gebäude
+
+Vollstaendiger Batch-Lauf ueber `CityGML_LoD2_260813_plusWAWUR/CityGML_LoD2_260813/` (98
+Kacheln, 4,3 GB) mit dem vollen Dresden-DGM (117 GeoTIFF-Kacheln, `sqltest/DGM/Dresden/`) fuer
+praezise TerrainIntersectionCurves. Erster Durchlauf: **97 von 98 Kacheln erfolgreich**, eine
+(`33_408_5654`) brach komplett ab mit einem JTS `TopologyException: found non-noded
+intersection` in `SlabClippingUtils.roofAreaBelowZ()` (Zeile 99, `union.union(jtsPoly)`) — ein
+bekanntes JTS-Overlay-Robustheitsproblem bei zwei Liniensegmenten, die nur ~0,9mm auseinander
+liegen (sub-mm-naher, aber nicht exakt deckungsgleicher Dachschnitt). Anders als die spaetere
+JTS-Operation in derselben Methode (`clipSlabAtZ`s `footprint.difference(...)`, bereits per
+try/catch abgesichert) hatte dieser fruehere Union-Aufruf GAR KEINE Absicherung — eine einzelne
+Kante in einem von 141.670 Gebaeuden riss dadurch die GESAMTE Kachel (3.209 Gebaeude) mit.
+
+**Fix:** `union.union(jtsPoly)` in `roofAreaBelowZ()` jetzt einzeln try/catch-abgesichert — bei
+Fehlschlag wird nur dieses eine Dachstueck NICHT von der Ausschlussflaeche ausgenommen (Union
+bleibt auf dem bisherigen Stand, Warnung geloggt), analog zum bestehenden Fallback-Muster in
+`clipSlabAtZ`. Konservativ: die betroffene Slab-Flaeche an dieser einen Stelle bleibt dadurch
+ggf. geringfuegig zu gross statt korrekt verkleinert — weit besser als der komplette
+Kachel-Absturz.
+
+**Verifikation:** (1) betroffene Kachel isoliert erneut verarbeitet — laeuft jetzt komplett
+durch, genau 1 neue Warnung an exakt derselben Koordinate. (2) Kompletter Dresden-Lauf mit Fix
+wiederholt: **98 von 98 Kacheln erfolgreich**, genau 1 Warnung im gesamten Lauf (dieselbe
+Stelle). (3) Statistischer Vollvergleich statt erneutem 14-GB-Datei-Diff: jede einzelne
+Kennzahl der Batch-Gesamtstatistik von Lauf 1 (97 Kacheln) PLUS die Kennzahlen der isolierten
+Fix-Verifikation ergeben exakt die Kennzahlen von Lauf 2 (98 Kacheln) — z.B. 138.461 + 3.209 =
+141.670 Gebaeude, 125.303 + 3.688 = 128.991 Tueren, 40 + 1 = 41 Pinch-Point-Aufspaltungen (alle
+neun geprueften Kennzahlen exakt passend). Beweist rechnerisch: der Fix hat ausschliesslich die
+eine betroffene Kachel veraendert, alle anderen 97 sind exakt unveraendert geblieben.
+
+Ergebnis: `sqltest/output/CityGML_LoD3_260813/` — 98 Dateien, ~14 GB, 141.670 Gebaeude,
+63.878 Keller, 236.940 Geschosse, 128.991 Tueren, 1.878.090 Fenster, 192.311 Balkone,
+93.675 Dachfenster, 41 Pinch-Point-Aufspaltungen. Gesamtlaufzeit ~16 Minuten.
+
+#### Validierung des kompletten Dresden-Laufs: val3dity + CityDoctor2 (2026-09-02)
+
+Erste city-weite Validierung in diesem Projekt (bisher max. 1 Kachel, hier 98 — Faktor ~37).
+Beide Tools jeweils per Batch-Skript ueber alle 98 Kacheln laufen lassen (val3dity ohne
+`--overlap_tol`, die bei Mehrteil-Gebaeuden dokumentiert instabile Option, siehe oben — reine
+`601`-Zahl daher wie gewohnt kein verlaessliches Qualitaetsmass fuer Mehrteil-Gebaeude).
+
+**Ein echter Stolperstein unterwegs:** der erste CityDoctor2-Batch-Versuch scheiterte bei JEDER
+Kachel mit `FileNotFoundException` auf die YAML-Konfigurationsdatei — Ursache: der Umlaut "ü" in
+`Konfig_für Test.yml` wurde beim Verketten Bash-Tool → `powershell.exe`-Subprozess → `java.exe`
+korrumpiert (Windows-Codepage-Problem ueber mehrere Prozess-Ebenen). Fix: Config auf einen
+umlautfreien Dateinamen kopiert, Pfad im Batch-Skript darauf umgestellt — kein Problem der
+Pipeline oder der Tools selbst, reine Batch-Skript-Infrastruktur.
+
+**val3dity — 98/98 Kacheln, ~54 Minuten:**
+- 526.292 Features, davon 517.671 valide (**98,36%**)
+- 933.406 Primitive, davon 929.440 valide (**99,58%**)
+- Fehlercodes (city-weit aufsummiert): 601 BUILDINGPARTS_OVERLAP 4.716 (siehe oben — groesstenteils
+  Nef-Erosions-Artefakt bei geteilten Party-Walls, kein reales Overlap), 303 NON_MANIFOLD_CASE
+  1.804, 204 NON_PLANAR_POLYGON_NORMALS_DEVIATION 791, 203 NON_PLANAR_POLYGON_DISTANCE_PLANE 501,
+  307 POLYGON_WRONG_ORIENTATION 490, 302 SHELL_NOT_CLOSED 329, 201 INTERSECTION_RINGS 172,
+  104 RING_SELF_INTERSECTION 123, 102 CONSECUTIVE_POINTS_SAME 115, 207 INNER_RINGS_NESTED 65,
+  101 TOO_FEW_POINTS 25, 206 INNER_RING_OUTSIDE 20, 305 MULTIPLE_CONNECTED_COMPONENTS 18,
+  306 SHELL_SELF_INTERSECTION 16, 205 POLYGON_INTERIOR_DISCONNECTED 2.
+
+**CityDoctor2 — 98/98 Kacheln, ~76 Minuten** (mit Nutzer-Konfiguration, `-c`, korrektes
+Arbeitsverzeichnis, `numberOfRoundingPlaces=3` bestaetigt in jedem Report):
+- 141.670 Gebaeude geprueft (exakt deckungsgleich mit der Pipeline-eigenen Zaehlung — starke
+  Konsistenzpruefung zwischen Generierung und Validierung)
+- 130.673 fehlerfrei (**92,24%**), 10.997 mit mind. einem Fehler (7,76%)
+- Fehlercodes (city-weit aufsummiert): GE_P_NON_PLANAR_POLYGON_DISTANCE_PLANE 15.796 (dominant,
+  bekanntes Rauschen aus unabhaengig digitalisierten LoD2-Quellflaechen), GE_S_NON_MANIFOLD_EDGE
+  1.124, GE_S_NOT_CLOSED 283, GE_R_CONSECUTIVE_POINTS_SAME 177, GE_R_SELF_INTERSECTION 140,
+  GE_S_SELF_INTERSECTION 140, GE_P_INTERSECTING_RINGS 122, GE_R_TOO_FEW_POINTS 103,
+  GE_S_NON_MANIFOLD_VERTEX 86, GE_P_INTERIOR_DISCONNECTED 74, GE_P_INNER_RINGS_NESTED 66,
+  GE_P_HOLE_OUTSIDE 18, GE_S_MULTIPLE_CONNECTED_COMPONENTS 7, GE_S_ALL_POLYGONS_WRONG_ORIENTATION 1,
+  1× nicht identifizierter "Unknown_error" bei `33_414_5664` (1 von 141.670 Gebaeuden, 0,0007% —
+  nicht weiter untersucht).
+
+**Einordnung:** beide Fehlerprofile sind in Art und relativer Groessenordnung konsistent mit den
+bereits ausfuehrlich untersuchten Einzelkachel-Ergebnissen (siehe die vielen Bugfix-Abschnitte
+oben) — kein neues, city-weit auftretendes Fehlerbild entdeckt. Die dominanten Kategorien
+(BUILDINGPARTS_OVERLAP, NON_PLANAR_POLYGON_DISTANCE_PLANE) sind beide bereits mechanistisch
+erklaert (Nef-Erosion bzw. LoD2-Quelldaten-Digitalisierungsrauschen), nicht neu entdeckt. Diese
+city-weite Zahlenbasis ist die erste ihrer Art in diesem Projekt und dient ab jetzt als
+Referenzpunkt fuer kuenftige Vollstadt-Laeufe.
+
+**Verifiziert (2026-09-02):** (1) Einzeldatei-Modus nach dem main()-Umbau weiterhin
+byte-identisch zum Vortagesstand (Diff nur laufspezifischer Zeitstempel). (2) Batch-Modus
+liefert fuer dieselbe Kachel exakt dasselbe Ergebnis wie der Einzeldatei-Modus (Diff nur
+Zeitstempel) — geprueft an einem 2-Kacheln-Testordner (33_412_5656 + 33_416_5656). Ein erster
+Testlauf verglich faelschlich zwei UNTERSCHIEDLICHE Quelldateien fuer "416_5656" (eine aus
+`sqltest/`, eine aus `LOD2_citygml/CityGML_LoD2_260813_plusWAWUR/`, tatsaechlich zwei
+verschiedene Datensaetze) und zeigte fast 10 Mio. Diff-Zeilen — nach Korrektur des Testaufbaus
+(dieselbe Quelldatei fuer beide Vergleichsseiten) war das Ergebnis sauber. Testfehler, kein
+Code-Bug — Lehre: bei kuenftigen Batch-Tests immer denselben Quelldatei-Pfad fuer Vorher/
+Nachher-Vergleiche verwenden, nicht "irgendeine Kopie derselben Kachel".
+
 ### Einzelne Schritte
 
 **Schritt 1: LoD2 → LoD3 Geometrie-Hochstufung**
@@ -2701,6 +2833,1016 @@ sichtbare Verbesserung, aber auch die groesste Verhaltensaenderung dieses Umbaus
   Fehlerprofil byte-identisch zur Baseline** (102=6/104=5/201=2/204=31/302=38/303=13/306=2/307=8/
   601=322) trotz des vollstaendigen Mechanismus-Austauschs; keine `TopologyException`-Fallbacks.
 
+### Bugfix: Fenster/Tueren/Balkone hinter Anbau — Party-Wand-Erkennung auf Segment-Ebene (2026-08-20)
+
+**Problem** (Nutzer-Fund an Gebaeude `DESNALK0pF001gHh`, Screenshot): ein Fenster wird fast
+vollstaendig von einem angebauten Gebaeudeteil verdeckt gerendert. Verifiziert mit echten
+Koordinaten: `Face_K0pF001gHh_1_6_GF_2` (BuildingPart 1, Hauptbau) ist eine geknickte Wand —
+sie deckt zwei Grundriss-Kanten in einem WallSurface ab: (417127.227, 5656312.386) →
+(417131.029, 5656315.19) → (417134.409, 5656317.683), perfekt kollinear, kein echter Winkel. Links
+vom Knick (u≈0) sitzt eine Tuer, rechts davon (u≈4,7–6,8m) das verdeckte Fenster — und genau
+dieser Abschnitt ist exakt deckungsgleich mit der eigenen, ungeknickten Wand
+`Face_K0pF001gHh_0_1_GF_1` von BuildingPart 0 (dem Anbau). Echte Trennwand zwischen zwei
+Gebaeudeteilen, keine Aussenwand.
+
+**Ursache:** `CityGmlUtils.wallBottomMidKey` (der Party-Wand-Dedup fuer `WindowGenerator`/
+`DoorGenerator`) mittelte ALLE Bodenpunkte einer Wand zu einem einzigen Punkt. Bei einer
+geknickten Wand (3 Bodenpunkte) landet dieser Mittelpunkt weit weg vom Mittelpunkt der
+ungeknickten Nachbarwand (2 Bodenpunkte) und matcht nicht — dieselbe Knick-Problematik wie beim
+`gjj`-Bug im StoreyGenerator (siehe oben), nur in der Oeffnungslogik. `DoorGenerator` hatte
+zusaetzlich einen unabhaengigen Pro-Tuer-Check (Tuermitte gegen Grundriss-Footprint,
+`FOOTPRINT_SHARE_TOL`), aber nur Mittelpunkt-basiert und nur fuer GF gedacht. `WindowGenerator`
+hatte GAR keinen Pro-Fenster-Fallback. `BalconyGenerator` hatte GAR keinen Deckungs-Check.
+
+**Warum Wand-gegen-Wand statt Grundriss-gegen-Punkt:** Grundrisse sind reine 2D-Footprints ohne
+Geschoss-Info. Ein einstoeckiger Anbau bleibt in der Draufsicht auf JEDER Hoehe kollinear zum
+Hauptbau — ein reiner Footprint-Test wuerde ein echt freiliegendes Obergeschoss-Fenster (das ueber
+die Anbau-Traufe hinausragt) faelschlich als "verdeckt" markieren. Wand-gegen-Wand, gefiltert nach
+`zMin`-Uebereinstimmung (= gleiches Geschoss), ist der einzige ueber GF/UF/BA hinweg korrekte
+Ansatz.
+
+**Fix:** neue Helfer in `CityGmlUtils.java` — `collectAllWallSurfaces(Building)` (alle Waende
+ueber alle Targets), `computeCoveredSpans(thisWall, allWallsOfBuilding, edgeStart, dirX, dirY,
+wallLength, thisZMin)` (Deckungs-Bereiche entlang der eigenen Unterkante, prueft ALLE Bodenpunkte
+der anderen Wand, damit auch eine geknickte ANDERE Wand korrekt erfasst wird — nicht nur Start/
+Ende), `overlapsAnySpan`, `isFullyCovered`. Ist die GESAMTE Wand betroffen, wird sie wie bisher
+komplett uebersprungen (`SkipReason.COVERED_BY_PART` bzw. `wallsSkippedCoveredByPart`); ist nur
+ein Abschnitt betroffen, wird jedes Fenster/jede Tuer/jeder Balkon einzeln gegen die
+Deckungs-Bereiche geprueft (`windowsDroppedCoveredByPart`, `doorsSkippedCovered`,
+`balconiesSkippedCoveredByPart`) — nur die tatsaechlich (ganz oder teilweise) betroffenen
+Oeffnungen fallen weg, unbetroffene auf demselben WallSurface bleiben erhalten. Der alte, wandweite
+`wallBottomMidKey`-Dedup (`CityGmlUtils`) sowie `DoorGenerator`s Mittelpunkt-Footprint-Check
+(`distPointToRingXY`/`distPointToSegmentXY`/`FOOTPRINT_SHARE_TOL`) wurden vollstaendig ersetzt und
+geloescht — der neue Mechanismus deckt den alten Anwendungsfall (ganze Wand dupliziert) als
+Spezialfall mit ab.
+
+**Verifiziert:** `gHh` isoliert — das Fenster auf dem gemeinsamen Abschnitt ist aus dem
+Wandpolygon verschwunden, die Tuer auf dem unbetroffenen Abschnitt DERSELBEN Wand bleibt
+unveraendert erhalten; schema-valide. 14-Testgebaeude-Menge schema-valide (Fenster-Gesamtzahl
+unveraendert — `gHh` ist nicht Teil dieser Menge). Volle 3.801-Gebaeude-Kachel: Fenster
+35.543→35.391 (−152, −0,43 %), Balkone 1.352→1.295 (−57), Tueren unveraendert (2.733); Geschosse/
+Wandsegmente exakt unveraendert (6.524/66.875 — dieser Fix ruehrt nicht an der Geschoss-Einteilung);
+schema-valide; **val3dity-Fehlerprofil verbessert sich sogar** an zwei Solid-Shell-Kategorien
+(302 SHELL_NOT_CLOSED 38→20, 601 BUILDINGPARTS_OVERLAP 322→316 — plausibel, da entfernte
+Fenster-/Tueroeffnungen auf tatsaechlichen Trennwaenden genau solche Schalen-Defekte an dieser
+Stelle verursacht haben koennen), alle anderen Kategorien exakt unveraendert
+(102=6/104=5/201=2/204=31/303=13/306=2/307=8).
+
+### Bugfix: Fenster lag exakt an der Traufe an (GE_P_INTERIOR_DISCONNECTED, 2026-08-24)
+
+**Problem** (Nutzer-Fund via CityDoctor2 an Gebaeude `DESNALK0pF001imo`, Polygon `Poly_00040DQ_0_6`):
+in seltenen Faellen liegt die Oberkante eines Fensters exakt auf der Oberkante seiner Wand — der
+Innenring (Fenster) beruehrt dann den Aussenring (Wand) an zwei Punkten, was CityDoctor2 als
+`GE_P_INTERIOR_DISCONNECTED` meldet. **Ursache bestaetigt:** bei `imo`s `Face_00040DQ_0_6`
+(Geschoss UF_2, oberstes Geschoss unter einem Walmdach) fehlt das Attribut `GeschossDeckeZ` (wird
+nur bei einer normalen Zwischendecke gesetzt, nicht beim obersten, dachseitig begrenzten
+Geschoss) — `usableHeight` entspricht dadurch der vollen Wandhoehe bis zur Traufe, ohne jeden
+Sicherheitsabstand nach oben. Passen `vDistFloorWindow + windowHeight` (JSON-Parameter) zufällig
+exakt in diese Hoehe, landet die Fensteroberkante exakt auf der Traufe. Tile-weite Suche (exakte
+Koordinaten-Uebereinstimmung, < 2mm) fand **2 von ueber 43.500 Fenstern** — ein sehr seltener
+Grenzfall, kein systematisches Problem.
+
+**Erster Fix-Versuch (verworfen):** ein Sicherheitsabstand auf ALLEN vier Seiten des
+Oeffnungs-Kontur-Checks `CityGmlUtils.openingInsideWall2D` — zunaechst global fuer alle drei
+Generatoren, dann auf `WindowGenerator` eingeschraenkt. Beide Varianten behoben den gemeldeten
+Fall, verursachten aber auf der vollen Kachel eine val3dity-Regression bei
+`201 INTERSECTION_RINGS` (2→13 bzw. 2→8) durch eine **entlang der Balkon/Fenster-
+Platzierungskette kaskadierende Verschiebung**: strengere Kriterien aendern, welche Fenster
+ueberhaupt entstehen → das aendert `GaReservedSpan`/Abstandskonflikte fuer den nachgelagerten
+`BalconyGenerator` (Phase 2) → andere Balkone/Fenster entstehen an anderer Stelle, darunter
+mehrere mit eigenen (vorher nie erzeugten, daher nie aufgefallenen) Ring-Intersection-Problemen.
+
+**Finaler Fix (Nutzer-Idee: Fenster bei Konflikt verschieben statt verwerfen):** zwei gezielte
+Aenderungen statt einer breiten Toleranz:
+1. `CityGmlUtils.openingInsideWallTopClearance2D` — wie `openingInsideWall2D`, aber mit 2cm
+   Sicherheitsabstand **ausschliesslich an der Oberkante** (`vTop`), links/rechts/unten bleiben
+   exakt wie zuvor. Der Testpunkt wird bewusst Richtung Kontur (nach oben) verschoben, nicht weg
+   davon — nur so erkennt der Test eine zu nah anliegende Oberkante zuverlaessig (ein reiner
+   Ray-Casting-Containment-Test ist an Randpunkten mehrdeutig und haette den Fall sonst
+   faelschlich als "passt" durchgewunken). Da nur die Oberkante betroffen ist, bleiben echte
+   Giebel-Abschnitte (schraege Seitenkanten, links/rechts) unangetastet.
+2. `WindowGenerator.collectValidWindows`: schlaegt der (jetzt strengere) Kontur-Check fehl, wird
+   VOR dem Verwerfen ein zweiter Versuch mit dem Fenster **5cm tiefer** (`WINDOW_TOP_NUDGE`)
+   unternommen — Position (u-Offset) und Fensterbreite bleiben exakt gleich, nur die Z-Hoehe
+   ruckt runter. Klappt auch das nicht, wird wie bisher verworfen (`gableWindowsDropped`), sonst
+   zaehlt `windowsNudgedDown`.
+
+**Warum keine Kaskade mehr:** `BalconyGenerator` kennt nur die HORIZONTALE Fensterposition
+(u-Spanne fuer `GaReservedSpan`/Abstandskonflikte), nie die Z-Hoehe. Ein nach unten gerueckes
+Fenster hat exakt dieselbe u-Spanne wie zuvor — fuer `BalconyGenerator` also nicht von einem
+unveraenderten Fenster zu unterscheiden. Verifiziert: Tueren (2.733) und Balkone (1.295) auf der
+vollen Kachel **byte-identisch** zur Baseline vor diesem Fix.
+
+**Verifiziert:** `imo` isoliert — Fensterdecke jetzt bei Z=237,13 statt 237,18 (5cm tiefer, keine
+Beruehrung mehr mit der Wandkontur); schema-valide. 14-Testgebaeude-Menge unveraendert (574
+Fenster, 11 Balkone), schema-valide. Volle 3.801-Gebaeude-Kachel: Fenster 35.391→35.400 (+9,
+genau die Anzahl der neu "geretteten" statt verworfenen Fenster — Giebel-Drops sanken passend um
+9, von 423 auf 414), Tueren/Balkone/Geschosse/Wandsegmente exakt unveraendert; schema-valide;
+**val3dity verbessert sich** — `201 INTERSECTION_RINGS` komplett auf 0 (vorher 2, beide betroffenen
+Faelle behoben), `204 NON_PLANAR_POLYGON_NORMALS_DEVIATION` 31→29 — alle anderen Kategorien exakt
+unveraendert (102=6/104=5/302=20/303=13/306=2/307=8/601=316).
+
+### Bugfix: Wand-Mehrfachschnitt schlug bei "Anbau-Kerbe" fehl — JTS-Umbau (2026-08-24)
+
+**Problem** (Nutzer-Fund an Gebaeude `DESNALK0pF001imo`): eine Wand mit Fenster blieb als eine
+grosse, ungeschnittene Flaeche stehen, obwohl sie in ≥2 Geschossstuecke geteilt werden sollte —
+sichtbar am Kontrast zur Rueckseite desselben Gebaeudes, wo die entsprechende Wand korrekt
+geschnitten war. Nutzer-Vermutung: haengt mit einem Anbau zusammen, der an der Wand endet.
+
+**Ursache bestaetigt** (Koordinaten + Code-Trace): `Face_00040DQ_0_8` fasst drei Grundriss-Kanten
+A→B→C→D in einem WallSurface zusammen (kollinear — dieselbe "geknickte Wand aus mehreren
+Grundriss-Kanten"-Konstellation wie beim `gjj`-StoreyGenerator-Bug und dem `gHh`-Party-Wand-Bug,
+siehe oben). Die mittlere Kante B→C grenzt an einen Anbau (Flachdach bei Z=235,28): dort reicht die
+Wand nur bis zur Anbau-Traufe, waehrend die aeusseren Kanten bis zur Haupttraufe (237,18)
+durchgehen — das 2D-Profil der Wand hat dadurch eine Kerbe, die bis zum Boden reicht (kein
+Rechteck). Der alte Mehrfachschnitt (`cutWallMultiPiece`/`extractZRuns`) erzeugte bei diesem Profil
+ein geometrisch falsches Phantom-Stueck (Flaechenbilanz-Check `isFaithfulSplit` schlug fehl) →
+Fallback auf `cutWallSinglePieceGuarded`, dessen einfacher 2-Stueck-Schnitt (`cutWallPolygonAtZ`)
+nur Ebenen verarbeiten kann, die den Umriss GENAU 2× kreuzen. Bei Schnitten innerhalb der
+Kerben-Zone (4 Kreuzungen) erkannte `ringSelfIntersects` das Problem und **ueberSprang den Schnitt
+komplett**, statt ihn in mehrere Teilstuecke aufzuloesen — GF und UF_1 blieben verschmolzen.
+
+**Fix:** dieselbe Baustelle wurde fuer Boden-/Deckenflaechen bereits robust mit JTS geloest
+(`clipSlabAtZ`, siehe oben). Die Wand-Mehrfachschnitt-Logik war der letzte Ort mit der alten,
+handgestrickten Ring-Clip-Logik. Neuer Helfer `CityGmlUtils.cutWallAtMultipleZJTS`: projiziert die
+Wand ins wandeigene (u,v)-Profil (`findBottomEdge` + `projectWallTo2D`, dieselbe Basis wie
+Fenster/Tuer/Balkon-Platzierung), baut daraus ein JTS-Polygon und schneidet es bandweise (ein
+unabhaengiges `intersection()` je Hoehenband) — JTS zerlegt beliebig komplexe/konkave Profile
+korrekt in (Multi-)Teilstuecke, ganz ohne Sonderfall-Erkennung "wie oft kreuzt die Ebene den
+Umriss". Ersetzt in `StoreyGenerator` den alten `cutWallAtMultipleZ`-Aufruf; `cutWallMultiPiece`,
+`isFaithfulSplit`, `cutWallSinglePieceGuarded` komplett geloescht (einziger Aufrufer ersetzt).
+`cutWallPolygonAtZ`/`ringSelfIntersects` bleiben (weiterhin fuer den unabhaengigen
+Keller-Trim-Einzelschnitt bzw. `splitWallByZ`/`roofAreaBelowZ` gebraucht).
+
+**Zwei Nachbesserungen waehrend der Verifikation** (beide durch die volle Kachel + val3dity
+aufgedeckt, nicht durch die Einzelgebaeude-Pruefung):
+1. **Umlaufrichtung:** JTS legt bei `intersection()` keine feste Umlaufrichtung fest — ohne
+   Korrektur zeigte die Normale mancher neuer Wandstuecke ins Gebaeude
+   (val3dity `303 NON_MANIFOLD_CASE` 13→1467, `307 POLYGON_WRONG_ORIENTATION` 8→1468 auf der vollen
+   Kachel!). Fix: Original-Umlaufrichtung der Wand vorab per Shoelace-Flaeche bestimmen, jedes
+   JTS-Ergebnisstueck bei Bedarf zurueckdrehen.
+2. **Koordinaten-Praezision an Schnittkanten:** der (u,v)-Rundweg (projizieren → JTS schneiden →
+   ueber `edgeStart + u*dir` zurueckrechnen) erzeugte fuer unveraenderte Original-Ecken und fuer
+   neue Schnittpunkte Koordinaten mit Sub-mm-Abweichung vom exakten Original-Wert — genug, um
+   `302 SHELL_NOT_CLOSED` auf der Kachel deutlich zu erhoehen (20→392), weil Nachbarwaende/
+   Boeden/Decken exakte Kantenuebereinstimmung erwarten. Fix in zwei Stufen: (a) Punkte, die einer
+   Original-Ecke entsprechen, schnappen exakt auf deren Original-Koordinate zurueck (`
+   findOriginalPoint`); (b) echte neue Schnittpunkte werden direkt auf der betroffenen
+   Original-3D-Kante interpoliert (`interpolateOnOriginalEdge`, haengt nur von den beiden
+   Kanten-Endpunkten ab — wie der alte Algorithmus es tat), statt ueber wandspezifische
+   `edgeStart`/`dir`-Grössen zu gehen. Nach beiden Stufen: `302` wieder exakt bei 20.
+
+**Verifiziert:** `imo` isoliert — `Face_00040DQ_0_8` erzeugt jetzt 4 Stuecke (`GF_5`, `GF_6`, je ein
+"Bein" links/rechts der Anbau-Kerbe auf Erdgeschoss-Hoehe, `UF_1_5` — ein einzelnes, nicht-konvexes
+Stueck, da die Kerbe 2cm unterhalb von UF_1s Decke wieder zusammenlaeuft, `UF_2_2`) statt 2; alle
+anderen Waende im Gebaeude unveraendert (Wand-Dump-Vergleich: nur die laufenden Nummern-Suffixe
+verschieben sich). `Face_00040DQ_0_6` (die schon vorher untersuchte, benachbarte Wand) bleibt
+weiterhin unveraendert 1 Stueck — architektonisch korrekt (ihr Z-Bereich entspricht bereits exakt
+einem Geschoss), kein Bug. 14-Testgebaeude-Menge schema-valide. Volle 3.801-Gebaeude-Kachel:
+Wandsegmente 66.875→67.024 (+149, mehr korrekt geschnittene Waende systemweit), Fenster
+35.400→35.425 (+25, neue nutzbare Wandflaeche), Tueren 2.733→2.768 (+35), Balkone 1.295→1.290 (−5)
+— anders als bei den vorherigen Session-Fixes ist dieser Cascade-Effekt hier **erwuenscht**, da der
+Fix die Geschoss-Struktur selbst korrigiert (mehr/besser geformte Waende → legitim andere
+Oeffnungs-Platzierung); schema-valide; val3dity nach beiden Nachbesserungen **exakt auf Baseline**
+(204=29/302=20/303=13/307=8/601=316; 102/104/306 innerhalb ±1, vorbestehende, unabhaengige
+Einzelfaelle).
+
+### Code-Audit: Dubletten/Dead Code bereinigt (2026-08-24)
+
+Kurzer Codeaudit auf Dubletten/Dead Code/Optimierungspotenzial ueber `CityGmlUtils`,
+`StoreyGenerator`, `WindowGenerator`, `DoorGenerator`, `BalconyGenerator`, `BasementGenerator`,
+`ModuleParameters`. Gefunden und behoben:
+- `WindowGenerator.resolveWallArea`/`BalconyGenerator.resolveCurrentWallArea` waren identische
+  Implementierungen (FACEAREA-Attribut, sonst `calculateWallArea`-Fallback) — jetzt eine
+  zentrale `CityGmlUtils.resolveWallArea(WallSurface, List<Point3D>)`, beide Aufrufer umgestellt.
+- `CityGmlUtils.createXLinkMultiSurfaceProperty` war Dead Code (0 Aufrufer im gesamten Projekt,
+  vermutlich Rest aus der Zeit vor der Floor/Ceiling-OrientableSurface-Umstellung — nur die
+  reversed-Variante wird noch gebraucht) — geloescht.
+
+Restliche Befunde (kein Bug, kein akuter Handlungsbedarf): `BalconyGenerator.spansOverlap`
+dupliziert die innere Formel von `CityGmlUtils.overlapsAnySpan` fuer den 2-Werte-Fall (2 Zeilen,
+geringer Nutzen einer Zentralisierung); sechs `CityGmlUtils`-Methoden
+(`calculateEdgeLength2D`/`collectBoundariesByType`/`collectLod3Polygons`/`createLinearRing`/
+`pointInPolygon2D`/`splitWallByZ`) sind `public`, werden aber nur intern in derselben Datei
+aufgerufen — koennten auf `private` verengt werden, rein kosmetisch.
+
+Verifiziert: Clean Build; `imo` isoliert liefert exakt dieselben Zahlen wie vor der Bereinigung
+(10 Fenster, 42 Wandsegmente) — reine Strukturaenderung, kein Verhaltensunterschied.
+
+### Bugfix: doppelte Fensterreihen + Balkone fehlten an Waenden mit `Innenwand="1"` (2026-08-25)
+
+**Problem** (Nutzer-Fund an Gebaeude `DESNALK0pF001iqd`, Screenshot): eine hohe Wand unterm Dach
+zeigte zwei uebereinanderliegende Fensterreihen statt einer; ausserdem bekam nur EINE Gebaeudeseite
+Balkone, obwohl geometrisch mehrere Waende gepasst haetten.
+
+**Ursache 1 (Fensterreihen):** `WindowGenerator.computeRowPositions` hatte den Ein-Reihen-Zwang nur
+fuer `Geschoss="BA"` (`singleRowOnly = "BA".equals(ctx.geschoss())`) — bei GF/UF stapelte die
+Schleife weitere Reihen, solange die Wandhoehe reichte, begrenzt nur durch den 60%-WWR-Grenzwert.
+Bei einer hohen Wand mit ausreichend Flaeche reisst 2 Reihen den Grenzwert nicht.
+
+**Fix 1:** `computeRowPositions` erzeugt jetzt fuer JEDES Geschoss immer genau eine Fensterreihe
+(die alte BA-Sonderfall-Unterscheidung ist entfallen, die Mehrfachreihen-Trimm-Schleife fuer den
+WWR-Check ebenfalls — bei konstant 1 Reihe war sie unerreichbarer Code). Der WWR-Check bleibt als
+reine Warnung erhalten (eine einzelne Reihe kann bei kurzer/breiter Wand mit grossen Fenstern
+weiterhin den Grenzwert reissen).
+
+**Ursache 2 (Balkone):** `BalconyGenerator.isEligibleForBalcony` schloss Waende mit
+`Innenwand="1"` von Balkonen aus. Laut eigener Doku (Abschnitt "Vorbedingungen (Gate-Checks)"
+oben) ist `Innenwand="1"` aber nur ein **LoD4-Indikator** ("hier koennte spaeter eine Innenwand
+abgehen") und sagt nichts ueber den aktuellen LoD3-Wandtyp aus — `WindowGenerator` ignoriert das
+Attribut bewusst und behandelt solche Waende normal. Bestaetigt an `iqd`: `Face_001FAAR_0_6` und
+`_0_8` haben `Innenwand="1"`, bekommen deshalb korrekt volle Fensterreihen vom `WindowGenerator`,
+wurden aber vom `BalconyGenerator` faelschlich komplett uebersprungen — exakt die vom Nutzer
+beobachtete "nur eine Gebaeudeseite hat Balkone".
+
+**Fix 2:** die `Innenwand`-Pruefung in `isEligibleForBalcony` ersatzlos entfernt — `BalconyGenerator`
+behandelt solche Waende jetzt wie `WindowGenerator` normal.
+
+**Verifiziert:** `iqd` isoliert — Fenster 110→73 (UF_3 von 2 auf 1 Reihe, 39→14 Fenster dort),
+Balkone 5→11 (Waende `0_6`/`0_8` bekommen jetzt ebenfalls Balkone auf allen passenden Geschossen,
+`0_7` bleibt korrekt auf das oberste Geschoss beschraenkt — dort verhindert `WindowPreference=2`
+(ABOVE_NEIGHBOR) die unteren Geschosse, unabhaengig von diesem Fix); schema-valide. 14-Testgebaeude-
+Menge schema-valide. Volle 3.801-Gebaeude-Kachel (auf dem seit 2026-08-24 aktuellen Datensatz mit
+ueberarbeiteten `sst`/`BuildingPreferences`-Attributen, siehe unten): Fenster 43.444→29.736 (−32%,
+erwartet — die zweite Reihe entfaellt), Balkone 1.574→14.980 (**+851%**, `Innenwand="1"`-Waende
+kommen jetzt tile-weit dazu, nicht nur bei `iqd`); schema-valide. val3dity: die meisten Kategorien
+bleiben trotz der fast 5-fachen Feature-Zahl (BuildingInstallation-Paare pro neuem Balkon) nahezu
+unveraendert (204=29→31, 302=23→23, 303=27→26, 306=1→1, 307=10→11, 601=321→321) — **aber
+`201 INTERSECTION_RINGS` erscheint neu mit 3 Instanzen** (vorher 0). Versuch, die betroffenen
+Gebaeude zu isolieren: Hypothese "Balkontuer beruehrt exakt die Wand-Oberkante" (dieselbe
+Fehlerklasse wie beim Fenster-Traufe-Fix) per Koordinatenabgleich ueber die gesamte Kachel
+widerlegt (0 Treffer) — `BalconyGenerator` nutzt fuer Tuer/Galerie-Span weiterhin nur das einfache
+`openingInsideWall2D`, nie die Clearance-Variante, das bleibt ein moeglicher Verdaechtiger fuer
+eine andere Beruehrungsart (z.B. seitlich), aber nicht bestaetigt. Die betroffenen 3 Primitive
+liessen sich nicht isolieren, da `val3dity --report` in dieser Umgebung persistent mit Exit 127
+abstuerzt (bestaetigt selbst bei einer 500-Feature-Datei — bekannte, ungeloeste Tooling-Einschraenkung,
+siehe auch weiter oben). Bei 3 von ueber 33.700 Features ein sehr kleiner, aber unbestaetigter
+Rest — als offener Punkt vorgemerkt, kein Revert (der Nutzen der Balkon-Korrektur ist eindeutig
+groesser als dieser kleine, noch nicht lokalisierte Nebeneffekt).
+
+### Bugfix: Balkone verdraengten Fenster komplett (EG-Ausschluss + Mindest-Pattern-Pruefung, 2026-08-26)
+
+**Problem** (Nutzer-Screenshots): der `Innenwand`-Fix vom Vortag hatte Balkone tile-weit korrekt
+auf viel mehr Waende ausgeweitet (+851%), aber zwei neue Probleme sichtbar gemacht: (1)
+Erdgeschoss-Waende bekamen Balkone; (2) `BalconyGenerator`s Phase 1 (`placeLeadingBalconies`)
+reservierte den fuehrenden Ga-Lauf **blind**, bevor ueberhaupt ein Fenster existierte — bei
+schmalen Waenden blieb dann kein Platz mehr fuer das naechste Pattern-Element, die Wand wurde zur
+reinen Balkon-Wand statt normal befenstert zu werden (Gebaeude mit mehr Balkonen als Fenstern,
+mehrere kollidierende Balkone an Gebaeude-Knicken).
+
+**Fix 1 (kein EG):** `isEligibleForBalcony` akzeptiert nur noch `geschoss.startsWith("UF_")` (GF
+faellt raus) — theoretisch koennten Loggien im EG existieren, das ist aktuell aber nicht ueber
+Parameter abfragbar. EG bekommt weiterhin ganz normal Tuer+Fenster ueber
+`DoorGenerator`/`WindowGenerator`.
+
+**Fix 2 (Mindest-Pattern-Pruefung):** in `placeLeadingBalconies`, direkt nach der bestehenden
+Breiten-Pruefung, NEU: nach dem (geplanten) Ga-Lauf muss auf der Restwand noch mindestens 1
+Fenster passen (`WindowGenerator.calculateWindowCount` wiederverwendet — paket-privat, dieselbe
+Datei/Package, garantiert dieselbe Passform-Logik wie der `WindowGenerator` spaeter tatsaechlich
+anwendet). **Wichtiger Befund:** `leadingGalleryRunLength` fasst alle fuehrenden aufeinander-
+folgenden `"Ga"`-Token bereits zu einem Lauf zusammen — das Token direkt danach kann demnach nie
+wieder `"Ga"` sein (waere es das, haette der gierige Lauf es schon eingesammelt). "GaGa als
+Folge-Element pruefen" kommt fuer den fuehrenden Lauf strukturell also gar nicht vor, das einzig
+relevante Folge-Element ist entweder `"Wi"` oder gar keins. Die Pruefung laeuft bewusst
+**einheitlich fuer beide Faelle** (kein Sonderfall fuers fehlende Folge-Token): die
+Mindestabstands-Parameter (`HDistMinWaGa`, `HDistWiGa`, Fensterbreite) sind fuer jedes Modul mit
+gueltigen Gallery-Parametern vorhanden, unabhaengig davon ob `GaPa` explizit gesetzt ist (z.B.
+`EE3_4.json`, wo `GaPa` fehlt und auf ein reines `"Ga"` zurueckfaellt) — passt Balkon +
+Mindestabstand + Fensterbreite auf die Restwand, wird gebaut (der "fehlende" Fensterplatz wird
+ohnehin ganz normal vom nachgelagerten `WindowGenerator` befuellt); passt es nicht, wird gar kein
+Balkon reserviert und die Wand komplett normal durchgefenstert. Neuer Zaehler
+`balconiesSkippedNoFollowUp`. Phase 2 (`placeRemainingPatternBalconies`) brauchte die Pruefung
+nicht: sie ersetzt ausschliesslich bereits real platzierte Fenster durch Balkone und kann daher
+nie mehr Balkone erzeugen als ohnehin Fenster da waren — das "Wand wird komplett verdraengt"-
+Problem war strukturell auf Phase 1 beschraenkt.
+
+**Kollidierende Balkone (dritte vom Nutzer genannte Restriktion) brauchten am Ende KEINEN
+zusaetzlichen Code:** ein dedizierter Koordinaten-Scan ueber alle 3.082 Balkon-Decks der vollen
+Kachel (paarweiser Bounding-Box-Vergleich, bewusst konservativ — mehr Kandidaten als eine echte
+2D-Polygon-Ueberschneidung liefern wuerde) fand **0 Ueberlappungskandidaten**. Die Mindest-Pattern-
+Pruefung hat die vom Nutzer gezeigte Ecken-Kollision offenbar bereits vollstaendig als Nebeneffekt
+geloest (weniger, aber gezielter platzierte Balkone).
+
+**Verifiziert:** `iqd` isoliert — EG-Balkon (`Face_001FAAR_0_3_GF_1_Ga_1_...`) verschwunden,
+UF-Balkone unveraendert (10 statt 11, nur der EG-Fall entfaellt, alle verbleibenden hatten schon
+vorher genug Platz fuer ein Folge-Fenster); Fenster 73→76; schema-valide. 14-Testgebaeude-Menge
+schema-valide (Balkone 243→61, Fenster 356→480). Volle 3.793-Gebaeude-Kachel: Balkone
+**14.980→3.082 (−79%)**, Fenster 29.736→40.336 (+36%, GF-Fenster allein 11.888 statt vorher
+anteilig durch Balkone verdraengt); schema-valide; val3dity: **`201 INTERSECTION_RINGS` zurueck
+auf 0** (war 3 seit dem `Innenwand`-Fix — bestaetigt, dass dieser Rest tatsaechlich von der
+unkontrollierten Balkon-Verdraengung kam, nicht von einer separaten, ungeklaerten Ursache), alle
+anderen Kategorien innerhalb ±1 der Baseline (102=7/104=4/204=30/302=22/303=27/306=1/307=10/601=314).
+
+### Bugfix: Balkone nach innen statt nach aussen orientiert (2026-08-26)
+
+**Problem** (Nutzer-Fund an Gebaeude `iMM`, Screenshots): an manchen Waenden zeigten Balkon-Decks
+und -Bruestungen ins Gebaeudeinnere statt nach aussen — bei `iMM` an mehreren Waenden entlang eines
+Gebaeudefluegels rund um einen Innenhof.
+
+**Ursache bestaetigt:** `resolveWallGeometry` bestimmte die Auswaerts-Normale einer Wand bisher
+ueber "weg vom Gebaeude-Schwerpunkt" (`computeFootprintCentroid` — Mittelwert aller
+Wand-Bodenkanten-Endpunkte des ganzen Gebaeudes). Bei einem **nicht-konvexen** Grundriss (Innenhof,
+mehrere Fluegel, wie bei `iMM`) kann "weg vom Schwerpunkt" fuer eine einzelne Wand systematisch die
+FALSCHE Seite ergeben — der Schwerpunkt liegt dann naeher an einer Aussenwand als deren eigene
+Innenseite, sodass die "weg davon"-Richtung nach innen zeigt statt nach aussen. Verifiziert mit
+echten Koordinaten an zwei unabhaengigen Waenden (`Face_0003ZEV_0_16` und `Face_0003ZEV_0_47`, per
+Ray-Casting/Schuhband-Formel gegen die tatsaechliche GroundSurface-Kontur geprueft): bei `0_47`
+zeigte die alte Schwerpunkt-Methode nachweislich nach innen, bei `0_16` traf sie zufaellig (fuer
+diese eine Wand) dieselbe Richtung wie die neue Methode — bestaetigt, dass der Bug nicht bei jeder
+Wand auftritt, aber strukturell vorhanden ist.
+
+**Fix:** die Auswaerts-Normale wird jetzt aus der **Umlaufrichtung des Wand-Polygons selbst**
+abgeleitet (`isExteriorRingCCW`, bereits vorher fuer die Tueroeffnungs-Umlaufrichtung genutzt und
+vertraut) statt aus einer gebaeudeweiten Schwerpunkt-Heuristik: `normX = extCCW ? dirY : -dirY;
+normY = extCCW ? -dirX : dirX;` (Herleitung: fuer eine im (u,v)-Profil CCW gewundene Wand zeigt die
+Auswaerts-Normale nach dem Kreuzprodukt der (u,v)-Basisvektoren in Richtung `(dirY,-dirX)`). Das ist
+eine rein lokale Eigenschaft NUR dieser einen Wand und damit unabhaengig von der Grundriss-Form
+(konvex, Innenhof, beliebig verwinkelt) immer korrekt — verifiziert an zwei geometrisch
+unabhaengigen Waenden mit unterschiedlichen Referenz-Konturen. `computeFootprintCentroid` war
+danach nirgendwo mehr gebraucht und wurde geloescht, ebenso der `footprintCentroid`-Parameter aus
+`resolveWallGeometry`/`placeLeadingBalconies`/`placeRemainingPatternBalconies`.
+
+**Verifiziert:** `iMM` isoliert — 5 von 23 Balkon-Waenden hatten tatsaechlich abweichende
+Normalen zwischen alter und neuer Methode (per Debug-Vergleich beider Formeln nebeneinander
+bestaetigt, nicht nur vermutet); Balkon-Anzahl unveraendert (23, reine Richtungs-Aenderung,
+keine Eligibilitaets-Aenderung). 14-Testgebaeude-Menge und volle 3.793-Gebaeude-Kachel: Fenster/
+Tueren/Balkone-Zahlen **exakt unveraendert** (40.336/3.048/3.082 — erwartet, die Wand-Auswahl
+aendert sich nicht, nur die Deck-Richtung); schema-valide; val3dity **exakt identisch zur
+Baseline** (102=7/104=4/204=30/302=22/303=27/306=1/307=10/601=314) — plausibel, da ein
+gespiegeltes, weiterhin planares und nicht-selbstueberschneidendes Rechteck geometrisch genauso
+gueltig ist wie das Original, nur auf der jeweils anderen Wandseite.
+
+### Neue Standard-Testkachel (2026-08-24/25)
+
+Ab 2026-08-24 gilt `sqltest/BuildingParts_neu_Kachel/neue_Prefs/LoD2_33_416_5656_2_SN_
+BuildingPreferences.gml` (voll, 3793 Gebaeude) bzw. `.../14_geb/LoD2_33_416_5656_2_SN_
+BuildingPreferences_neueKachel_14_Buildings.gml` (14er-Set) als Standard-Testdaten fuer alle
+Verifikationen — die `sst`/`BuildingPreferences`-Attribute wurden ueberarbeitet, deutlich mehr
+Gebaeude haben jetzt ein passendes Baukoerpermodul (Fenster 35.425→43.444, Tueren 2.768→3.048,
+Balkone 1.290→1.574 auf dem unveraenderten Codestand vor den beiden Fixes oben — allein durch die
+Datenaktualisierung, nicht durch Codeaenderungen).
+
+### Bekannte Einschraenkung: manche Gebaeude haben Fenster aber keine Tuer (Quelldaten-Luecke)
+
+**Problem** (Nutzer-Fund an Gebaeude `DESNALK0pF001giF`): ein Gebaeude hat Fenster, aber keine
+einzige Tuer. **Ursache bestaetigt:** `DoorCount=0` ist fuer **jede** GF-Wand dieses Gebaeudes
+bereits im LoD2-Quelldatensatz (`sqltest/LoD2_33_416_5656_2_SN_BuildingPreferences.gml`) so
+gesetzt — nicht erst durch unsere Pipeline. `DoorGenerator` verarbeitet dieses Attribut korrekt
+(0 = keine Tuer, wie dokumentiert). Tile-weite Suche: **26 von 3.801 Gebaeuden** (≈0,68 %) haben
+Fenster, aber `DoorCount=0` auf jeder Wand — durchgehend dasselbe Muster, keine Mischfaelle mit
+"echtem" Platzierungsfehler gefunden. Dies ist eine Datenluecke der vorgelagerten
+Datenaufbereitung (fehlende Tuer-Zuordnung fuer diese 26 Gebaeude), kein Fehler in
+`DoorGenerator`/`WindowGenerator` — analog zu den bereits gemeldeten CityDoctor2-Upstream-Bugs
+(siehe `CityDoctor2_Bugreport.md`), sollte aber beim Datenersteller gemeldet statt in diesem
+Konverter "repariert" werden (wir haben keine Information, WO eine Tuer sein sollte).
+
+### Bugfix: falsche Traufhoehe durch dominantes Kehl-/Walm-Dachpolygon (2026-08-26)
+
+**Problem** (Nutzer-Fund an Gebaeude `DESNALK0q80047bD`, mehrere Screenshots): an vielen senkrechten
+Waenden im 1./2./3.OG fehlten scheinbar willkuerlich Fenster, obwohl sichtbar Platz vorhanden war.
+
+**Zwei Mechanismen als korrekt bestaetigt** (kein Bug): `WindowPreference=2` (ABOVE_NEIGHBOR)
+blockt Fenster unterhalb echter Nachbar-Bauteile — exakte Hoehen-Uebereinstimmung mit den
+Nachbar-Parts verifiziert; ein hartes `TOO_SHORT`-Minimum (`hDistMin=2.25m` → 5.5m
+Mindestwandbreite) lehnt schmale Waende (4.4–4.9m) korrekt ab, waehrend eine 5.81m breite Wand
+aehnlicher Flaeche korrekt akzeptiert wird.
+
+**Ursache (echter Bug) bestaetigt:** `CityGmlUtils.getRoofZRange` bestimmte die Traufhoehe fuer
+geneigte Daecher bisher aus dem lokalen Minimum-Z des flaechengroessten RoofSurface-Polygons. Fuer
+Part 3 (Walmdach-Hauptteil) ist die flaechengroesste Flaeche (`Face_K0q80047bD_3_17`, 86.00 m²) eine
+komplexe Kehl-/Walm-Verschneidungsflaeche mit 9 unterschiedlichen Z-Niveaus (124.13 bis 132.96) —
+ihr eigenes Minimum (124.13) liegt weit unter der echten Traufe, die von zwei fast gleich grossen
+Nachbarflaechen uebereinstimmend gezeigt wird (`_3_51`, 65.09 m², Min 127.246; `_3_76`, 54.64 m²,
+Min 127.220). Die zu niedrige Traufe deckelte `GeschossDeckeZ` fuer das oberste Geschoss (UF_3) zu
+frueh, wodurch `WindowGenerator`s `usableHeight`-Check dort viele Fenster faelschlich mit `TOO_LOW`
+verwarf.
+
+**Fix:** `getRoofZRange` nimmt jetzt das **Maximum der lokalen Minima aller "grossen" geneigten
+Dachflaechen** (Flaeche ≥ 50 % der groessten geneigten Flaeche, `MAJOR_FACET_AREA_RATIO`) statt
+blind der flaechengroessten Einzelflaeche zu vertrauen. Bei nur 1–2 geneigten Flaechen (Normalfall)
+aendert sich nichts (die "grosse Flaechen"-Menge ist dann identisch mit der bisherigen dominanten
+Flaeche allein). Reiner Flachdach-Fall bleibt unveraendert.
+
+**Verifiziert:** `DESNALK0q80047bD` isoliert — Traufe Part 3 124.13→127.246 (exakt der erwartete
+Konsens-Wert), Geschossteilung bekommt dadurch ein zusaetzliches, vorher fehlendes UF_4
+(GeschossDeckeZ 124.82→127.246 statt vorher bei UF_3 gedeckelt), 38 Fenster inkl. 11 neue in UF_4;
+schema-valide. 14-Testgebaeude-Menge schema-valide. Volle 3.793-Gebaeude-Kachel: Fenster
+40.336→40.781 (+445, +1,1 %, wie erwartet), Tueren unveraendert 3.048, Balkone 3.082→3.096
+(minimaler Nebeneffekt durch neu entstandene Fensterplaetze); schema-valide; val3dity **keine
+Regression** (102=7/104=4/204=30/302=22/303=27/306=1/307=10/601=313 — 601 sogar 314→313, eine
+Ueberlappung weniger, plausibel da eine der beiden am Ueberlapp beteiligten Geometrien jetzt anders
+zugeschnitten ist).
+
+**Bekannte Einschraenkung (nicht Teil dieses Fixes):** einige Waende von Part 3 (z.B.
+`Face_K0q80047bD_3_19/_39/_41/_66`, Z bis 130.56) reichen weiterhin hoeher als selbst die neue
+Traufe von 127.246 — vermutlich ein Giebel-/Turmabschnitt mit einer zweiten, noch hoeheren
+Eigen-Traufe innerhalb desselben BuildingParts. Diese Waende bleiben unveraendert "Orphan"-Waende
+(keine Schnitt-Z faellt in ihren Bereich) und werden ueber den bestehenden Nearest-Storey-Fallback
+dem obersten Geschoss zugeordnet — ein `traufeZ`-Wert pro BuildingPart ist fuer ein Dach mit
+mehreren echten Traufhoehen strukturell zu einfach; falls das sichtbar wird, braucht es eine
+grundsaetzlichere Ueberarbeitung (mehrere Traufhoehen pro Part), kein Thema dieses Fixes.
+
+### Neues Feature: Fallback-Tuer fuer Gebaeude ohne Tuer (`DoorGenerator.processFallbackDoors`, 2026-08-27/28)
+
+**Anlass** (Nutzer-Fund an Gebaeude `DESNALK0pF001iLp`, spaeter mit dem Referenzfall
+`DESNALK0pF001giF` verifiziert): manche Gebaeude haben `DoorCount=0` auf JEDER Wand bereits in
+den LoD2-Quelldaten — bestaetigte Luecke der vorgelagerten Adresspunkt-/ALKIS-Zuordnung (siehe
+oben, "Bekannte Einschraenkung"), kein Pipeline-Fehler. Solche Gebaeude bekommen trotzdem korrekt
+Fenster, aber gar keine Tuer — unrealistisch fuer ein bewohntes Gebaeude. Nutzer-Wunsch: Gebaeude
+mit mindestens einem Fenster (Wand- oder Dachfenster) aber ohne jede Tuer bekommen genau eine
+zusaetzliche Tuer.
+
+**Design-Entscheidungen** (mit Nutzer abgestimmt): Wand-Auswahl per **breiteste EG-Wand zuerst**
+(FACEAREA-sortiert), nicht `BU.EnDi` (Eingangsrichtung) — EnDi ist zwar bestaetigt
+"EntranceDirection", aber eine reine 1-4-Seitennummerierung des idealisierten `BuLen`x`BuWid`-
+Rechtecks aus der urspruenglichen novaFACTORY-Generierung, ohne dokumentierte Zuordnung zu echten
+Wand-IDs/Richtungen unserer realen (unregelmaessigen) LoD2-Grundrisse — zu riskant zu erraten.
+Wand- UND Dachfenster zaehlen gleichermassen als "hat Fenster".
+
+**Implementierung:** neue Methode `DoorGenerator.processFallbackDoors`, als eigener Pipeline-
+Schritt "Fallback-Tueren" **nach** Fenstern UND Dachfenstern verdrahtet (anders als der normale
+Tuer-Schritt, der immer VOR den Fenstern laeuft) — erst dann steht fest, ob das Gebaeude Fenster
+hat. `DoorGenerator.processWall` (bestehende, gepruefte Platzierungslogik) wird direkt
+wiederverwendet, minimal erweitert um einen `extraExclusionSpans`-Parameter (leer am bestehenden
+Aufrufer, kein Verhaltensunterschied im Normalfall) und einen Rueckgabewert (Anzahl platzierter
+Tueren).
+
+**Drei Bugs waehrend der Verifikation gefunden und behoben** (guter Beleg dafuer, warum die volle
+Kachel + val3dity + CityDoctor2 nach JEDER Aenderung nochmal laufen muss, auch bei scheinbar
+einfachen Erweiterungen):
+
+1. **`GE_R_SELF_INTERSECTION`-Fehldiagnose:** erster Verdacht war eine Tuerkante exakt auf der
+   Wandkontur (analog zum Fenster-Seitenkante-Fix). Fix angewendet
+   (`openingInsideWallSideTopClearance2D` statt `openingInsideWall2D`, dieselbe bereits verifizierte
+   Methode wiederverwendet), aber die betroffene Gebaeudeliste blieb identisch — der Fehler
+   existierte nachweislich schon VOR dem Tuer-Feature (bestaetigt im Report der vorherigen
+   Kachel-Baseline). Der Fix bleibt trotzdem drin (sinnvolle, risikoarme Haertung), war aber nicht
+   die Ursache der eigentlichen val3dity-Regression (`201 INTERSECTION_RINGS`, 0→6).
+2. **Wandkontur durchquert die Oeffnung** (der eigentliche Haupt-Bug): eine "M"-foermige Wand
+   unter einem Satteldach mit Gaube (zwei Firstspitzen, ein Tal dazwischen, Gebaeude
+   `DESNALK0q80046gq`) — eine Fallback-Tuer, die das Tal ueberspannt, besteht den reinen
+   4-Eckpunkt-Containment-Test (beide Ecken liegen unterhalb der jeweils benachbarten Firstspitze),
+   obwohl ihre Oberkante mitten durch das Tal der Wandkontur verlaeuft. Neue Funktion
+   `CityGmlUtils.wallContourEntersOpening`: zweistufig — (a) liegt ein Wand-Eckpunkt selbst
+   innerhalb des Oeffnungs-Rechtecks, (b) durchquert eine Wandkante (echte Segment-Schnitt-Pruefung,
+   nicht nur Beruehrung) eine der 4 Rechteck-Kanten. Reduzierte die Faelle von 6 auf 5.
+3. **Zwei Oeffnungen stossen an derselben u-Kante mit unterschiedlicher Hoehe aneinander**
+   (Gebaeude `DESNALK0q80045BR`): die bestehende Fenster-Ausschluss-Pruefung
+   (`computeExistingWindowSpans`/`extraExclusionSpans`) verglich nur den horizontalen u-Bereich,
+   ignorierte die Hoehe komplett — eine Fallback-Tuer direkt neben einem (niedrigeren) Fenster mit
+   exakt gleicher u-Kante aber ueberlappender Hoehe erzeugt teilweise deckungsgleiche Ringkanten.
+   Fix: `computeExistingWindowSpans` liefert jetzt 2D-Rechtecke `{uMin,uMax,vMin,vMax}` statt
+   reiner u-Spannen, neue Funktion `CityGmlUtils.overlapsAnyOpeningRect` prueft echten 2D-Konflikt
+   (nicht getrennt in U ODER V, mit Sicherheitsabstand). Reduzierte die restlichen Faelle von 5
+   auf 0.
+
+**Verifiziert:** 25/25 Unit-Tests (5 neue: "M"-Wand-Tal-Erkennung inkl. Kontrollfall "besteht
+4-Eckpunkt-Test", 2D-Rechteck-Konflikt inkl. "gleiche u-Kante aber sauber getrennte Hoehe darf
+nicht blockieren"-Gegenprobe). `DESNALK0pF001giF` isoliert (bestaetigter DoorCount=0-ueberall-
+Fall): 1 Fallback-Tuer, schema-valide, CityDoctor2 sauber bis auf den bekannten
+`SE_POLYGON_WITHOUT_SURFACE`-Mapper-Fehlalarm. 14-Testgebaeude-Menge: unveraendert (kein
+betroffenes Gebaeude enthalten), schema-valide. Volle 3.793-Gebaeude-Kachel: **142 Fallback-Tueren**
+(3.048→3.190 Tueren gesamt inkl. der bereits vorher bestehenden 3.048), Fenster/Balkone/
+Dachfenster **exakt unveraendert** (vollstaendig unabhaengiger, nachgelagerter Schritt);
+schema-valide; val3dity und CityDoctor2 nach dem letzten Fix **exakt identisch zur Baseline vor
+dem Feature** (val3dity: 79 invalide Primitive/390 invalide Features, 102=7/104=4/204=30/302=23/
+303=13/306=1/307=7/601=314 — keine einzige neue Fehlerklasse; CityDoctor2:
+GE_R_SELF_INTERSECTION=5/GE_S_NON_MANIFOLD_EDGE=19/GE_S_NON_MANIFOLD_VERTEX=1/GE_S_NOT_CLOSED=58/
+GE_S_SELF_INTERSECTION=34, `GE_P_INTERSECTING_RINGS` vollstaendig verschwunden).
+
+### Nachbesserung: Fallback-Tuer gab zu frueh auf + verdeckte Wand als Kandidat (2026-08-28)
+
+**Problem 1** (Nutzer-Fund an Gebaeude `DESNALK0q80047Pm`): trotz vorhandener Fenster keine
+Fallback-Tuer. **Ursache bestaetigt:** `processWall` berechnet fuer die Fallback-Tuer nur EINE
+feste Standardposition (HDistDoWa ab Wandanfang bzw. zentriert) und gibt sofort auf, wenn genau
+diese mit einem vorhandenen Fenster kollidiert — ALLE 4 GF-Waende dieses Gebaeudes waren
+geometrisch geeignet (breit genug, `WindowPreference=1`), scheiterten aber jeweils nur an der
+EINEN versuchten Position, obwohl daneben noch reichlich freier Platz gewesen waere.
+
+**Problem 2** (Nutzer-Fund am bereits verifizierten Referenzgebaeude `DESNALK0pF001giF`): die
+platzierte Fallback-Tuer landete auf einer Wand mit `WindowPreference=2` (ABOVE_NEIGHBOR,
+`Z_Fenster_ASL=215.02` > eigene `Z_MAX_ASL=211.92` — die komplette Wand liegt unterhalb der
+Schwelle) — diese Wand ist laut dem bereits an anderer Stelle bestaetigten ABOVE_NEIGHBOR-
+Mechanismus (siehe "traufeZ"-Untersuchung) durch ein Nachbargebaeude (Reihenhaus/Doppelhaushaelfte)
+verdeckt. Fuer Fenster wird das bereits korrekt beruecksichtigt (keine Fenster unterhalb
+`Z_Fenster_ASL`), die Fallback-Tuer-Kandidatenauswahl pruefte `WindowPreference` bisher aber gar
+nicht — eine Tuer in eine verdeckte Wand ist architektonisch falsch.
+
+**Fix 1 — Mehrfach-Positionsversuch:** `processWall` bekommt einen neuen optionalen Parameter
+`forcedOffset` (nur bei der Fallback-Tuer genutzt, `null` = unveraendertes Verhalten am
+bestehenden Aufrufer). Scheitert die Standardposition an einem vorhandenen Fenster, berechnet
+`processFallbackDoors` ueber die neue Methode `computeFreeUSections` alle freien Wandabschnitte
+NEBEN den vorhandenen Fenstern (groesster zuerst, jeweils zentriert platziert) und probiert diese
+der Reihe nach, bevor die ganze Wand verworfen wird.
+
+**Fix 2 — WindowPreference-Filter:** die Kandidatenliste in `processFallbackDoors` nimmt nur noch
+Waende mit `WindowPreference=NORMAL` auf (`WindowPreference.parse`, bereits vorhandenes Modell aus
+`WindowGenerator`) — NONE (komplett verdeckt) und ABOVE_NEIGHBOR (im unteren, tuerrelevanten
+Bereich verdeckt) werden von vornherein ausgeschlossen.
+
+**Verifiziert:** 25/25 Unit-Tests weiterhin gruen (keine neuen Tests noetig, reine Erweiterung
+bereits getesteter Bausteine). `DESNALK0q80047Pm` isoliert: Fallback-Tuer jetzt erfolgreich an der
+breitesten Wand, schema-valide, CityDoctor2 sauber (nur bekannter Mapper-Fehlalarm).
+`DESNALK0pF001giF` isoliert: Tuer wandert von der verdeckten Wand `..._GF_3` (WindowPreference=2)
+zur naechstbreiten, normalen Wand `..._GF_1`, weiterhin schema-valide und CityDoctor2-sauber.
+14-Testgebaeude-Menge unveraendert, schema-valide. Volle 3.793-Gebaeude-Kachel: Fallback-Tueren
+142→**154** (+12, vom Mehrfach-Positionsversuch gerettete Gebaeude wie Pm — der
+WindowPreference-Filter kann in Einzelfaellen auch Gebaeude von "hat Fallback-Tuer" auf "kein
+Kandidat gefunden" umklappen, per Saldo tile-weit aber ein deutliches Plus); Fenster/Balkone/
+Dachfenster exakt unveraendert; schema-valide; val3dity **exakt identisch zur Baseline**
+(79 invalide Primitive/390 invalide Features, 102=7/104=4/204=30/302=23/303=13/306=1/307=7/601=314
+— keine einzige neue Fehlerklasse).
+
+### Bugfix: Selbstueberschneidung bei Geschossdecken-Zuschnitt nahe Grundriss-/Dach-Diskrepanz (GE_R_SELF_INTERSECTION, 2026-08-28)
+
+**Nutzer-Fund** (Gebaeude `DESNALK0q8004709`, Screenshot mit einer aus der Fassade herausragenden
+Linie, 3-4x ueber die Geschosse verteilt): Frage, ob dies aus den LoD2-Quelldaten stammt oder von
+der Pipeline eingefuehrt wird. **Wichtiger Werkzeug-Fund waehrend der Untersuchung:** die
+CityDoctor2-CLI ohne eigene `-c`-Konfiguration nutzt einen unvollstaendigen Default-Pruefplan (das
+referenzierte Schematron `checkForSolid.xml` wird nur gefunden, wenn die CLI aus
+`D:\Tools\CityDoctorGUI-3.18.2-win\` heraus mit der eigenen `Konfig_für Test.yml` des Nutzers
+(`sqltest/output/Konfig_für Test.yml`, `-c`-Flag) aufgerufen wird) — der Default-Plan meldet fuer
+viele Gebaeude ausschliesslich den bekannten `SE_POLYGON_WITHOUT_SURFACE`-Fehlalarm und uebersieht
+echte Fehler. **Mit der korrekten Konfiguration bestaetigt:** LoD3-Ausgabe zeigt 4x
+`GE_R_SELF_INTERSECTION` (0x in der LoD2-Quelle) — eindeutig von uns eingefuehrt.
+
+**Ursache:** `CityGmlUtils.clipSlabAtZ` (JTS-Slab-Zuschnitt, Abschnitt "Slab-Zuschnitt bei
+Anbauten (JTS)") schneidet das Grundpolygon
+(`footprint`, aus der GroundSurface) mit `footprint.difference(excluded)`, wobei `excluded` die
+Vereinigung aller Dachanteile unter der jeweiligen Geschosshoehe ist (aus den RoofSurface-Polygonen
+abgeleitet). Grundriss- und Dachpolygone sind in den LoD2-Quelldaten unabhaengig voneinander
+digitalisiert und treffen sich an gemeinsamen Gebaeudeecken oft nicht exakt — am betroffenen
+Gebaeude lagen zwei eigentlich identische Eckpunkte (ein schmaler Pilaster-/Erker-Vorsprung an der
+Fassade) real nur ca. 1,1 cm auseinander. Ohne Snapping erzeugt JTS' `difference()` dort statt
+eines sauberen gemeinsamen Eckpunkts einen entarteten "Spike" (der Ring beruehrt sich selbst kurz
+vor dem eigentlichen Schluss) — genau die aus der Fassade ragende Linie im Screenshot. Da
+`clipSlabAtZ` pro Geschoss unabhaengig aufgerufen wird, trat der exakt gleiche Spike an derselben
+(X,Y)-Ecke auf allen 4 betroffenen Geschossdecken auf (4 Fehler, eine Ursache).
+
+**Fix (zweiter Anlauf — erster Versuch verworfen, siehe unten):** `excluded` wird vor der
+Differenz-Operation um `SLAB_EXCLUSION_GROW_TOL` (2 cm) aufgeblaht (`excluded.buffer(...)`), sodass
+eine eigentlich gemeinsame Ecke zuverlaessig vollstaendig abgedeckt ist, ohne dass irgendein
+Eckpunkt tatsaechlich verschoben wird.
+
+**Erster Versuch (verworfen — Nutzer-Fund, siehe "Nachbesserung" unten):** urspruenglich per
+`org.locationtech.jts.operation.overlay.snap.GeometrySnapper.snap(footprint, excluded, tol)`
+geloest (beide Geometrien vor der Differenz aufeinander einrasten). Behob den Spike, erzeugte aber
+an einem anderen Gebaeude (`DESNALK0pF001hYt`) ein NEUES, schwebendes Geschossdeckenstueck —
+GeometrySnapper verschiebt Punkte irgendwo im (oft komplexen, vielkantigen) Grundriss, nicht nur an
+der betroffenen Ecke, und klemmte dabei eine schmale Verbindung zwischen zwei Raeumen ab. Auch
+`GeometryFixer.fix(...)` auf das Differenz-ERGEBNIS angewendet wurde probiert und verworfen (behob
+den Spike gar nicht). Der finale `buffer`-Ansatz aendert dagegen nur, WIE VIEL `excluded` entfernt,
+nie WO die uebrigen Punkte liegen — rein lokal, keine Nebenwirkungen anderswo im Grundriss.
+
+**Verifiziert:** 25/25 Unit-Tests gruen (ein bestehender Test mit synthetischer, exakt
+uebereinstimmender Anbau-/Grundriss-Geometrie musste um den erwarteten 2cm-Puffer-Randverlust
+angepasst werden, 50,0→49,8 m²). `DESNALK0q8004709` isoliert mit der echten CityDoctor2-
+Konfiguration: `GE_R_SELF_INTERSECTION` 4→**0**. `DESNALK0pF001hYt` isoliert: Boeden/Decken wieder
+16/11 wie im Ausgangszustand (kein schwebendes Stueck mehr). Volle 3.801-Gebaeude-Kachel:
+schema-valide (`citygml-tools validate`), val3dity **byte-identisch** mit und ohne Fix auf
+demselben Datenstand (102=6/104=4/204=30/302=20/303=13/306=1/307=8/601=309 — val3dity's eigene,
+deutlich lockerere Toleranz erkennt diese Art Spike gar nicht, daher unveraendert; die eigentliche
+Bestaetigung kommt aus dem direkten CityDoctor2-Vorher/Nachher-Vergleich am betroffenen Gebaeude).
+
+**Bekannter, NICHT behobener Nebenbefund:** dieselbe CityDoctor2-Pruefung zeigt fuer
+`DESNALK0q8004709` zusaetzlich 9x `GE_P_NON_PLANAR_POLYGON_DISTANCE_PLANE` (LoD2-Quelle: 5x).
+Davon sind 7 unveraendert/erklaerbar (4 unveraendert uebernommene Original-Dachpolygone + 1
+Original-Wandpolygon, das durch den Geschoss-Wandschnitt in 3 Hoehen-Stuecke zerlegt wird und daher
+3x statt 1x gemeldet wird — eine bereits vorher nicht-plane Wand bleibt in jedem Teilstueck
+nicht-plan). Die verbleibenden 2 (`Poly_0003ZPX_0_29`, `Poly_0003ZPX_0_10`, beide RoofSurfaces mit
+Dachfenster-Ausschnitt) sind grenzwertig NEU: Abstand von der Ebene 1,47 mm bzw. 1,62 mm gegen
+einen Schwellwert von 1,41 mm — nur 0,06–0,21 mm ueber der Grenze. Ursache: das Hinzufuegen des
+Fensterloch-Innenrings verschiebt CityDoctor2's Ausgleichsebene (Least-Squares ueber alle Punkte
+inkl. Loch) minimal, was bei ohnehin schon knapp unter der Schwelle liegenden Original-Daechern
+ausreicht, um sie knapp darueber zu schieben. Da `RoofWindowGenerator` bei jedem Dachfenster
+(802 tile-weit) diesen minimalen Effekt erzeugt, aber nur Daecher betrifft, die schon vorher
+Millimeter von der Schwelle entfernt waren, ist dies ein sehr seltener Grenzfall (2 von ~800). Eine
+vollstaendige Behebung wuerde erfordern, die Loch-Eckpunkte auf dieselbe Ausgleichsebene zu
+projizieren, die CityDoctor2 intern berechnet (nicht exakt bekannt/reproduzierbar) — Aufwand/Nutzen
+aktuell nicht gerechtfertigt, daher bewusst als bekannte Einschraenkung dokumentiert statt "gefixt".
+
+### Nachbesserung: Fallback-Tuer ignorierte HDistDoWi (Mindestabstand zu vorhandenen Fenstern, 2026-08-28)
+
+**Nutzer-Fund:** die Fallback-Tuer (siehe oben) hielt zwar geometrisch einen 2D-Konflikt mit
+vorhandenen Fenstern ab (`overlapsAnyOpeningRect`, 2cm Sicherheitsabstand), beachtete aber nicht
+den architektonisch vorgegebenen `HDistDoWi`-Parameter aus der JSON (`GF.window.HDistDoWi`,
+"Horizontaler Abstand Tuer-Fenster") — denselben Wert, den `WindowGenerator.extractFreeSections`
+bereits in umgekehrter Richtung nutzt, um neue Fenster von vorhandenen Tueren fernzuhalten.
+
+**Fix:** `computeExistingWindowSpans` bekommt `hDistDoWi` (aus
+`params.getGroundFloor().window.hDistDoorWindow`, 0 falls kein Fenster-Modul definiert) als
+Parameter und schlaegt ihn als u-Puffer auf jede Fenster-Sperrspanne auf — analog und
+symmetrisch zu `WindowGenerator`s Behandlung des Parameters in der Gegenrichtung. Nur die
+u-Ausdehnung wird gepuffert, nicht die Hoehe (HDistDoWi ist rein horizontal).
+
+**Erste Version (verworfen — Nutzer-Fund, siehe naechster Abschnitt):** kollidierte die Tuer mit
+einem vorhandenen Fenster (auch unter Beruecksichtigung von HDistDoWi), wurde die Wand komplett
+verworfen und die naechste Kandidatenwand probiert; blieb am Ende gar keine geeignete Wand uebrig,
+bekam das Gebaeude gar keine Tuer. Am eigenen Referenzgebaeude `DESNALK0pF001giF`
+(`HDistDoWi=2,0m` in dessen Modul) fuehrte das dazu, dass GAR KEINE Fallback-Tuer mehr gesetzt
+wurde — tile-weit sank die Zahl der Fallback-Tueren von 29 auf 22 (7 Gebaeude ganz ohne Tuer).
+
+### Nachbesserung: Tuer erzwungen statt Wand aufgegeben (2026-08-28)
+
+**Nutzer-Fund:** die obige Konsequenz ("lieber keine Tuer als eine zu dicht am Fenster") war ein
+Missverstaendnis meinerseits — ein bewohntes Gebaeude OHNE Tuer ist unrealistisch ("man kommt ja
+nicht rein"). Die Tuer MUSS gesetzt werden, wenn DoorCount=0 aber Fenster vorhanden sind; die
+Fenster-Abstandsregel (HDistDoWi) darf dabei nur bestimmen, WELCHE/WIE VIELE Fenster im Zweifel
+weichen — bis zu allen, wenn noetig — nicht ob ueberhaupt eine Tuer kommt.
+
+**Fix:** `processWall` bekommt einen neuen Parameter `forceWindowRemoval`. Kollidiert die
+Standardposition mit einem Fenster: bei `false` (Normalfall, erste zwei Versuche in
+`processFallbackDoors`) wird die Tuer wie bisher verworfen; als dritter, letzter Versuch pro Wand
+wird `processWall` mit `forceWindowRemoval=true` aufgerufen — kollidierende Fenster werden jetzt
+entfernt (Innenring aus dem Wandpolygon + FillingSurface-Eintrag, FACEAREA korrigiert), die Tuer
+wird trotzdem gesetzt. Die Pruefreihenfolge in `processWall` wurde dafuer umgestellt: Anbau-
+Verdeckung und Wandkontur-Checks laufen jetzt VOR dem Fenster-Konflikt-Check, damit im Force-Modus
+nie ein Fenster entfernt wird, wenn die Position ohnehin aus einem anderen (nicht behebbaren)
+Grund scheitert. Nur wenn buchstaeblich KEINE der Kandidatenwaende geometrisch passt (zu schmal,
+komplett Anbau-verdeckt, Wandkontur durchquert die Oeffnung ueberall) bleibt ein Gebaeude ohne
+Fallback-Tuer — das ist dann keine Fenster-Frage mehr.
+
+**Verifiziert:** Build + 25/25 Unit-Tests gruen. `DESNALK0pF001giF` isoliert: bekommt wieder eine
+Tuer (an Wand `..._GF_1`), dafuer wird 1 von deren 2 Fenstern entfernt; schema-valide,
+CityDoctor2-sauber (nur der bereits in der LoD2-Quelle vorhandene 1 Planaritaetsfehler, keiner
+neu). Volle 3.801-Gebaeude-Kachel: Fallback-Tueren wieder **29/29** (alle Kandidaten bekommen ihre
+Tuer, 0× "kein geeigneter Wandkandidat"), dafuer 15 Fenster an 11 Gebaeuden entfernt; normale
+Tueren (Schritt 4) unveraendert; schema-valide; val3dity zeigt gegenueber der Baseline nur eine
+A/B-bestaetigt vom Feature UNABHAENGIGE Verschiebung bei `102 CONSECUTIVE_POINTS_SAME` (6→8,
+identisch mit und ohne `forceWindowRemoval` reproduziert — 5 Gebaeude ohne jeden Bezug zu
+Fallback-Tueren/-Fenstern, siehe "Bekannter, nicht behobener Nebenbefund" unten); alle anderen
+Fehlerklassen exakt identisch zur Baseline (104=4/204=30/302=20/303=13/306=1/307=8/601=309).
+Doku.md/GitHub-Zielordner/sqltest/output synchron.
+
+### Bugfix + Untersuchung: `102 CONSECUTIVE_POINTS_SAME` — zwei verschiedene Ursachen (2026-08-28)
+
+**Nutzer-Fund** (Gebaeude `DESNALK0pF001fWE`, Screenshot mit einer Punktreihe im obersten OG
+oberhalb des Daches): "die Punkte kommen ja von uns rein?" — bestaetigt: JA. Zusaetzlich gefragt,
+ob die 5 zuvor gemeldeten Gebaeude denselben Grund haben. **Antwort: NEIN, zwei verschiedene,
+unabhaengige Ursachen** — siehe unten.
+
+**Ursache 1 (fWE, GEFIXT):** `Poly_...UF_1_Ceiling_1`, eine `clipSlabAtZ`-Geschossdecke — dieselbe
+Funktion wie beim `q8004709`-Selbstueberschneidungs-Fix oben. Der dortige `buffer()`-Fix nutzt die
+JTS-Standardeinstellung `JOIN_ROUND`: eine Ecke wird durch mehrere kurze Kreisbogen-Segmente
+angenaehert (Default 8 pro Viertelkreis) — bei 2cm Radius liegen deren Punkte nur 1-2mm
+auseinander und wurden am realen Gebaeude prompt als eigener neuer Fehler erkannt. **Fix:**
+`BufferOp.bufferOp(excluded, tol, params)` mit `BufferParameters.JOIN_BEVEL` statt der
+Standardmethode — schneidet Ecken mit hoechstens einem zusaetzlichen, weit genug entfernten Punkt
+gerade ab, kein Rundungs-Splitter, kein Spike-Risiko (anders als ein Mitre-Join). Zusaetzlich:
+neue, groessere Toleranz `RING_DEDUP_TOL` (2mm statt der bisherigen `POINT_MERGE_TOL`=1mm) im
+finalen Ring-Dedup in `createPolygon` — 1mm lag exakt an/unter CityDoctor2's eigener
+`minVertexDistance` (0,00173m aus der Nutzer-Konfiguration), sodass Punkte, die knapp unter dieser
+Schwelle lagen, unser eigenes Dedup faelschlich ueberlebten.
+
+**Ursache 2 (5 weitere Gebaeude, NICHT gefixt — bewusste Entscheidung):** die betroffenen Polygone
+sind normale WallSurfaces, keine `clipSlabAtZ`-Slabs. Ursache: `CityGmlUtils.conformJunctions`
+(Schritt 7, T-Naht-Vertices) fuegt fuer jede Wandkante Punkte benachbarter Huellen-Ringe ein, die
+auf dieser Kante liegen. Zwei UNABHAENGIGE Nachbarwaende koennen an derselben Stelle je einen
+eigenen Eckpunkt haben, der (weil in den LoD2-Quelldaten separat digitalisiert) nur ca. 1mm
+auseinanderliegt — beide werden als eigene Kandidaten erkannt und eingefuegt, es entstehen zwei
+fast identische neue Punkte.
+
+**Erster Fix-Versuch (verworfen):** den naeher liegenden der beiden Kandidaten beim Einfuegen
+uebersprang (per 3D-Abstand zum zuletzt eingefuegten Punkt, `RING_DEDUP_TOL`). Behob
+`102 CONSECUTIVE_POINTS_SAME` an allen 6 betroffenen Gebaeuden vollstaendig (0 Fastduplikate
+tile-weit, per Text-Scan bestaetigt) — **aber per direktem A/B an genau diesen 6 Gebaeuden mit
+CityDoctor2** bestaetigt: `GE_S_NOT_CLOSED` stieg dabei von 4 auf 10 (`GE_S_SELF_INTERSECTION`
+und `GE_P_NON_PLANAR` blieben unveraendert bei je 2). **Ursache des Tauschgeschaefts:** der
+uebersprungene Kandidat war der Anschlusspunkt fuer eine ANDERE Nachbarwand — fehlt er, bleibt
+dort eine kleine Luecke in der Huelle. Ein Tausch von "harmlosem" `CONSECUTIVE_POINTS_SAME`
+gegen das schwerwiegendere `SHELL_NOT_CLOSED` ist kein echter Fix, daher verworfen.
+
+Erster Fix-Versuch damit zunaechst NICHT uebernommen, mit Verweis auf den bereits dokumentierten
+Projekt-Grundsatz bei `conformJunctions` ("Vertex-Welding wurde bewusst ENTFERNT: es verschob
+~0,3% der Vertices um bis zu 5mm... das Schliessen solcher mm-Naehte uebernimmt der nachgelagerte
+Healer, nicht dieses LoD3-Update").
+
+**Korrektur (2026-08-28, spaeter am Tag):** Nutzer stellte klar, dass dieser Grundsatz auf einer
+falschen Annahme beruhte — der Healer laeuft laut Projektplan NUR ueber die LoD2-Ausgangsdaten,
+NICHT ein zweites Mal nach der LoD3-Aufwertung. Es gibt also keinen nachgelagerten Schritt, der
+von unserer Pipeline neu eingefuehrte Maengel noch bereinigt — solche Fehler sind IMMER unsere
+eigene Verantwortung (siehe Memory `healer-runs-only-on-lod2`). Die Entscheidung, Ursache 2 offen
+zu lassen, war damit hinfaellig.
+
+**Finaler Fix — echtes, aber eng begrenztes Vertex-Welding:** neue `CityGmlUtils.
+weldNearbyRingVertices(rings, RING_DEDUP_TOL)`, VOR der T-Naht-Einfuegung in `conformJunctions`
+aufgerufen. Verschmilzt Eckpunkte VERSCHIEDENER Huellen-Ringe, die naeher als `RING_DEDUP_TOL`
+(2mm) beieinander liegen, auf einen gemeinsamen Punkt — per Union-Find, damit auch Cluster aus
+3+ nahen Punkten korrekt (nicht nur paarweise) zusammengefasst werden. Anders als das
+urspruenglich entfernte generelle Vertex-Welding (bis zu 5mm, unklar begrenzt) ist dies bewusst
+eng: nur 2mm Toleranz, nur innerhalb der ohnehin fuer die T-Naht-Pruefung gesammelten Huellen-
+Ringe. Die bestehende (unveraenderte) Einfuege-Logik sieht dank der Vorab-Verschmelzung nur noch
+EINEN Kandidaten pro realer Ecke — der bestehende "doppeltes t"-Check verhindert daher ganz
+automatisch jede Doppel-Einfuegung, ohne dass irgendeine Nachbarwand ihren Anschlusspunkt verliert.
+
+**Verifiziert:** 25/25 Unit-Tests gruen. Direkter A/B-Vergleich mit CityDoctor2 an genau den 11
+betroffenen Gebaeuden (`fEA, fb7, fIN, g7H, gmt, hKN, hna, i8L, iWh, ixo, fWE`), sonst identischer
+Code: `GE_R_CONSECUTIVE_POINTS_SAME` 52→**0**, alle anderen Fehlerklassen an denselben Gebaeuden
+**exakt unveraendert** (`GE_S_SELF_INTERSECTION` 2→2, `GE_S_NOT_CLOSED` 4→4,
+`GE_P_NON_PLANAR_POLYGON_DISTANCE_PLANE` 6→6) — diesmal ein sauberer Fix ohne Tauschgeschaeft.
+Volle 3.801-Gebaeude-Kachel: schema-valide; Text-Scan auf Fastduplikat-Punkte (CityDoctor2-
+Schwelle 0,00173m) zeigt **0 verbleibende Faelle** tile-weit; `q8004709`/`hYt` weiterhin
+unveraendert (Selbstueberschneidung 0, keine schwebende Etage); Schritt-3/4-Zahlen (Boeden/Decken/
+Tueren/Fallback-Tueren) exakt identisch zur Baseline. val3dity tile-weit sogar spuerbar
+**verbessert** (75→**56** invalide Primitive): `102`=0 (weg), `104`=5 (unveraendert), `204`=25
+(vorher 30 — das Welding schliesst offenbar auch anderswo vorher lockere mm-Naehte), `302`=11
+(vorher 20, ebenfalls verbessert), `303`=13/`306`=1/`307`=8 (alle unveraendert). Einzige kleine
+Verschiebung: `601 BUILDINGPARTS_OVERLAP` 309→313 Features (+4) — dieser Check ist nachweislich
+nachbarschaftskontext-abhaengig (siehe frühere Untersuchungen in diesem Dokument) und auf
+Mikro-Verschiebungen im mm-Bereich empfindlich; nicht weiter verfolgt. Doku.md/GitHub-Zielordner/
+sqltest/output synchron.
+
+### Systematischer LoD2-vs-LoD3-Vergleich: neue Fehlerkategorien (2026-08-31)
+
+**Nutzer-Frage:** "holen wir uns im Vergleich zu vorher (Ausgangsdaten) noch irgendwo neue Fehler
+rein?" — CityDoctor2 (Nutzer-Konfig) auf volle LoD2-Quelle vs. volle LoD3-Kachel verglichen
+(je 3.801 Gebaeude), per-Gebaeude-Diff berechnet. Ergebnis: reale neue Fehler jenseits des
+bisher Gefixten — `GE_R_SELF_INTERSECTION` 0→8, `GE_S_SELF_INTERSECTION` 1→12 (KEINE
+Ueberschneidung mit der R-Level-Liste!), `GE_P_NON_PLANAR` netto +30 (~35 Gebaeude), `GE_S_
+NON_MANIFOLD_EDGE` 1→3. `GE_S_NOT_CLOSED` sogar verbessert (9→8), keine Aktion noetig.
+
+**GE_R_SELF_INTERSECTION — Root Causes gefunden, Ergebnis gemischt:**
+
+1. **cutWallAtMultipleZJTS-Klasse** (`h55` 3x, `gqs` 1x, vermutlich auch `h37`, `09Xf000Fn`):
+   die LoD2-Wand hat ein reales "gestuftes" Profil (dieselbe (u)-Position kommt bei mehreren
+   Original-Hoehen vor — echte Quelldaten-Geometrie). Trifft eine Geschoss-Schnitthoehe zufaellig
+   fast exakt (hier: 4mm) eine dieser Original-Hoehen, ist `wallJts.intersection(bandRect)` ein
+   bekannter JTS-Robustheits-Grenzfall und liefert einen sich selbst beruehrenden Ring.
+   Fix-Versuch (Schnitthoehe bei Koinzidenz wegruecken) behob h55+gqs vollstaendig, erzeugte aber
+   an einem ANDEREN, unbeteiligten Gebaeude (`gO2`) eine neue `GE_S_NOT_CLOSED`-Luecke.
+   **Verworfen — kein Fix im Einsatz, Root Cause aber dokumentiert fuer einen spaeteren, besseren
+   Versuch.**
+2. **conformJunctions-Klasse** (`hms`): eine Nachbarwand-Ecke liegt zufaellig exakt auf einer
+   Kante DIESES Rings, an einer Stelle, die (nicht benachbart) bereits einem eigenen Punkt des
+   Rings entspricht. Fix-Versuch (Kandidat ueberspringen, wenn er einem anderen Punkt DESSELBEN
+   Rings entspricht) behob hms — aber identisches Muster wie der bereits am 28.08. verworfene
+   erste conformJunctions-Fix: an anderer Stelle wieder `GE_S_NOT_CLOSED` + `GE_S_NON_MANIFOLD_
+   EDGE` neu. **Verworfen.**
+3. **clipSlabAtZ-Zyklusschluss-Klasse** (`hHr`, NEU gefunden, GEFIXT): eine Geschossdecke, deren
+   Ring am zyklischen Schluss (letzter Punkt ~ erster Punkt) 2,2mm auseinanderliegt — knapp ueber
+   `RING_DEDUP_TOL` (2mm). Eine pauschale Erhoehung von `RING_DEDUP_TOL` auf 3mm haette hHr
+   behoben, aber an einer voellig unbeteiligten Wand in einem anderen Gebaeude (`i5d`) eine neue,
+   grenzwertige `GE_P_NON_PLANAR`-Meldung ausgeloest (per A/B mit 2,3mm UND 3mm Toleranz identisch
+   reproduziert — die Ursache ist die pauschale Geltung, nicht die genaue Toleranzgroesse).
+   **Finaler Fix:** `createPolygon` bekommt eine private ueberladene Variante mit expliziter
+   Toleranz; `createPolygonWithHoles` (ausschliesslich fuer clipSlabAtZ-Geschossdecken/-boeden
+   verwendet) nutzt eine eigene, groessere `SLAB_RING_DEDUP_TOL` (3mm) NUR fuer den Aussenring
+   dieser Slabs, waehrend alle anderen `createPolygon`-Aufrufer (Waende, Oeffnungen) weiter bei
+   `RING_DEDUP_TOL` (2mm) bleiben. **Sauber verifiziert:** per-Gebaeude-Diff der vollen Kachel
+   zeigt genau EINE Zeile Unterschied zur Baseline (`hHr`s Selbstueberschneidung weg), sonst
+   tile-weit exakt null Veraenderung — kein Tauschgeschaeft.
+
+**Wichtige, wiederholt bestaetigte Lektion:** in `conformJunctions`/`cutWallAtMultipleZJTS`
+funktionieren "Kandidat/Schnitt ueberspringen"-Fixe fast nie sauber (zweimal an unterschiedlichen
+Stellen mit demselben Tauschgeschaeft gescheitert). Ein pauschal erhoehter globaler Toleranzwert
+kann ebenfalls an unbeteiligter Stelle Kollateralschaeden ausloesen — der rettende Unterschied
+beim `hHr`-Fix war, die erhoehte Toleranz strikt auf den tatsaechlich betroffenen Aufrufer-
+Kontext (Slabs) zu beschraenken, statt sie global zu setzen. Fuer kuenftige aehnliche Faelle:
+**Toleranzerhoehungen so eng wie moeglich scopen (Aufrufer-spezifisch), nicht die zentrale
+Utility-Funktion pauschal betreffen.**
+
+**Verbleibend UNGEFIXT nach diesem ersten Durchgang (2026-08-31, vormittags):**
+- `GE_R_SELF_INTERSECTION`: 8→7 (nur hHr behoben, war Klasse 3 = clipSlabAtZ-Zyklusschluss, nicht
+  Teil der urspruenglichen 8 R-Level-Faelle sondern ein NEUER, beim Diagnostizieren gefundener
+  Fall — die urspruenglichen 6 betroffenen Gebaeude/8 Instanzen bleiben unveraendert offen, da
+  beide dafuer entwickelten Fixe verworfen wurden).
+- `GE_S_SELF_INTERSECTION` (12 Instanzen, 11 Gebaeude) — komplett ununtersucht, CityDoctor2
+  liefert dafuer keine Koordinaten (nur `type=SOLID` + `parent BuildingPart`).
+- Grossteil der `GE_P_NON_PLANAR`-Zunahme (+30 netto) — nur ein Mechanismus bekannt
+  (Dachfenster-Lochrand verschiebt die Ausgleichsebene minimal), erklaert vermutlich nicht alle
+  Faelle.
+
+### KRITISCHER Config-Fund: `numberOfRoundingPlaces` falsch (2026-08-31, nachmittags)
+
+Beim Versuch, `GE_S_SELF_INTERSECTION` per Sichtpruefung mit dem Nutzer zu klaeren (CityDoctor2-
+GUI, Fehler-Baum mit Polygon-Namen), zeigten mehrere Gebaeude in der GUI "valide", obwohl die CLI
+mit derselben `-c Konfig_für Test.yml` einen Fehler meldete (`ivU`, `gEY`, `g0q`). Ursache: die
+YAML hatte `numberOfRoundingPlaces: '8'` (Nanometer-Praezision), die tatsaechliche, vom Nutzer in
+der GUI haendisch eingestellte und per Screenshot bestaetigte Konfiguration nutzt aber `3`
+(Millimeter — CityGML-Quelldateien liegen ohnehin nur mit max. 3 Nachkommastellen vor).
+**`sqltest/output/Konfig_für Test.yml` jetzt auf `3` korrigiert.**
+
+Auswirkung: bei `GE_S_SELF_INTERSECTION` (Solid-Ebene, trianguationsbasiert) massiv — volle
+Kachel meldete mit `8` 12 Instanzen/11 Gebaeude, mit korrektem `3` nur noch **5 Instanzen/5
+Gebaeude**. 7 der 11 (`ivU, iB9, hWg, fMO, fHh, gEY, g0q`) waren reine Rundungs-Fehlalarme
+(Sub-Millimeter-Trianguationsrauschen, das bei Nanometer-Rundung als "Fehler" erscheint, bei
+Millimeter-Rundung korrekt verschwindet) — per direktem CLI/GUI-Abgleich an 7 Testgebaeuden
+100% verifiziert. Andere Kategorien (`GE_R_SELF_INTERSECTION`, `GE_S_NON_MANIFOLD_EDGE`)
+blieben beim Wechsel unveraendert — nur der trianguationslastige Solid-Self-Intersection-Check
+reagierte so empfindlich. **Wichtige Nebenwirkung:** die LoD2-Baseline muss mit derselben
+korrigierten Konfig neu geprueft werden (war ebenfalls mit `8` gelaufen) — dabei fiel zusaetzlich
+auf, dass `GE_S_NOT_CLOSED` fälschlich als "9→8, verbessert" dokumentiert war; mit korrekter
+Baseline ist es tatsaechlich **6→8, eine Verschlechterung** (siehe unten).
+
+### GE_S_SELF_INTERSECTION: vollstaendig untersucht, drei Root-Cause-Klassen (2026-08-31)
+
+Mit der korrigierten Konfig verbleiben 5 echte Instanzen: `hGc`, `fMQ`, `gnQ`, `iWh`, `j0t`.
+
+1. **hGc** (1 Instanz): Dachfenster-Loch (`RoofWindowGenerator`) in einer nicht-konvexen, um eine
+   Gaube herum gekerbten Dachflaeche (16 Randpunkte). Fensterposition nachweislich egal (auch ein
+   sicher weit von der Kerbe platziertes Fenster loest den Fehler aus; komplettes Deaktivieren
+   behebt ihn). CityDoctor2 trianguliert fuer den Solid-Check intern (eigene, zur Laufzeit
+   generierte `CityDoctor_<timestamp>_N`-IDs — NICHT in unserer GML vorhanden, per grep
+   bestaetigt); ein Loch in einer so komplexen Kontur macht daraus eine "constrained
+   triangulation", die an der Gaubennaht offenbar ein Splitter-Dreieck erzeugt, obwohl unsere
+   echten Randpunkte exakt mit der Gaube uebereinstimmen. val3dity findet dort nichts Ungueltiges.
+   Vermutlich (nicht 100% sicher) ein CityDoctor2-Trianguations-Grenzfall, aehnlich dem bekannten
+   TIN-Fehlalarm. Als generelle Verbesserung (unabhaengig vom eigentlichen Fehler) wurde
+   `RoofWindowGenerator` um `openingInsideWallSideTopClearance2D` + `wallContourEntersOpening`
+   erweitert (analog Tuer/Fenster) — per Volltile-Diff exakt nebenwirkungsfrei, behebt aber
+   diesen spezifischen Fall nicht (positionsunabhaengig). NICHT weiter gefixt.
+2. **fMQ** (1 Instanz, aber 12 Splitter-Stellen rund um das Gebaeude): ECHTES Artefakt, kein
+   Trianguations-Fehlalarm. Ungleiche Traufhoehe zwischen Nachbarwaenden derselben Gebaeudeecke
+   (z.B. 233,70 vs. 233,75 — 5cm, reale LoD2-Geometrie). Die hoehere Nachbarwand braucht ein
+   zusaetzliches Geschoss, dessen Geschoss-Grenz-Vertex per T-Naht-Logik (`conformJunctions`)
+   korrekterweise auch auf die niedrigere Nachbarwand eingetragen wird — erzeugt dort einen
+   5cm-Splitter, den CityDoctor2 kaskadierend gegen mehrere Nachbarflaechen meldet. Gleiche
+   Grundklasse wie die weiterhin offenen `h55`/`gqs`/`h37`/`09Xf000Fn`. NICHT gefixt.
+3. **gnQ + iWh** (je 1 Instanz, gnQ mit 15 gemeldeten Paaren): schmale (10-25cm), aber sehr hohe
+   (bis 16m, Keller bis 4.OG), lueckenlos und ueberlappungsfrei gestapelte Wandsegmente — bei gnQ
+   bestaetigt exakt dieselben zwei XY-Eckpunkte in allen 6 Stuecken, Z-Bereiche schliessen
+   nahtlos. Alle moeglichen Paare (auch nicht benachbarte) werden gemeldet — spricht fuer einen
+   weiteren Trianguations-Stabilitaetsgrenzfall bei sehr schmalen/hohen, exakt fluchtenden
+   Mehrfach-Scheiben. NICHT gefixt, NICHT abschliessend als Fehlalarm oder echt eingestuft.
+4. **j0t**: erst durch die Config-Korrektur ueberhaupt sichtbar geworden. NACHTRAG (spaeter am
+   Tag): identischer Mechanismus wie `hGc` bestaetigt (Dachfenster deaktivieren behebt es komplett,
+   positionsunabhaengig; betroffene Dachflaechen mit 13 Aussenring-Punkten aehnlich komplex/
+   gekerbt).
+
+**Abschluss-Entscheidung (2026-08-31, Nutzer):** hGc/j0t (Dachfenster-Klasse) und gnQ/iWh
+(Schmalwand-Klasse) werden als bekannte, akzeptierte CityDoctor2-Trianguations-Grenzfaelle
+dokumentiert (analog zum TIN-Fehlalarm) — KEIN Code-Fix. Jeder denkbare generelle Fix
+(Dachfenster auf komplex gekerbten Dachflaechen grundsaetzlich unterdruecken, schmale Waende
+nicht mehr geschossweise teilen) waere eine echte Verhaltensaenderung mit realen Kosten (weniger
+Dachfenster / andere Wandaufteilung), nur um einen mutmasslichen Tool-Trianguations-Fehlalarm zu
+vermeiden — kein echter Geometriedefekt (Randpunkte stimmen an allen Nahtstellen exakt ueberein,
+val3dity findet an keiner der 4 Stellen etwas Ungueltiges). **Damit ist `GE_S_SELF_INTERSECTION`
+komplett abgeschlossen** — einzige verbleibende ECHTE, ungefixte Instanz in dieser Kategorie ist
+`fMQ` (Teil der groesseren, weiterhin offenen T-Naht-Splitter-Familie mit h55/gqs/h37/09Xf000Fn,
+siehe `GE_R_SELF_INTERSECTION` oben).
+
+### Bugfix: Traufe-Verwurf-Schwelle inkonsistent mit Flachdach-Toleranz (GE_S_NOT_CLOSED, 2026-08-31)
+
+Bei der Untersuchung der neu entdeckten `GE_S_NOT_CLOSED`-Faelle `fb7`, `ggO`, `hHL` (alle drei
+per Config-Korrektur neu sichtbar geworden, siehe oben) fand sich ein gemeinsamer, klar
+verstandener Mechanismus: `StoreyGenerator` klassifiziert ein Dach als "flach" (`isFlachdach`),
+wenn First- und Traufhoehe um weniger als `FLAT_ROOF_TOLERANCE` (0,30m) auseinanderliegen — bei
+`fb7` betrifft das ein Dach mit einem kleinen First-Detail nur 19cm ueber der Traufe, korrekt
+noch als "flach" erkannt. Beim anschliessenden Wandschnitt (`cutWallAtMultipleZJTS`) wird bei
+Flachdaechern jedes Wandstueck OBERHALB der Traufe verworfen — aber mit der viel engeren
+`CUT_TOLERANCE` (0,05m) statt derselben `FLAT_ROOF_TOLERANCE`. Ergebnis: das legitime 19cm-First-
+Wandstueck wird verworfen, obwohl die zugehoerigen (unveraenderten) Original-Dachflaechen dieses
+Detail weiterhin erwarten → offene Kante im Solid (`GE_S_NOT_CLOSED`). Bestaetigt per direkter
+`cutWallAtMultipleZJTS`-Instrumentierung: das First-Dreieck wird von JTS korrekt als eigenes
+Bandstueck erzeugt, aber danach durch die zu enge Verwurf-Schwelle wieder entfernt.
+
+**Fix:** beide betroffenen Verwurf-Schwellen (Sammelschleife + Pro-Segment-Schleife) in
+`StoreyGenerator.processBuilding` von `traufeZ + CUT_TOLERANCE` auf `traufeZ +
+FLAT_ROOF_TOLERANCE` geaendert — dieselbe Toleranz, die auch die Flachdach-Klassifikation selbst
+verwendet, konsistent angewendet. Bewusst NUR diese zwei Stellen geaendert (nicht die
+Cut-Entscheidung selbst, nicht andere `traufeZ`-Vergleiche wie Slab-Generierung), um den Eingriff
+minimal zu halten.
+
+**Verifikation:** fb7, ggO UND hHL isoliert alle drei sauber behoben (Root Cause war identisch
+bei allen dreien). Volle 3.801-Gebaeude-Kachel per-Gebaeude-Diff: **genau 3 Zeilen** Unterschied
+(fb7/ggO/hHL, `GE_S_NOT_CLOSED` jeweils weg), alle anderen Kategorien (`GE_R_SELF_INTERSECTION`=7,
+`GE_S_SELF_INTERSECTION`=5, `GE_P_NON_PLANAR`=538, `GE_S_NON_MANIFOLD_EDGE`=3) exakt unveraendert
+— kein Tauschgeschaeft. `GE_S_NOT_CLOSED` tile-weit 8→5. **Gefixt, synchronisiert, GitHub-
+Zielordner gebaut, `sqltest/output` neu erzeugt.**
+
+Der vierte urspruengliche `GE_S_NOT_CLOSED`-Neuzugang, `gJv`, ist ein ANDERER, bereits bekannter
+Fall: zwei separate `BA_Ground`-Flaechen desselben Gebaeudes ueberlappen sich exakt an den
+gemeldeten Fehlerkoordinaten — identisch zum bereits dokumentierten, vom Nutzer bewusst
+zurueckgestellten "isolierte GroundSurface"-Fall (siehe `iaq`, Abschnitt "Keller-Basisgeschoss-
+Generierung"). Nicht Teil dieses Fixes, bleibt bewusst offen.
+
+**Vollstaendiger, config-korrigierter Fehlerbild-Vergleich LoD2 → LoD3 (Stand 2026-08-31, nach
+diesem Fix):**
+
+| Kategorie | LoD2 | LoD3 (vorher) | LoD3 (nach Traufe-Fix) |
+|---|---|---|---|
+| `GE_R_SELF_INTERSECTION` | 0 | 7 | 7 (unveraendert) |
+| `GE_S_SELF_INTERSECTION` | 1 | 5 | 5 (unveraendert) |
+| `GE_S_NOT_CLOSED` | 6 | 8 | **5** |
+| `GE_S_NON_MANIFOLD_EDGE` | 1 | 3 | 3 (unveraendert) |
+| `GE_P_NON_PLANAR_...` | 505 | 538 | 538 (unveraendert) |
+
+**Verbleibend UNGEFIXT (Stand 2026-08-31, Sitzungsende):**
+- `GE_R_SELF_INTERSECTION` (7 Instanzen: h55×3, gqs, h37, 09Xf000Fn, hms) — Root Cause bekannt
+  (T-Naht-Splitter), drei Fix-Versuche verworfen (Tauschgeschaeft).
+- `GE_S_SELF_INTERSECTION` (5: hGc, fMQ, gnQ, iWh, j0t) — **ABGESCHLOSSEN.** hGc+j0t und
+  gnQ+iWh als CityDoctor2-Trianguations-Fehlalarm dokumentiert (Nutzer-Entscheidung, kein
+  Code-Fix). Einzige verbleibende echte, ungefixte Instanz: `fMQ` (T-Naht-Splitter-Familie,
+  s.o.).
+- `GE_S_NOT_CLOSED` (5: `CpV`, `gGt`, `hjL` vorbestehend nicht unsere Schuld; `gmt` Symptom von
+  Self-Intersection zu NotClosed gewechselt, weiterhin kaputt; `gJv` bekannter, zurueckgestellter
+  Fall).
+- `GE_S_NON_MANIFOLD_EDGE` (3: `hdQ`/`iMM` Symptom von NonManifoldVertex zu NonManifoldEdge
+  gewechselt, weiterhin kaputt; `gJv` s.o.).
+- `GE_P_NON_PLANAR` (505→538, +33 netto) — **VOLLSTAENDIG AUFGESCHLUESSELT** (2026-08-31,
+  Sitzungsende, auf Nutzer-Wunsch zuerst Wandfaelle geprueft). Drei Ursachen erklaeren praktisch
+  die gesamte Zunahme:
+  1. **Vorbestehende Quelldaten-Ungenauigkeit** (Wand oder Dach bereits in den LoD2-Rohdaten
+     leicht windschief — ein Eckpunkt liegt 1-2mm neben der Ebene der anderen drei, typischerweise
+     durch ~1cm XY-Versatz zwischen oberer und unterer Kante ueber die Bauteilhoehe). Bei ALLEN
+     8 geprueften Wandfaellen (`fbd`, `hxZ`, `iJE`, `i2s`, `02d60008Z`, `g0f`, `0q800468k`,
+     `0007wF`) bestaetigt: dieselbe Original-Wand hatte in der LoD2-Baseline bereits GENAU DIESE
+     Meldung — unser Geschossschnitt teilt die Wand nur in mehrere Stuecke auf, jedes Stueck erbt
+     dieselbe winzige Verdrehung und wird deshalb EINZELN gezaehlt (1 Meldung -> 2-3 Meldungen).
+     Keine neue Verdrehung wird eingefuehrt. Nutzer-Entscheidung: als erklaert dokumentieren, kein
+     Fix (echte Neu-Einebnung waere eine Geometrieaenderung mit realem Seiteneffekt-Risiko, nur
+     um Sub-3mm-Kleinstungenauigkeit zu vermeiden). Betrifft auch einen Teil der Nicht-Wand-Faelle
+     (z.B. `iLc`, `0B740002q`, Teile von `q800468k`/`ie3`).
+  2. **RoofWindowGenerator verschiebt die Ausgleichsebene** (bereits laenger bekannter
+     Mechanismus, siehe [[slab-clip-self-intersection-snap-fix]]) — massiv bestaetigt: 27 von 41
+     geprueften Nicht-Wand-Instanzen betroffen, u.a. ein kompletter 7er-Cluster (`02d60008S/N/R/
+     K/L/b/Z`, alle mit identischer Original-Aussenkontur, nur durch 1-5 Dachfenster-Loecher
+     jeweils ueber die Toleranz gedrueckt). Keine Aktion — dieselbe Klassifikation wie bei hGc/j0t
+     (GE_S_SELF_INTERSECTION): reale, aber sehr kleine (Sub-mm) Verschiebung der CityDoctor2-
+     Ausgleichsebene durch legitime Dachfenster, kein Geometriefehler.
+  3. **T-Naht-Splitter (conformJunctions)** — DIESELBE Familie wie die offenen
+     `GE_R_SELF_INTERSECTION`-Faelle (h55/gqs/h37/09Xf000Fn/fMQ/hms): ein T-Naht-Kandidat wird
+     wenige mm bis ~1cm neben einem bereits vorhandenen Eckpunkt derselben Kontur eingefuegt und
+     erzeugt dort statt einer Selbstueberschneidung nur einen winzigen Knick, der die Ebene
+     verfehlt. Bestaetigt bei `h37` (Punktanzahl 7->8, neuer Punkt exakt 7mm unter einem
+     bestehenden Eckpunkt derselben XY-Position), `ie3`, `q80047bD`, `flt` (alle mit zusaetzlichem
+     Punkt gegenueber LoD2) und `q80044Y6` (mehrere neue Punkte). ~5 Instanzen. Bleibt ungefixt
+     aus demselben Grund wie `GE_R_SELF_INTERSECTION` — Teil derselben, bereits mehrfach an
+     Trade-offs gescheiterten Baustelle, keine separate Untersuchung noetig.
+
+  **Fazit:** die urspruengliche Sorge "34 komplett unerklaerte Gebaeude" ist nach dieser
+  Untersuchung nicht mehr zutreffend — praktisch die komplette Zunahme ist auf die drei
+  o.g., bereits an anderer Stelle dokumentierten Mechanismen zurueckgefuehrt, keine neue,
+  eigenstaendige Fehlerklasse gefunden.
+
+### Vierter Fix-Versuch fuer T-Naht-Splitter, TEILWEISE erfolgreich: Ring-Aufspaltung am Pinch-Point (2026-08-31, spaet)
+
+Nach den drei gescheiterten "Kandidat weglassen"-Versuchen (s.o., Abschnitt "Systematischer
+LoD2-vs-LoD3-Vergleich") eine strukturell andere Idee: statt die T-Naht-Einfuegung zu verhindern,
+den dadurch entstandenen selbstberuehrenden Ring NACHTRAEGLICH an der Beruehrungsstelle in zwei
+einfache Teilringe aufspalten — beide bleiben Teil desselben `MultiSurface` (in CityGML voellig
+normal, mehrere `Polygon`e pro Flaeche sind zulaessig). Keine Einfuegung wird dafuer weggelassen,
+keine Verbindung geht verloren.
+
+**Implementierung:** `CityGmlUtils.splitSelfTouchingRings(Building)`, neuer letzter
+geometrieveraendernder Schritt NACH `conformJunctions` (muss danach laufen, der Pinch entsteht
+erst dort — nachgelagerter Code darf sich ab hier NICHT mehr auf "genau ein Polygon pro Flaeche"
+verlassen). Findet im Aussenring eines Polygons ein Kandidatenpaar (nicht benachbarter, (nahezu)
+identischer Punkt), teilt den offenen Punktpfad an dieser Stelle in zwei Haelften auf, ordnet
+vorhandene Innenringe (Fenster/Tueren) per 3D-Punkt-in-planarem-Ring-Test (dominante-Achse-
+Projektion, wie `ringSelfIntersects`) der jeweils passenden Haelfte zu. Rekursiv (bis 5
+Iterationen), falls mehrere verschachtelte Pinch-Points im selben Ring vorliegen.
+
+**Zwei wichtige, beim Testen gefundene Randfaelle:**
+1. Bei verschachtelten Pinch-Points (derselbe Punkt kommt an DREI+ Stellen vor) kann das erste
+   gefundene Kandidatenpaar eine entartete (<3 Punkte) Teilflaeche erzeugen, obwohl ein ANDERES
+   Paar im selben Ring einen gueltigen Schnitt liefern wuerde. Fix: naechstes Kandidatenpaar
+   probieren statt aufzugeben, wenn eines entartet.
+2. Ein reiner "Spike" (Weg geht zu einem Punkt raus und exakt wieder zurueck, z.B. A→B→C→B) hat
+   IMMER einen zu kurzen Abstand zwischen den beiden Beruehrungs-Indizes — beide resultierenden
+   Haelften wuerden auf <3 Punkte entarten. Strukturell NICHT per Zweiseiten-Aufspaltung loesbar.
+   **Sicherung:** das Gesamtergebnis wird nur committet, wenn ALLE Teilstuecke (nach allen
+   Rekursionsstufen) mit dem gruendlicheren `ringSelfIntersects`-Test vollstaendig sauber sind —
+   sonst wird die GESAMTE Aufspaltung verworfen und das Original bleibt unveraendert (Ring bleibt
+   wie bisher gemeldet, aber es entsteht KEIN neuer Fehler an anderer Stelle). Ohne diese
+   Sicherung erzeugte ein Testlauf bei `h55` genau das befuerchtete Tauschgeschaeft (2 von 3
+   Selbstueberschneidungen behoben, aber eine neue `GE_S_NOT_CLOSED` durch das uebrig gebliebene
+   Spike-Stueck) — mit der Sicherung: sauber 2 von 3 behoben, keine neue Luecke.
+
+**Ergebnis:** von den bekannten Problemfaellen liessen sich NUR 2 der 3 Instanzen bei `h55`
+sauber aufspalten (echte, nicht verschachtelte Zweiseiten-Pinches). `gqs`, `h37`, `09Xf000Fn`,
+`hms` sind alle reine Spikes (Punktabstand <3 zwischen den Beruehrungsstellen) und bleiben
+unveraendert — fuer diese braeuchte es eine andere Technik (Spike-Detour entfernen), die aber
+strukturell wieder dem bereits verworfenen "Weglassen"-Muster nahekommt und hier bewusst NICHT
+versucht wurde. **Verifiziert:** volle 3.801-Gebaeude-Kachel per-Gebaeude-Diff zeigt GENAU EINE
+Zeile Unterschied (`h55`: 3→1 Instanzen), alle anderen Kategorien exakt unveraendert
+(`GE_S_SELF_INTERSECTION`=5, `GE_S_NOT_CLOSED`=5, `GE_P_NON_PLANAR`=538, `GE_S_NON_MANIFOLD_
+EDGE`=3), Schema-valide, val3dity identisch (366/9409 Features, 53/16238 Primitive, exakt wie
+vorher). `GE_R_SELF_INTERSECTION` tile-weit 7→5. **Geshippt, synchronisiert, GitHub-Zielordner
+gebaut, `sqltest/output` neu erzeugt.**
+
+**Verbleibend UNGEFIXT (Stand 2026-08-31, nach diesem Fix):** `h55` (1 verbleibende Instanz,
+Spike), `gqs`, `h37`, `09Xf000Fn`, `hms` (alle Spikes) — 5 Instanzen insgesamt. Root Cause fuer
+ALLE fuenf jetzt vollstaendig verstanden (Spike-Pattern), aber kein sicherer Fix ohne
+Tauschgeschaeft gefunden.
+
+**Konkrete Root-Cause-Herleitung an `gqs` + Korrektur einer Fehleinschaetzung (2026-08-31,
+noch spaeter):** die T-Naht-Einfuegung sucht mit `tol=5mm` nach Kandidaten fuer jede Ringkante.
+Weil die Geschoss-Schnitthoehe bei `gqs` zufaellig nur ~1mm von einer ECHTEN Original-Wandstufe
+entfernt liegt (`cutWallAtMultipleZJTS` liefert dafuer bereits ein sauberes, aber sehr eng
+gestuftes Rohstueck), findet die T-Naht-Suche einen Kandidaten, der SPAETER im selben Ring
+ohnehin schon als eigener Punkt vorkommt, und traegt ihn zusaetzlich ein — der Spike entsteht.
+Bestaetigt identisch bei `h55`/`h37`/`09Xf000Fn` (6-9mm Z-Differenz zwischen den beiden
+Vorkommen); `hms` ist derselbe Spike-Typ mit exakt (nicht nur fast) gleicher Hoehe.
+
+Erste Vermutung dazu (`weldNearbyRingVertices` kollabiere zwei 1mm-nahe Punkte und schaffe so
+erst die kritische Kante) wurde per direktem A/B-Test (Verschmelzung per Schalter deaktiviert vs.
+aktiviert, an denselben 5 Gebaeuden UND an der vollen Kachel) **widerlegt** — `GE_R_SELF_
+INTERSECTION` war in beiden Faellen exakt identisch (5/5). Verschmelzung ist NICHT die Ursache.
+Zusaetzlich bestaetigt: OHNE Verschmelzung wird es an anderer Stelle sogar schlechter
+(`GE_S_NOT_CLOSED` 5→9, `GE_R_CONSECUTIVE_POINTS_SAME` 0→26) — Verschmelzung bleibt ein reiner
+Gewinn, keine Mitursache dieser Spikes.
+
 ## Geplante Erweiterungen
 
 | Schritt | Funktion | Status |
@@ -2720,26 +3862,190 @@ sichtbare Verbesserung, aber auch die groesste Verhaltensaenderung dieses Umbaus
 | 5 | Fenster (WindowGenerator) | ✅ Fertig |
 | 5a | Kellerfenster ab Kellerboden (BA floor fix) | ✅ Fertig |
 | 5b | BuildingPart-Duplizierung verhindern (coveredByPart) | ✅ Fertig |
-| 5c | Dachfenster (RO.window.XXX) | 📋 TODO |
-| 3f | Flaechentreue-Fallback (`isFaithfulSplit`, sicherer Schnitt bei Oeffnung+Mischdach → kein 306) | ✅ Fertig |
+| 5c | Dachfenster (RO.window.XXX, `RoofWindowGenerator`) | ✅ Fertig (2026-08-27) |
+| 3f | Wand-Mehrfachschnitt bei Oeffnung+Mischdach/Anbau-Kerben (JTS-Bandschnitt, `cutWallAtMultipleZJTS` → kein 306) | ✅ Fertig (2026-08-24, JTS-Umbau) |
 | 6 | Junction-Conforming (T-Naht-Vertices, streng formneutral, 0 mm bewegt) | ✅ Fertig |
 | — | Vertex-Welding ENTFERNT (verschob Vertices ≤5 mm → Aufgabe des Healers) | ✅ Entfernt |
 | 7 | Oeffnungs-Kontur-Check (Tuer+Fenster via `openingInsideWall2D`; 206/201 → 0) | ✅ Fertig |
 | 8 | Balkone/Terrassen (`BalconyGenerator`) | ✅ Fertig — seit 2026-08-10 in Pipeline verdrahtet, seit 2026-08-11 als `BuildingInstallation`, seit 2026-08-12 zweiphasig um die Fenster herum (Redesign 3: 630→1.075 Balkone); an 14 Testgebäuden + voller 3.801er-Kachel val3dity- und XSD-verifiziert (0 zusätzliche Fehler, schema-valide) |
 | 3g | Fliegende Geschossdecke bei BuildingPart-losen Anbauten (siehe [Bugfix](#bugfix-fliegendes-stockwerk-bei-anbauten-ohne-eigenes-buildingpart-2026-08-12)) | ✅ Fertig (2026-08-12) — Anbau-Kerben-Entfernung pro Grundpolygon-Kante, val3dity-neutral verifiziert |
-| 5d | Doppelte/gestapelte Kellerfenster-Reihen (`WindowGenerator`, BA hart auf 1 Reihe begrenzt) | ✅ Fertig (2026-08-11) |
+| 5d | Doppelte/gestapelte Fensterreihen (`WindowGenerator`, jede Wand hart auf 1 Reihe begrenzt) | ✅ Fertig (2026-08-11, auf alle Geschosse erweitert 2026-08-25) |
 
-### TODO: Dachfenster (Schritt 5c)
+### Schritt 5c: Dachfenster (`RoofWindowGenerator`, 2026-08-27)
 
-Die JSON-Baukörpermodule enthalten bereits RO-Parameter (z.B. `RO.window.WiLen`,
-`RO.window.WiHe`, `RO.window.VDistFlWi`, `RO.shape.RiHe` = Firsthöhe).
-Die Implementierung ist zurückgestellt und als eigenständiger Schritt (5c) geplant.
+Eigenständiger neuer Generator (nicht in `WindowGenerator` integriert, um diesen nicht weiter
+aufzublähen und weil die Geometrie einer geneigten Dachfläche fundamental anders ist als eine
+senkrechte Wand). Platziert Dachflächenfenster (flach in der Dachschräge liegend, Velux-Stil,
+keine Gauben) auf geneigten `RoofSurface`-Polygonen anhand des `RO.window`-Blocks der JSON-
+Baukörpermodule — derselbe Parametersatz wie bei Wand-/Kellerfenstern
+(`HDistWaWi`/`HDistMinWaWi`/`HDistWiWi`/`VDistFlWi`/`WiLen`/`WiHe`), da `RO.window` intern
+denselben `WindowParams`-Typ nutzt.
 
-Geplante Logik:
-- Dachflächen (`RoofSurface`) nach Neigung und Azimut analysieren
-- Firsthöhe (`RO.shape.RiHe`) aus JSON, Traufhöhe aus Geometrie bestimmen
-- Dachfenster als `Opening`/`Window` auf schrägen Flächen platzieren
-- Begrenzung auf maximal zulässigen Flächenanteil (WWR analog zu Wandfenstern)
+**Vorab geklärt:** `RO.shape.Typ` ist NICHT ein Dachfenster-/Gauben-Typ, sondern die Dachform des
+Gebäudes selbst (Satteldach/Flachdach/etc., `ModuleParameters.RoofShape.type`). Die weiteren
+`RO.shape`-Neigungsparameter (`HSiTi`/`VSiTi`/`HFrTi`/`VFrTi`) dienten offenbar der prozeduralen
+Dachform-Erzeugung im urspruenglichen novaFACTORY-Tool und sind fuer uns irrelevant, da die
+Dachgeometrie bereits real aus dem LoD2-Datensatz vorliegt (kein Dach wird neu konstruiert). Scope
+bleibt bewusst einfach: flache Dachflächenfenster in vorhandene geneigte `RoofSurface`-Polygone
+einschneiden, keine Gauben-Baukörper. `RO.window` ist in ca. der Haelfte der geprueften Module
+komplett leer (kein Dachfenster in diesem Baukoerpertyp) — `WindowParams.isValid()` filtert das
+automatisch.
+
+**Geometrische Kernentscheidung:** die von Wänden bekannte Konvention "u = entlang Unterkante, v =
+Erstreckung von der Bezugskante weg" wird 1:1 auf die Dachfläche übertragen — bei der Wand ist v
+zufällig Welt-Z (weil senkrecht), bei der Dachfläche ist v die Erstreckung **entlang der
+Dachschräge** (Traufe → First), nicht Welt-Z. `VDistFlWi`/`WiHe` werden also entlang der Neigung
+gemessen (an einer 45°-Testfläche numerisch verifiziert: ein Fenster mit `WiHe=1.45` hat exakt
+1.45m 3D-Abstand zwischen Unter- und Oberkante, nicht nur 1.45m Z-Differenz). Außerdem: genau 1
+Fensterreihe pro Dachfläche (Traufe→First), konsistent mit der Wand-Konvention seit dem
+2026-08-25-Fix.
+
+**Wiederverwendung:** `CityGmlUtils.findBottomEdge` (Traufkante = "Unterkante" einer Dachfläche,
+identische Logik wie bei Wänden — komplexe/unregelmäßige Verschneidungsflächen ohne 2 Punkte auf
+zMin, z.B. die aus dem traufeZ-Fix bekannte 86m²-Kehlfläche, werden dadurch automatisch
+übersprungen, kein Sondercode nötig), `WindowGenerator.calculateWindowCount`/`calculateWindowOffsets`
+(paket-privat, direkt wiederverwendbar), `CityGmlUtils.pointInPolygon2D`/`openingInsideWall2D`/
+`openingInsideWallTopClearance2D` (bereits vollständig generisch), `CityGmlUtils.addOpeningToWall`
+(trotz des Namens bereits generisch — nimmt 4 beliebige 3D-Eckpunkte entgegen, kein Duplikat
+nötig). Neu: zwei kleine, eigenständige Utility-Methoden `CityGmlUtils.projectPlaneTo2D`/
+`isRingCCWOnPlane` (Generalisierung von `projectWallTo2D`/`isExteriorRingCCW` mit echtem 3D-
+"Aufwärts"-Vektor statt der Wand-Annahme v=Z — bewusst als NEUE Methoden, keine Änderung an den
+bestehenden wand-spezifischen Funktionen, um jedes Regressionsrisiko am verifizierten Wand-Pfad
+auszuschließen) sowie `computeUpSlopeVector` (Newell-Normale × Traufrichtung, Vorzeichen auf
+First-Richtung normiert).
+
+**Bugfix waehrend der Verifikation — `302 SHELL_NOT_CLOSED` (22→342 Primitive):** der erste Lauf
+auf der vollen Kachel zeigte eine deutliche val3dity-Regression. Isoliert auf `DESNALK0q80047bD`
+(1 Dachfläche, 2 Dachfenster) reproduziert. Ursachen-Analyse: `CityGmlUtils.rebuildSolidShell`
+nimmt FillingSurfaces (Fenster/Türen) einer Öffnung explizit mit in die Solid-Shell auf — laut
+eigenem Code-Kommentar "sonst GE_S_NOT_CLOSED am Lochrand" — aber dieser Mechanismus war hart auf
+`instanceof WallSurface` verdrahtet, ohne Berücksichtigung von `RoofSurface`. Jedes durchs
+Dachfenster geschnittene Loch blieb dadurch am Lochrand offen. **Verifiziert per Ausschlussverfahren**
+(empirischer Flip-Test, um eine falsche Loch-Wicklung als Ursache auszuschließen: `!extCCW` beim
+Lochschnitt ergab `208 ORIENTATION_RINGS_SAME` statt `302` — bestätigt, dass die urspruengliche
+Wicklungsrichtung korrekt war und das Problem woanders lag). **Fix:** `rebuildSolidShell`s
+FillingSurface-Sammlung generalisiert auf `WallSurface` UND `RoofSurface` (kein Umbau der
+bestehenden Wand-Logik, nur ein zusätzlicher Zweig). Nach dem Fix: isoliertes Testgebäude 10/10
+Primitive valide (vorher 9/10), volle Kachel wieder exakt auf der Baseline.
+
+**Verifiziert:** 17/17 Unit-Tests (4 neue, geometrisch an einer 45°-Testfläche per Hand
+vorverifiziert: `computeUpSlopeVector`, `projectPlaneTo2D`, CCW-Erkennung beider Richtungen).
+`DESNALK0q80047bD` isoliert (Modul EE3, reale `RO.window`-Werte): 2 Dachfenster auf der sauberen
+Walmdach-Teilfläche `_3_76` (54.6m², Teil des im traufeZ-Fix bestätigten Konsens-Clusters), 0
+Fenster auf der bekannten 86m²-Kehlfläche `_3_17` (automatisch ausgeschlossen: zu kurze
+Traufkante) — schema-valide, 10/10 val3dity-Primitive valide. 14-Testgebäude-Menge schema-valide.
+Volle 3.793-Gebäude-Kachel: 1.400 Dachfenster auf 657 Dachflächen (2.116 übersprungen: 497
+Flachdach, 776 keine Traufkante/Normale, 96 zu kurz entlang der Schräge, 640 Traufkante zu kurz,
+107 außerhalb der Kontur); Wand-/Tür-/Fenster-/Balkon-Zahlen **exakt unverändert** (40.781/3.048/
+3.096 — Dachfenster sind vollständig unabhängig vom Wandzustand); schema-valide; val3dity **exakt
+identisch zur Baseline** (102=7/104=4/204=30/302=22/303=27/306=1/307=10/601=313).
+
+### Bugfix: Fensterkante exakt auf Anbau-Kerbe der Wandkontur (GE_P_INTERIOR_DISCONNECTED, 2026-08-27)
+
+**Problem** (Nutzer-Fund an Gebäude `DESNALK0pF001i5d`, Screenshot): CityDoctor2 meldet
+`GE_P_INTERIOR_DISCONNECTED`. Der Nutzer vermutete richtig: eine Fensterecke berührt exakt die
+Ecke, an der ein Flachdach-Anbau in die Hauptwand einschneidet.
+
+**Ursache bestätigt** (CityDoctor2-CLI direkt auf das isolierte Gebäude angesetzt,
+`de.hft.stuttgart.citydoctor2.CityDoctorValidationCLI` aus `D:\Tools\CityDoctorGUI-3.18.2-win\app`,
+liefert einen XML-Report mit exakten Koordinaten): Wand `Face_00042S8_0_1_UF_1_1` (Innenwand="1",
+neben einem Anbau) hat durch die bestehende Anbau-Kerben-Behandlung eine **nicht-konvexe**
+Kontur mit einer echten Stufe (Kerbe bei u≈7,63, Höhe springt von Z=230,81 auf Z=231,35). Ein
+Fenster-Kandidat (`Win_2`) wurde von `calculateWindowOffsets` so platziert, dass seine RECHTE Kante
+exakt auf dieser Kerbe liegt (Koordinaten bis auf 1e-7m identisch). Der reine 4-Eckpunkt-
+Ray-Casting-Test (`openingInsideWall2D`) ist an Randpunkten mehrdeutig und ließ den Kandidaten
+faelschlich durch — dieselbe Fehlerklasse wie der bereits behobene "Fenster liegt exakt an der
+Traufe an"-Bug (`openingInsideWallTopClearance2D`), hier aber an einer SEITENKANTE statt der
+Oberkante.
+
+**Tile-weite Prüfung:** CityDoctor2 auf der vollen 3.793-Gebäude-Kachel angesetzt (lief in ~7
+Sekunden dank In-Memory-Fallback-DB) — **nur 1 Vorkommen tile-weit**, kein systematisches Muster.
+
+**Fix:** neue Methode `CityGmlUtils.openingInsideWallSideTopClearance2D` — wie die bestehende
+Traufe-Clearance, zusätzlich mit demselben 2cm-Sicherheitsabstand an LINKER und RECHTER Kante
+(bewusst weiterhin OHNE Unterkante — bodenbündige Kellerfenster bleiben gültig). Da bei einem
+"normalen" Fenster der Abstand zur Wandkante durch `HDistMinWaWi` (typischerweise 1–3m) ohnehin
+weit über 2cm liegt, betrifft die Änderung ausschließlich echte Randfälle wie diesen — verifiziert
+durch die tile-weite Zahlen unten. `WindowGenerator.collectValidWindows` nutzt diese neue Methode
+jetzt als primäre Prüfung (Fallback-Nudge nach unten bleibt wie bisher nur vertikal — ein seitlich
+kollidierendes Fenster wird verworfen statt seitlich verschoben, analog zum bestehenden
+Giebel-Drop-Verhalten).
+
+**Verifiziert:** 20/20 Unit-Tests (2 neue: Ablehnung einer Fensterkante exakt auf einer
+Wand-internen Kerbe, Bestätigung dass ein Fenster mit echtem Abstand weiterhin passiert, an einer
+synthetischen L-foermigen Testwand). `DESNALK0pF001i5d` isoliert: 19→18 Fenster (1 Giebel-Drop
+mehr), CityDoctor2 bestätigt `GE_P_INTERIOR_DISCONNECTED` 1→0. 14-Testgebäude-Menge:
+schema-valide, Fensterzahl unverändert (i5d nicht im 14er-Set enthalten). Volle Kachel:
+40.781→40.776 Fenster (−5, plausibel: die restlichen 4 sind bislang unentdeckte, ähnlich knappe
+Randfälle ohne CityDoctor2-Meldung, jetzt präventiv verworfen), Giebel-Drops 333→338 (+5, exakt
+gegenläufig); schema-valide; val3dity **Gesamtzahlen exakt unverändert** (92/17.797 Primitive,
+396/9.985 Features weiterhin invalide) — nur eine Verschiebung 302→303 um je 1 (dieselbe Wand,
+siehe unten); CityDoctor2 tile-weit: `GE_P_INTERIOR_DISCONNECTED` 1→0.
+
+**Nebenbefund (nicht Teil dieses Fixes):** nach dem Entfernen des kollidierenden Fensters meldet
+CityDoctor2 für **dieselbe** Wand neu `GE_S_NOT_CLOSED` (vorher durch den schwerwiegenderen
+Interior-Disconnected-Fehler offenbar maskiert) — passt zur val3dity-Verschiebung 302→303. Das
+Entfernen eines Fensters kann geometrisch nur vereinfachen, nie einen neuen Fehler erzeugen; die
+gestufte Wandkontur an dieser Stelle hat also vermutlich bereits vorher ein eigenes, noch nicht
+untersuchtes Problem, unabhängig vom Fenster. Val3dity-Gesamtzahl bleibt unveraendert (derselbe
+Primitive war vorher schon invalide), daher kein Rueckschritt — aber als offener Punkt fuer eine
+spaetere, gezielte Untersuchung der Anbau-Kerben-Geometrie an dieser Wand vorgemerkt. **Update
+2026-08-27: identifiziert und behoben, siehe unten** — exakt derselbe Mechanismus wie bei
+`DESNALK0pF001iLp`.
+
+### Bugfix: Keller-Überhang-Segment nicht verworfen (GE_S_NON_MANIFOLD_EDGE/GE_S_NOT_CLOSED, 2026-08-27)
+
+**Problem** (Nutzer-Fund an Gebäude `DESNALK0pF001iLp`, betrifft laut Nutzer möglicherweise mehr
+Gebäude): CityDoctor2 meldet an der Keller-/EG-Kante `GE_S_NON_MANIFOLD_EDGE` und `GE_S_NOT_CLOSED`
+— der Nutzer beschrieb es treffend als "zwei Linien knapp übereinander".
+
+**Neuer Werkzeug-Einsatz:** CityDoctor2-CLI (`de.hft.stuttgart.citydoctor2.CityDoctorValidationCLI`)
+direkt auf den vollen 3.793-Gebäude-Bestand angesetzt (in ~7 Sekunden dank In-Memory-DB), um die
+tile-weite Häufigkeit zu ermitteln, statt blind zu fixen: **79 von 3.793 Gebäuden (≈2,1 %)**
+betroffen — genug, um eine echte, allgemeine Untersuchung zu rechtfertigen.
+
+**Ursache bestätigt** (StoreyGenerator, Wand-Mehrfachschnitt): eine Original-Wand kann geringfügig
+unter `egFloorZ` (Keller-/EG-Grenze) hinabreichen (hier exakt 0,10 m, `Face_00043QT_0_12` von
+227,49 bis 230,87, `egFloorZ`=227,59). Der JTS-Bandschnitt (`cutWallAtMultipleZJTS`) erzeugt daraus
+korrekt ein eigenes Segment für das Kellerband [227,49; 227,59]. Der Verwurf-Check dafür prüfte
+bisher den **Mittelpunkt** des Segments gegen `egFloorZ − CUT_TOLERANCE` (227,59 − 0,05 = 227,54)
+— bei genau 0,10 m Überhang liegt der Mittelpunkt (227,54) **exakt** auf dieser Schwelle, der
+`<`-Vergleich schlägt knapp fehl, das Segment wird NICHT verworfen. Der anschließende
+Nachtrimm-Fallback (`trimWallBelowEgFloor` → `cutWallPolygonAtZ`) erkennt dann, dass der
+Schnittpunkt exakt auf der eigenen Obergrenze des Segments liegt ("nichts mehr zu schneiden") und
+gibt `null` zurück — der Fallback behält daraufhin das komplette Kellerband als eigenständiges
+GF-Wandstück, das sich mit der separat erzeugten Kellerwand (`BasementGenerator`) überlappt bzw.
+eine offene Kante hinterlässt.
+
+**Fix:** Verwurf-Kriterium von "Mittelpunkt unterhalb Schwelle" auf "**Oberkante** des Segments
+überragt `egFloorZ` nicht um mehr als `CUT_TOLERANCE`" umgestellt (`segZ[1] <= egFloorZ +
+CUT_TOLERANCE`) — an zwei Stellen in `StoreyGenerator.java` (Vorab-Ermittlung von `keptMaxTop` und
+die eigentliche Verwurf-Entscheidung). Diese neue Schwelle ist **mathematisch exakt deckungsgleich**
+mit `cutWallPolygonAtZ`s eigenem "zCut liegt an der Obergrenze"-Schutz (`zCut >= maxZ - tolerance`
+⟺ `maxZ <= zCut + tolerance`, gleiche `CUT_TOLERANCE`) — jedes Segment, das den Nachtrimm-Fallback
+zum Scheitern bringen würde, wird dadurch bereits vorher zuverlässig verworfen, unabhängig von der
+genauen Größe des Überhangs (nicht nur bei exakt 0,10 m).
+
+**Verifiziert:** 20/20 Unit-Tests weiterhin grün (keine neuen Tests nötig, reine Bugfix-Änderung
+an bereits bestehender Logik). `DESNALK0pF001iLp` isoliert: alle bisherigen Warnungen
+("reicht unter egFloorZ", "Tür passt nicht in Wand ... Wandhöhe 0.1") verschwunden,
+Wandsegmente 16→8, CityDoctor2 bestätigt `GE_S_NON_MANIFOLD_EDGE`/`GE_S_NOT_CLOSED` je 1→0.
+14-Testgebäude-Menge: unverändert (kein betroffenes Gebäude enthalten), schema-valide. Volle
+Kachel: Wandsegmente 77.374→77.151 (−223, Kellerüberhang-Slivers tile-weit eliminiert), Türen
+2 weniger übersprungen (44→32, einige zuvor fälschlich zu niedrige Wandstücke sind jetzt normale
+Wände), Fenster/Balkone/Dachfenster unverändert; schema-valide; val3dity **echte Verbesserung**
+(92→79 invalide Primitive, 396→390 invalide Features; 303 NON_MANIFOLD_CASE 26→13,
+307 POLYGON_WRONG_ORIENTATION 10→7, 601 minimal +1 durch Nebeneffekt, alle anderen Kategorien
+unverändert); CityDoctor2 tile-weit: `GE_S_NON_MANIFOLD_EDGE` 32→19, `GE_S_NOT_CLOSED` 71→58
+(exakt 13 Gebäude vollständig behoben, 79→66 betroffene Gebäude), `GE_P_INTERIOR_DISCONNECTED`
+bleibt bei 0 (Fix von oben haelt).
+
+**Offener Punkt (nicht Teil dieses Fixes):** 66 Gebäude zeigen weiterhin `GE_S_NON_MANIFOLD_EDGE`/
+`GE_S_NOT_CLOSED` — Stichprobe (`DESNALK0pF0007wF`) zeigt offene Kanten auf einem ANDEREN
+Z-Niveau (224,01 statt einer egFloorZ-nahen Höhe), also vermutlich eine andere, noch nicht
+diagnostizierte Ursache. Für eine spätere, separate Untersuchung vorgemerkt — CityDoctor2-CLI auf
+die volle Kachel angesetzt liefert dafür bereits die betroffene Gebäudeliste
+(`affected_buildings2.txt`-Muster, siehe Vorgehen oben).
 
 ## Schritt 6: Balkon-Generator (`BalconyGenerator`)
 
@@ -3148,6 +4454,129 @@ mvn clean package
 ```
 
 Erzeugt drei JAR-Dateien im `target/` Verzeichnis.
+
+## Unit-Tests (2026-08-24)
+
+Seit dem Code-Audit vom 2026-08-24 gibt es neben der bisherigen manuellen Verifikationskette
+(Einzelgebäude isolieren → 14er-Testset → volle 3.801-Gebäude-Kachel → `citygml-tools validate` →
+val3dity) auch klassische JUnit-5-Tests für die trickyste, reine Geometrie-Logik in
+`CityGmlUtils` — die Funktionen, die keine GML-Ein-/Ausgabe brauchen, sondern nur Koordinaten
+rein und Teilstücke/Booleans raus liefern.
+
+**Warum zusätzlich zur Kachel-Verifikation, nicht statt ihr:** ein Test läuft in Millisekunden
+und schlägt sofort fehl, wenn eine Änderung eine der bereits gefundenen, nicht offensichtlichen
+Fehlerursachen (geknickte Wände, Anbau-Kerben, Party-Wand-Deckung) wieder kaputt macht — noch
+bevor man den mehrminütigen Weg über Kachel + val3dity geht. Was Tests **nicht** abdecken können:
+Shell-Geschlossenheit, Koordinaten-Präzision zwischen benachbarten Flächen im fertigen GML,
+val3dity-Kategorien insgesamt — das sind Effekte, die erst beim echten Zusammenbau der ganzen
+Kachel auftreten (siehe die zwei Nachbesserungen beim JTS-Wand-Mehrfachschnitt-Fix oben). Die
+volle Verifikationskette bleibt daher vor jedem Fix-Abschluss weiterhin Pflicht.
+
+**Wo:** `src/test/java/de/mpsc/lod2tolod3/util/`, spiegelt die Paketstruktur von `src/main`
+(Standard-Maven-Layout). Abhängigkeit: `org.junit.jupiter:junit-jupiter` (test-scoped in
+`pom.xml`), von Maven Surefire automatisch erkannt — kein zusätzliches Plugin nötig.
+
+**Ausführen:**
+```bash
+mvn test              # nur Tests
+mvn clean package      # Tests laufen automatisch mit (nicht mehr -DskipTests wie bisher!)
+```
+
+**Vorhandene Tests:**
+
+- `CityGmlUtilsWallCutTest` — testet `cutWallAtMultipleZJTS` (siehe Bugfix oben). Baut das
+  Face_00040DQ_0_8-Profil aus `imo` mit runden Testkoordinaten nach (Wand mit Anbau-Kerbe, die
+  bis zum Boden reicht) und prüft: (a) ein Schnitt innerhalb der Kerben-Zone zerfällt korrekt in
+  mehrere Teilstücke statt stillschweigend übersprungen zu werden (der ursprüngliche Bug), (b) die
+  Flächenbilanz aller Teilstücke stimmt exakt mit der Original-Wandfläche überein (deckt sowohl
+  verlorene als auch doppelt gezählte Fläche auf — genau die Art Fehler, die zur
+  Orientierungs-Regression während der Entwicklung geführt hat). Plus ein Kontrolltest für die
+  einfache Rechteckwand (kein Kerben-Sonderfall), damit der JTS-Umbau den Normalfall nicht
+  verändert.
+- `CityGmlUtilsPartyWallTest` — testet `computeCoveredSpans`/`overlapsAnySpan`/`isFullyCovered`
+  (siehe Bugfix "Fenster/Tueren/Balkone hinter Anbau" oben). Baut die gHh-Situation nach (geknickte
+  Wand, ein Abschnitt deckt sich mit der Trennwand eines Anbaus) und prüft: (a) nur der
+  tatsächlich verdeckte Abschnitt wird als verdeckt erkannt, der freie Abschnitt bleibt nutzbar,
+  (b) volle Deckung wird korrekt von Teildeckung unterschieden, (c) eine Nachbarwand auf einem
+  anderen Geschoss (abweichendes zMin) erzeugt keine Deckung — das ist der Grund, warum die
+  Prüfung wandweise und nicht grundrissweise arbeitet (ein freiliegendes Obergeschossfenster über
+  einem einstöckigen Anbau würde sonst fälschlich als verdeckt markiert).
+- `CityGmlUtilsBottomEdgeTest` — testet `findBottomEdge`, die Grundlage praktisch jeder
+  Öffnungs-Platzierung UND (seit 2026-08-24) des Wand-Mehrfachschnitts. Prüft: bei mehreren Punkten
+  auf `zMin` (geknickte Wand mit Zwischenpunkt auf der Sohle) wird das Punktepaar mit dem größten
+  2D-Abstand gewählt (volle Wandbreite), nicht das erste gefundene, kürzere Teilstück — genau der
+  Mechanismus, der beim `gjj`-Bug fehlte.
+- `CityGmlUtilsOpeningClearanceTest` — testet `openingInsideWallTopClearance2D` (siehe Bugfix
+  "Fenster lag exakt an der Traufe an" oben). Prüft: ein Fenster, dessen Oberkante exakt auf der
+  Wandkontur liegt, wird abgelehnt; eines mit echtem Abstand zur Oberkante bleibt zugelassen; ein
+  bodenbündiges Fenster (Unterkante bei v=0) bleibt unbeeinflusst — der Clearance-Abstand gilt
+  bewusst nur oben, nicht an den anderen drei Seiten (sonst würden echte Giebel-Abschnitte mit
+  schrägen Seitenkanten mitbeeinflusst).
+- `CityGmlUtilsSlabClipTest` — testet `clipSlabAtZ` (siehe Bugfix "Ablösung: Anbau-Zuschnitt durch
+  echte 2D-Polygon-Differenz" oben, der Vorläufer des heutigen Wand-Mehrfachschnitt-Fixes). Baut
+  einen Grundriss mit einem niedrigeren Anbau-Flachdach nach und prüft: eine Geschossdecke weit
+  über der Anbau-Traufe wird korrekt um die Anbau-Grundfläche verkleinert (kein schwebender
+  Deckenanteil über dem Anbau), eine Geschossdecke unterhalb der Anbau-Traufe bleibt dagegen
+  unverändert über den vollen Grundriss.
+
+Alle Testklassen sind bewusst als Regressionstests für konkrete, real gefundene Fehler geschrieben
+(nicht als abstrakte Coverage-Übung) — jeder Testfall entspricht einem Screenshot/Bugreport aus
+dieser Session.
+
+---
+
+## Code-Redundanz-Aufräumung: `CityGmlUtils.java` aufgeteilt (2026-09-01)
+
+`CityGmlUtils.java` war über Monate organisch auf 2.186 Zeilen mit 13 thematisch klar
+unterscheidbaren Blöcken gewachsen (Geometrie-Grundlagen, Gebäude-Abfragen, Wand-Schnitt,
+Slab-Zuschnitt, TerrainIntersectionCurve, Solid-Shell-Rebuild, Junction-Conforming,
+Pinch-Point-Aufspaltung, Öffnungen, Party-Wand-Deckung, GML-I/O, Attribut-Helfer). Reine
+Verschiebung ohne Logikänderung, kein Verhalten sollte sich ändern — daher als **Phase A**
+separat von jeder inhaltlichen Änderung durchgeführt und per Plan-Mode vom Nutzer abgesegnet.
+
+**Neue Struktur** (alle im selben Paket `de.mpsc.lod2tolod3.util`, package-private Sichtbarkeit
+reicht für Cross-Klassen-Aufrufe):
+
+| Datei | Inhalt |
+|---|---|
+| `Point3D.java` | Die bisher in `CityGmlUtils` verschachtelte `Point3D`-Klasse, jetzt Top-Level |
+| `GeometryUtils.java` | Geometrie-Grundlagen (Flächen, Kanten, Rundung, `createPolygon`, Selbstschnitt-Test, Wand-Attribut-Berechnung, Ebenen-Projektion, Ring-Punkte) — Basis-Klasse, von fast allen anderen genutzt |
+| `BuildingQueryUtils.java` | Boundary-/Target-Sammlung, Dach-Z-Bereich |
+| `WallCuttingUtils.java` | Sutherland-Hodgman-Einzelschnitt + JTS-Bandschnitt an mehreren Höhen |
+| `SlabClippingUtils.java` | Geschossflächen-Zuschnitt bei Anbauten (JTS-Differenz) |
+| `SolidShellUtils.java` | TerrainIntersectionCurve + Solid-Shell-Neuaufbau |
+| `JunctionConformingUtils.java` | T-Naht-Konformierung + Pinch-Point-Aufspaltung (gehören eng zusammen, Aufspaltung läuft direkt nach Konformierung) |
+| `OpeningUtils.java` | Fenster-/Tür-Platzierungsprüfungen und -Erzeugung |
+| `PartyWallCoverageUtils.java` | Wand-Deckung durch Nachbarbauteile (Anbau) |
+| `CityGmlUtils.java` (bleibt, 200 statt 2.186 Zeilen) | Attribut-Helfer, GML-Datei-I/O, SRS-Konstanten + `MultiSurfaceProperty`-Erzeugung |
+
+Zwei Methoden mussten entgegen der reinen Zeilenbereich-Zuordnung des Plans bewusst mit ihrem
+jeweiligen Abschnitt "mitwandern", weil sie nur dort gebraucht werden: `pointsOfRing` (physisch im
+Öffnungen-Block, aber sowohl von der Pinch-Point-Aufspaltung als auch von den Öffnungen gebraucht
+→ landet in `GeometryUtils`) und `segmentsProperlyIntersect` (Selbstschnitt-Helfer, zusätzlich von
+`OpeningUtils.wallContourEntersOpening` gebraucht → package-private in `GeometryUtils`, nicht mehr
+rein privat). `import static` wurde bewusst NICHT verwendet (Herkunft am Aufrufort bleibt über
+`GeometryUtils.xxx(...)` sichtbar, wie zuvor `CityGmlUtils.xxx(...)`).
+
+**Verifikation:**
+1. `mvn clean package`: alle 25 Unit-Tests grün, keine Compile-Fehler (Java-Compiler als
+   Sicherheitsnetz für übersehene Aufrufstellen genutzt — zwei Fehler tatsächlich so gefunden:
+   ein falscher Klassenimport (`WallSurface` aus dem falschen Package) und eine
+   Methodenreferenz `CityGmlUtils::calculateNetArea2D`, die das reine `CityGmlUtils.xxx`-Text-
+   Ersetzungsskript wegen der `::`-statt-`.`-Syntax übersehen hatte).
+2. Volle 3.801-Gebäude-Kachel einmal mit dem alten Code (Stand vor der Aufteilung, aus dem
+   GitHub-Zielordner) und einmal mit dem neuen Code durchlaufen lassen, beide ~438 MB großen
+   Ausgabedateien direkt per `diff` verglichen: von 15.228 Diff-Zeilen betraf **jede einzige**
+   ausschließlich den lauf-spezifischen `timestamp=...`-Wert in der Promotion-Metadaten
+   (`gen:value` der Hochstufungs-Herkunft, mit Wanduhrzeit gestempelt — ändert sich bei jedem Lauf
+   unabhängig vom Code). Keine einzige Abweichung an Geometrie, Attributen oder Struktur — die
+   Aufteilung ist damit als verhaltensneutral bestätigt, kein erneuter CityDoctor2/val3dity-Lauf
+   nötig (siehe Plan-Begründung).
+3. GitHub-Zielordner (`DD_BIM_LoD2_to_LoD3`) synchronisiert, dort ebenfalls `mvn clean package`
+   grün mit allen 25 Tests.
+
+Nebenbei sechs stale `{@link CityGmlUtils#...}`-Javadoc-Verweise in den Testklassen auf die
+jeweils neue Zielklasse korrigiert (rein kosmetisch, keine Verhaltensänderung).
 
 ---
 

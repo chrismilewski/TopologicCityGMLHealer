@@ -3,8 +3,13 @@ package de.mpsc.lod2tolod3;
 import de.mpsc.lod2tolod3.model.ModuleParameters;
 import de.mpsc.lod2tolod3.model.ModuleParameters.Gallery;
 import de.mpsc.lod2tolod3.model.WindowPreference;
+import de.mpsc.lod2tolod3.util.BuildingQueryUtils;
 import de.mpsc.lod2tolod3.util.CityGmlUtils;
-import de.mpsc.lod2tolod3.util.CityGmlUtils.Point3D;
+import de.mpsc.lod2tolod3.util.GeometryUtils;
+import de.mpsc.lod2tolod3.util.OpeningUtils;
+import de.mpsc.lod2tolod3.util.PartyWallCoverageUtils;
+import de.mpsc.lod2tolod3.util.Point3D;
+import de.mpsc.lod2tolod3.util.SolidShellUtils;
 import de.mpsc.lod2tolod3.util.ModuleParametersLoader;
 import org.citygml4j.core.model.building.AbstractBuilding;
 import org.citygml4j.core.model.building.Building;
@@ -64,8 +69,11 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         log.info("Waende uebersprungen: {}", stats.wallsSkipped);
         log.info("Balkone uebersprungen (ausserhalb Wandkontur, Tuer-Check): {}", stats.balconiesSkippedOutside);
         log.info("Balkone uebersprungen (Lauf/Balkon zu breit fuer Wandkontur): {}", stats.balconiesSkippedRunTooWide);
+        log.info("Balkone uebersprungen (kein Fenster passt danach, Mindest-Pattern): {}", stats.balconiesSkippedNoFollowUp);
         log.info("Balkone uebersprungen (Konflikt mit bestehender Tuer): {}", stats.balconiesSkippedDoorConflict);
         log.info("Balkone uebersprungen (Mindestabstand HDistWiGa zu Nachbarfenster): {}", stats.balconiesSkippedNeighborConflict);
+        log.info("Waende uebersprungen (geteilt zwischen BuildingParts): {}", stats.wallsSkippedCoveredByPart);
+        log.info("Balkone uebersprungen (hinter Anbau verborgen): {}", stats.balconiesSkippedCoveredByPart);
         log.info("Fenster durch Balkon ersetzt: {}", stats.windowsRemovedForBalcony);
         log.info("GaPa-Token ohne passendes Fenster an der Wand: {}", stats.galleryTokensUnfulfilled);
         log.info("Waende mit Balkon-Muster, aber ohne vorhandene Fenster: {}", stats.wallsWithNoWindowsForPattern);
@@ -87,82 +95,87 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
     /** Pipeline-Einstiegspunkt Phase 1 (laeuft VOR dem WindowGenerator). */
     protected void processBuildingLeading(Building building, ModuleParametersLoader paramLoader,
             GenerationStats stats) {
-        Gallery gallery = resolveGallery(building, paramLoader);
-        if (gallery == null) return;
-        for (AbstractBuilding target : CityGmlUtils.getBuildingTargets(building)) {
-            processAbstractBuilding(target, gallery, stats, true);
-            CityGmlUtils.rebuildSolidShell(target);
+        GalleryContext ctx = resolveGalleryContext(building, paramLoader);
+        if (ctx == null) return;
+        // Fuer die Party-Wand-Deckungspruefung (Anbau-Trennwaende, siehe Doku.md).
+        List<WallSurface> allWallsInBuilding = BuildingQueryUtils.collectAllWallSurfaces(building);
+        for (AbstractBuilding target : BuildingQueryUtils.getBuildingTargets(building)) {
+            processAbstractBuilding(target, ctx.gallery(), ctx.windowParams(), stats, true, allWallsInBuilding);
+            SolidShellUtils.rebuildSolidShell(target);
         }
     }
 
     /** Pipeline-Einstiegspunkt Phase 2 (laeuft NACH dem WindowGenerator). */
     protected void processBuildingRemaining(Building building, ModuleParametersLoader paramLoader,
             GenerationStats stats) {
-        Gallery gallery = resolveGallery(building, paramLoader);
-        if (gallery == null) return;
-        for (AbstractBuilding target : CityGmlUtils.getBuildingTargets(building)) {
-            processAbstractBuilding(target, gallery, stats, false);
-            CityGmlUtils.rebuildSolidShell(target);
+        GalleryContext ctx = resolveGalleryContext(building, paramLoader);
+        if (ctx == null) return;
+        List<WallSurface> allWallsInBuilding = BuildingQueryUtils.collectAllWallSurfaces(building);
+        for (AbstractBuilding target : BuildingQueryUtils.getBuildingTargets(building)) {
+            processAbstractBuilding(target, ctx.gallery(), null, stats, false, allWallsInBuilding);
+            SolidShellUtils.rebuildSolidShell(target);
         }
     }
 
-    private static Gallery resolveGallery(Building building, ModuleParametersLoader paramLoader) {
+    /** Gallery-Parameter + Fensterparameter (fuer die Mindest-Pattern-Pruefung in Phase 1). Alle
+     * balkonfaehigen Geschosse sind seit dem EG-Ausschluss ausschliesslich "UF_*", die sich alle
+     * denselben WindowParams-Block teilen ({@link ModuleParameters#getWindowParamsForGeschoss}) —
+     * ein einmaliger Abruf pro Gebaeude genuegt. */
+    private record GalleryContext(Gallery gallery, ModuleParameters.WindowParams windowParams) {}
+
+    private static GalleryContext resolveGalleryContext(Building building, ModuleParametersLoader paramLoader) {
         BuildingParams bp = resolveParams(building, paramLoader).orElse(null);
         if (bp == null) return null;
         ModuleParameters params = bp.params();
         Gallery gallery = params.getGallery();
-        return (gallery != null && gallery.isValid()) ? gallery : null;
+        if (gallery == null || !gallery.isValid()) return null;
+        return new GalleryContext(gallery, params.getWindowParamsForGeschoss("UF_1"));
     }
 
-    /** Verarbeitet jede eligible Wand eines AbstractBuilding gegen die gewaehlte Phase. */
+    /** Verarbeitet jede eligible Wand eines AbstractBuilding gegen die gewaehlte Phase.
+     * {@code windowParams} nur fuer Phase 1 gebraucht (Mindest-Pattern-Pruefung), bei Phase 2
+     * {@code null}. */
     private void processAbstractBuilding(AbstractBuilding target, Gallery gallery,
-            GenerationStats stats, boolean leadingPhase) {
+            ModuleParameters.WindowParams windowParams, GenerationStats stats,
+            boolean leadingPhase, List<WallSurface> allWallsInBuilding) {
 
         // Kopie: neu erzeugte Waende duerfen die Iteration nicht beeinflussen.
-        List<WallSurface> walls = new ArrayList<>(CityGmlUtils.collectWallSurfaces(target));
-        Point3D centroid = computeFootprintCentroid(walls);
+        List<WallSurface> walls = new ArrayList<>(BuildingQueryUtils.collectWallSurfaces(target));
         GaPaSequence sequence = parseGaPattern(gallery.pattern);
 
         for (WallSurface wall : walls) {
             String geschoss = CityGmlUtils.getStringAttribute(wall, "Geschoss");
-            CityGmlUtils.BottomEdge edge = bottomEdgeOf(wall);
+            GeometryUtils.BottomEdge edge = bottomEdgeOf(wall);
             if (!isEligibleForBalcony(wall, geschoss, edge, gallery)) continue;
             if (leadingPhase) {
-                placeLeadingBalconies(target, wall, geschoss, gallery, sequence, stats, centroid);
+                placeLeadingBalconies(target, wall, geschoss, gallery, windowParams, sequence,
+                        stats, allWallsInBuilding);
             } else {
-                placeRemainingPatternBalconies(target, wall, geschoss, gallery, sequence, stats, centroid);
+                placeRemainingPatternBalconies(target, wall, geschoss, gallery, sequence, stats, allWallsInBuilding);
             }
         }
     }
 
-    /** Groberer 2D-Schwerpunkt des Gebaeude-Footprints, als Referenz fuer die Auswaerts-Richtung der Wandnormalen. */
-    private static Point3D computeFootprintCentroid(List<WallSurface> walls) {
-        double sx = 0, sy = 0;
-        int n = 0;
-        for (WallSurface wall : walls) {
-            CityGmlUtils.BottomEdge edge = bottomEdgeOf(wall);
-            if (edge == null) continue;
-            sx += edge.start().x + edge.end().x;
-            sy += edge.start().y + edge.end().y;
-            n += 2;
-        }
-        return n == 0 ? new Point3D(0, 0, 0) : new Point3D(sx / n, sy / n, 0);
-    }
-
-    private static CityGmlUtils.BottomEdge bottomEdgeOf(WallSurface wall) {
-        Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
+    private static GeometryUtils.BottomEdge bottomEdgeOf(WallSurface wall) {
+        Polygon wallPoly = BuildingQueryUtils.getWallPolygon(wall);
         if (wallPoly == null) return null;
-        List<Point3D> open = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(wallPoly));
-        return CityGmlUtils.findBottomEdge(open);
+        List<Point3D> open = GeometryUtils.removeClosingPoint(GeometryUtils.toPoints(wallPoly));
+        return GeometryUtils.findBottomEdge(open);
     }
 
     /** Eligibilitaet einer Wand fuer Balkone anhand WindowPreference, Geschoss und Mindestlaenge (siehe Doku.md). */
     private boolean isEligibleForBalcony(WallSurface wall, String geschoss,
-            CityGmlUtils.BottomEdge edge, Gallery gallery) {
+            GeometryUtils.BottomEdge edge, Gallery gallery) {
         if (geschoss == null) return false;
-        boolean isGfOrUf = "GF".equals(geschoss) || geschoss.startsWith("UF_");
-        if (!isGfOrUf) return false;
-        if ("1".equals(CityGmlUtils.getStringAttribute(wall, "Innenwand"))) return false;
+        // EG bewusst ausgeschlossen: theoretisch koennten Loggien im EG existieren, das ist aber
+        // aktuell nicht ueber Parameter abfragbar -- bis dahin bekommt EG nur Tuer+Fenster nach
+        // JSON-Werten (siehe Doku.md).
+        if (!geschoss.startsWith("UF_")) return false;
+        // Innenwand="1" ist NUR ein LoD4-Indikator ("hier koennte spaeter eine Innenwand
+        // abgehen"), keine Aussage ueber den aktuellen LoD3-Wandtyp -- WindowGenerator ignoriert
+        // es bewusst und behandelt solche Waende normal (siehe Doku.md "Vorbedingungen
+        // (Gate-Checks)"); BalconyGenerator muss dasselbe tun, sonst bekommen Waende mit vollen
+        // Fensterreihen faelschlich nie einen Balkon.
         double minLength = gallery.length + safe(gallery.hDistMinWallGallery, 0.0);
         if (edge == null || edge.wallLength() < minLength) return false;
 
@@ -212,24 +225,25 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
 
     /** Gemeinsame Wand-Geometrie fuer beide Balkon-Phasen (siehe {@link #resolveWallGeometry}). */
     private record WallGeom(
-            CityGmlUtils.BottomEdge edge, Polygon wallPoly, List<Point3D> open,
+            GeometryUtils.BottomEdge edge, Polygon wallPoly, List<Point3D> open,
             double gaLen, double gaWid, double gaHe,
             double hDistWallGallery, double hDistGalleryGallery, double hDistWindowGallery,
             double distDoorGallery, double doorWidth, double doorHeight,
             double dirX, double dirY, double normX, double normY, boolean extCCW,
             double zMin, double doorBottomZ, double doorTopZ, double deckZ, double railTopZ,
-            double[][] wallPoly2D, String wallFaceId) {}
+            double[][] wallPoly2D, String wallFaceId,
+            List<double[]> coveredSpans) {}
 
     /** Liest Wandkontur + Gallery-Parameter der Wand; null bei geometrischem Fruehabbruch. */
     private WallGeom resolveWallGeometry(WallSurface wall, Gallery gallery,
-            Point3D footprintCentroid, GenerationStats stats) {
+            GenerationStats stats, List<WallSurface> allWallsInBuilding) {
 
-        Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
+        Polygon wallPoly = BuildingQueryUtils.getWallPolygon(wall);
         if (wallPoly == null) return null;
-        List<Point3D> open = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(wallPoly));
+        List<Point3D> open = GeometryUtils.removeClosingPoint(GeometryUtils.toPoints(wallPoly));
         if (open.size() < 3) return null;
 
-        CityGmlUtils.BottomEdge edge = CityGmlUtils.findBottomEdge(open);
+        GeometryUtils.BottomEdge edge = GeometryUtils.findBottomEdge(open);
         if (edge == null) { stats.wallsSkipped++; return null; }
 
         double gaLen = gallery.length;
@@ -263,24 +277,35 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         double dy = edge.end().y - edge.start().y;
         double dirX = dx / wallLength;
         double dirY = dy / wallLength;
-        // Auswaerts-Normale, gegen den Gebaeude-Schwerpunkt geprueft und ggf. umgedreht.
-        double normX = -dirY;
-        double normY = dirX;
-        double wallMidX = (edge.start().x + edge.end().x) / 2.0;
-        double wallMidY = (edge.start().y + edge.end().y) / 2.0;
-        if (normX * (wallMidX - footprintCentroid.x) + normY * (wallMidY - footprintCentroid.y) < 0) {
-            normX = -normX;
-            normY = -normY;
+
+        // Party-Wand-Deckung: Abschnitte, an denen ein anderer Gebaeudeteil (Anbau) exakt
+        // dieselbe Bodenkante beansprucht — dort waeren Balkone physisch verborgen. Ist die
+        // GESAMTE Wand betroffen, komplett ueberspringen; sonst wird pro Balkon-Kandidat in
+        // tryPlaceOneBalcony gefiltert (siehe Doku.md).
+        List<double[]> coveredSpans = PartyWallCoverageUtils.computeCoveredSpans(
+                wall, allWallsInBuilding, edge.start(), dirX, dirY, wallLength, edge.zMin());
+        if (PartyWallCoverageUtils.isFullyCovered(coveredSpans, wallLength)) {
+            stats.wallsSkippedCoveredByPart++;
+            return null;
         }
 
-        boolean extCCW = CityGmlUtils.isExteriorRingCCW(open, edge.start(), dirX, dirY);
+        // Auswaerts-Normale aus der Umlaufrichtung des Wand-Polygons selbst (nicht mehr aus dem
+        // Gebaeude-Schwerpunkt): bei nicht-konvexen Grundrissen (Innenhof, Gebaeudeflügel, siehe
+        // Doku.md) kann "weg vom Schwerpunkt" fuer eine einzelne Wand die falsche (nach innen
+        // zeigende) Seite ergeben — verifiziert an Gebaeude iMM, wo genau das passierte. Die
+        // Umlaufrichtung ist eine lokale Eigenschaft NUR dieser Wand und damit unabhaengig von der
+        // Grundriss-Form korrekt; wird bereits fuer die Tueroeffnungs-Umlaufrichtung vertraut
+        // (siehe unten, addOpeningToWall).
+        boolean extCCW = SolidShellUtils.isExteriorRingCCW(open, edge.start(), dirX, dirY);
+        double normX = extCCW ? dirY : -dirY;
+        double normY = extCCW ? -dirX : dirX;
         double zMin = edge.zMin();
-        double doorBottomZ = CityGmlUtils.roundZ(effectiveFloorZ + DOOR_SILL_HEIGHT);
-        double doorTopZ = CityGmlUtils.roundZ(doorBottomZ + doorHeight);
+        double doorBottomZ = GeometryUtils.roundZ(effectiveFloorZ + DOOR_SILL_HEIGHT);
+        double doorTopZ = GeometryUtils.roundZ(doorBottomZ + doorHeight);
         double deckZ = doorBottomZ;
-        double railTopZ = CityGmlUtils.roundZ(deckZ + gaHe);
+        double railTopZ = GeometryUtils.roundZ(deckZ + gaHe);
 
-        double[][] wallPoly2D = CityGmlUtils.projectWallTo2D(open, edge.start(), dirX, dirY, zMin);
+        double[][] wallPoly2D = GeometryUtils.projectWallTo2D(open, edge.start(), dirX, dirY, zMin);
 
         String wallFaceId = CityGmlUtils.getStringAttribute(wall, "BldgFaceID");
         if (wallFaceId == null) wallFaceId = wall.getId() != null ? wall.getId() : "unknown";
@@ -288,7 +313,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         return new WallGeom(edge, wallPoly, open, gaLen, gaWid, gaHe,
                 hDistWallGallery, hDistGaGa, hDistWindowGallery, distDoorGallery,
                 doorWidth, doorHeight, dirX, dirY, normX, normY, extCCW,
-                zMin, doorBottomZ, doorTopZ, deckZ, railTopZ, wallPoly2D, wallFaceId);
+                zMin, doorBottomZ, doorTopZ, deckZ, railTopZ, wallPoly2D, wallFaceId, coveredSpans);
     }
 
     /** Laenge des FUEHRENDEN zusammenhaengenden Ga-Laufs (0, falls das Muster nicht mit Ga beginnt). */
@@ -311,18 +336,31 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
      * belegte Spanne als Wand-Attribut fuer den WindowGenerator (siehe Doku.md).
      */
     private void placeLeadingBalconies(AbstractBuilding target, WallSurface wall, String geschoss,
-            Gallery gallery, GaPaSequence sequence, GenerationStats stats, Point3D footprintCentroid) {
+            Gallery gallery, ModuleParameters.WindowParams windowParams, GaPaSequence sequence,
+            GenerationStats stats, List<WallSurface> allWallsInBuilding) {
 
         int k = leadingGalleryRunLength(sequence.tokens());
         if (k == 0) return;
 
-        WallGeom g = resolveWallGeometry(wall, gallery, footprintCentroid, stats);
+        WallGeom g = resolveWallGeometry(wall, gallery, stats, allWallsInBuilding);
         if (g == null) return;
 
         double total = k * g.gaLen() + (k - 1) * g.hDistGalleryGallery();
         double maxStart = g.edge().wallLength() - total - safe(gallery.hDistMinWallGallery, 0.0);
         double blockStart = Math.min(g.hDistWallGallery(), maxStart);
         if (blockStart < 0) { stats.balconiesSkippedRunTooWide++; return; }
+
+        // Mindest-Pattern-Pruefung: ein Balkon wird nur gebaut, wenn DANACH auch noch mindestens
+        // ein Fenster passt (egal ob das Pattern explizit mit "Wi" weitergeht oder mangels GaPa
+        // auf ein reines "Ga" zurueckfaellt, z.B. EE3_4.json — derselbe Code-Pfad, siehe Doku.md).
+        // Ohne diese Pruefung reserviert Phase 1 blind Platz, bevor ueberhaupt ein Fenster
+        // existiert, und schmale Waende werden zu reinen Balkon-Waenden statt normal befenstert.
+        double availableAfter = g.edge().wallLength() - (blockStart + total + g.hDistWindowGallery());
+        if (windowParams == null || !windowParams.isValid() || availableAfter <= 0
+                || WindowGenerator.calculateWindowCount(availableAfter, windowParams) < 1) {
+            stats.balconiesSkippedNoFollowUp++;
+            return;
+        }
 
         double[] offsets = layoutGaRunFromStart(k, g.gaLen(), g.hDistGalleryGallery(), blockStart);
         String wallFaceId = g.wallFaceId();
@@ -339,10 +377,10 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         stats.balconyCountHistogram.merge(placed, 1, Integer::sum);
         if (placed == 0) return;
 
-        double wallAreaBefore = resolveCurrentWallArea(wall, g.open());
+        double wallAreaBefore = GeometryUtils.resolveWallArea(wall, g.open());
         double doorAreaTotal = placed * g.doorWidth() * g.doorHeight();
         CityGmlUtils.setStringAttribute(wall, "FACEAREA",
-                CityGmlUtils.formatNum(Math.max(0, wallAreaBefore - doorAreaTotal)));
+                GeometryUtils.formatNum(Math.max(0, wallAreaBefore - doorAreaTotal)));
         stats.wallsWithBalconies++;
 
         // Ausschluss-Zone fuer den WindowGenerator (dort duerfen keine Fenster mehr entstehen).
@@ -351,7 +389,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         double reservedLo = Math.max(0, minOffset - g.hDistWindowGallery());
         double reservedHi = maxOffset + g.hDistWindowGallery();
         CityGmlUtils.addStringAttribute(wall, "GaReservedSpan",
-                CityGmlUtils.formatNum(reservedLo) + "," + CityGmlUtils.formatNum(reservedHi));
+                GeometryUtils.formatNum(reservedLo) + "," + GeometryUtils.formatNum(reservedHi));
     }
 
     /**
@@ -361,14 +399,15 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
      * zentrieren — siehe Doku.md fuer die HDistGaGa/HDistWiGa-Abgrenzung.
      */
     private void placeRemainingPatternBalconies(AbstractBuilding target, WallSurface wall, String geschoss,
-            Gallery gallery, GaPaSequence sequence, GenerationStats stats, Point3D footprintCentroid) {
+            Gallery gallery, GaPaSequence sequence, GenerationStats stats,
+            List<WallSurface> allWallsInBuilding) {
 
         List<String> tokens = sequence.tokens();
         int leadK = leadingGalleryRunLength(tokens);
         List<String> remaining = tokens.subList(leadK, tokens.size());
         if (!remaining.contains("Ga")) return;
 
-        WallGeom g = resolveWallGeometry(wall, gallery, footprintCentroid, stats);
+        WallGeom g = resolveWallGeometry(wall, gallery, stats, allWallsInBuilding);
         if (g == null) return;
 
         List<WindowSlot> slots = collectSortedWindowSlots(wall, g.edge().start(), g.dirX(), g.dirY());
@@ -384,7 +423,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
             return;
         }
 
-        double wallAreaBefore = resolveCurrentWallArea(wall, g.open());
+        double wallAreaBefore = GeometryUtils.resolveWallArea(wall, g.open());
         double areaRestoredFromRemovedWindows = 0;
         int placed = 0;
         String wallFaceId = g.wallFaceId();
@@ -425,7 +464,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
 
                 // --- Ersetztes Fenster entfernen (FillingSurface + Innenring), Flaeche zurueckbuchen ---
                 areaRestoredFromRemovedWindows += parseAreaOrZero(slot.window());
-                CityGmlUtils.removeMatchingInteriorRing(g.wallPoly(), slot.points());
+                OpeningUtils.removeMatchingInteriorRing(g.wallPoly(), slot.points());
                 removeFillingSurfaceByIdentity(wall, slot.prop());
                 stats.windowsRemovedForBalcony++;
                 placed++;
@@ -438,7 +477,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         double doorAreaTotal = placed * g.doorWidth() * g.doorHeight();
         double wallAreaAfter = wallAreaBefore + areaRestoredFromRemovedWindows - doorAreaTotal;
         CityGmlUtils.setStringAttribute(wall, "FACEAREA",
-                CityGmlUtils.formatNum(Math.max(0, wallAreaAfter)));
+                GeometryUtils.formatNum(Math.max(0, wallAreaAfter)));
         stats.wallsWithBalconies++;
     }
 
@@ -449,7 +488,13 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
     private boolean tryPlaceOneBalcony(AbstractBuilding target, WallSurface wall, WallGeom g,
             String geschoss, double galleryOffset, String balconyId, GenerationStats stats) {
 
-        if (!CityGmlUtils.openingInsideWall2D(galleryOffset, galleryOffset + g.gaLen(),
+        if (PartyWallCoverageUtils.overlapsAnySpan(g.coveredSpans(), galleryOffset, galleryOffset + g.gaLen(),
+                PartyWallCoverageUtils.SPAN_OVERLAP_TOL)) {
+            stats.balconiesSkippedCoveredByPart++;
+            return false;
+        }
+
+        if (!OpeningUtils.openingInsideWall2D(galleryOffset, galleryOffset + g.gaLen(),
                 g.doorBottomZ() - g.zMin(), g.railTopZ() - g.zMin(), g.wallPoly2D())) {
             stats.balconiesSkippedRunTooWide++;
             return false;
@@ -457,7 +502,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
 
         double doorOffset = galleryOffset + g.distDoorGallery();
         doorOffset = Math.max(galleryOffset, Math.min(doorOffset, galleryOffset + g.gaLen() - g.doorWidth()));
-        if (!CityGmlUtils.openingInsideWall2D(doorOffset, doorOffset + g.doorWidth(),
+        if (!OpeningUtils.openingInsideWall2D(doorOffset, doorOffset + g.doorWidth(),
                 g.doorBottomZ() - g.zMin(), g.doorTopZ() - g.zMin(), g.wallPoly2D())) {
             stats.balconiesSkippedOutside++;
             return false;
@@ -475,14 +520,14 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         Point3D dbr = pointOn(g.edge().start(), g.dirX(), g.dirY(), doorOffset + g.doorWidth(), g.doorBottomZ());
         Point3D dtr = pointOn(g.edge().start(), g.dirX(), g.dirY(), doorOffset + g.doorWidth(), g.doorTopZ());
         Point3D dtl = pointOn(g.edge().start(), g.dirX(), g.dirY(), doorOffset, g.doorTopZ());
-        Polygon doorPoly = CityGmlUtils.addOpeningToWall(g.wallPoly(), dbl, dbr, dtr, dtl, g.extCCW());
+        Polygon doorPoly = OpeningUtils.addOpeningToWall(g.wallPoly(), dbl, dbr, dtr, dtl, g.extCCW());
 
         DoorSurface door = new DoorSurface();
         door.setId("Face_" + balconyId + "_Door");
         CityGmlUtils.setGmlName(door, "LOD3_BalconyDoor");
         door.setLod3MultiSurface(CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(doorPoly));
         CityGmlUtils.addStringAttribute(door, "BldgFaceID", balconyId + "_Door");
-        CityGmlUtils.addStringAttribute(door, "FACEAREA", CityGmlUtils.formatNum(g.doorWidth() * g.doorHeight()));
+        CityGmlUtils.addStringAttribute(door, "FACEAREA", GeometryUtils.formatNum(g.doorWidth() * g.doorHeight()));
         CityGmlUtils.addStringAttribute(door, "Geschoss", geschoss);
         wall.getFillingSurfaces().add(new AbstractFillingSurfaceProperty(door));
 
@@ -493,14 +538,14 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         Point3D p4 = offsetOutward(p1, g.normX(), g.normY(), g.gaWid());
 
         List<Point3D> deckRing = orientUpward(List.of(p1, p2, p3, p4));
-        Polygon deckPoly = CityGmlUtils.createPolygon(deckRing);
-        double deckArea = CityGmlUtils.calculatePolygonArea2D(deckRing);
+        Polygon deckPoly = GeometryUtils.createPolygon(deckRing);
+        double deckArea = GeometryUtils.calculatePolygonArea2D(deckRing);
         BuildingInstallation deck = new BuildingInstallation();
         deck.setId("Face_" + balconyId + "_Deck");
         CityGmlUtils.setGmlName(deck, "LOD3_BalconyDeck");
         deck.getDeprecatedProperties().setLod3Geometry(new GeometryProperty<>(deckPoly));
         CityGmlUtils.addStringAttribute(deck, "BldgFaceID", balconyId + "_Deck");
-        CityGmlUtils.addStringAttribute(deck, "FACEAREA", CityGmlUtils.formatNum(deckArea));
+        CityGmlUtils.addStringAttribute(deck, "FACEAREA", GeometryUtils.formatNum(deckArea));
         CityGmlUtils.addStringAttribute(deck, "Geschoss", geschoss);
         CityGmlUtils.addStringAttribute(deck, "STRUKTUR", CityGmlUtils.STRUKTUR_BALCONY_DECK);
         target.getBuildingInstallations().add(new BuildingInstallationProperty(deck));
@@ -526,7 +571,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
             if (!(fsp.getObject() instanceof WindowSurface ws)) continue;
             Polygon poly = firstPolygonOf(ws);
             if (poly == null) continue;
-            List<Point3D> pts = CityGmlUtils.toPoints(poly);
+            List<Point3D> pts = GeometryUtils.toPoints(poly);
             double[] span = uSpanOf(pts, origin, dirX, dirY);
             slots.add(new WindowSlot(fsp, ws, pts, span[0], span[1], (span[0] + span[1]) / 2.0));
         }
@@ -535,15 +580,6 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
     }
 
     // ==================== Kollision mit Fenstern/Tueren ====================
-
-    /** Aktuelle Netto-Wandflaeche (FACEAREA-Attribut, sonst Bruttoflaeche). */
-    private static double resolveCurrentWallArea(WallSurface wall, List<Point3D> open) {
-        String faceAreaStr = CityGmlUtils.getStringAttribute(wall, "FACEAREA");
-        if (faceAreaStr != null) {
-            try { return Double.parseDouble(faceAreaStr); } catch (NumberFormatException ignored) {}
-        }
-        return CityGmlUtils.calculateWallArea(open);
-    }
 
     /** Projiziert Punkte auf die Wandrichtung (u-Achse ab {@code origin}) und liefert [min, max]. */
     private static double[] uSpanOf(List<Point3D> pts, Point3D origin, double dirX, double dirY) {
@@ -565,11 +601,9 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         return members.get(0).getObject() instanceof Polygon p ? p : null;
     }
 
-    /** True, wenn Ueberlappungslaenge > diese Toleranz ist (blosse Kantenberuehrung zaehlt nicht). */
-    private static final double SPAN_OVERLAP_TOL = 0.02;
-
+    /** True, wenn Ueberlappungslaenge > Toleranz ist (blosse Kantenberuehrung zaehlt nicht). */
     private static boolean spansOverlap(double aLo, double aHi, double bLo, double bHi) {
-        return Math.min(aHi, bHi) - Math.max(aLo, bLo) > SPAN_OVERLAP_TOL;
+        return Math.min(aHi, bHi) - Math.max(aLo, bLo) > PartyWallCoverageUtils.SPAN_OVERLAP_TOL;
     }
 
     /** Prueft Ueberlappung mit einer bestehenden FillingSurface vom Typ type im Intervall [spanMin, spanMax]. */
@@ -580,7 +614,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
             if (!type.isInstance(fs)) continue;
             Polygon poly = firstPolygonOf(fs);
             if (poly == null) continue;
-            double[] span = uSpanOf(CityGmlUtils.toPoints(poly), origin, dirX, dirY);
+            double[] span = uSpanOf(GeometryUtils.toPoints(poly), origin, dirX, dirY);
             if (spansOverlap(spanMin, spanMax, span[0], span[1])) return true;
         }
         return false;
@@ -599,7 +633,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
             if (!(fsp.getObject() instanceof WindowSurface ws)) continue;
             Polygon poly = firstPolygonOf(ws);
             if (poly == null) continue;
-            double[] span = uSpanOf(CityGmlUtils.toPoints(poly), origin, dirX, dirY);
+            double[] span = uSpanOf(GeometryUtils.toPoints(poly), origin, dirX, dirY);
             if (spansOverlap(spanMin - clearance, spanMax + clearance, span[0], span[1])) return true;
         }
         return false;
@@ -635,7 +669,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         double totalArea = 0;
         for (Polygon side : sides) {
             multiSurface.getSurfaceMember().add(new SurfaceProperty(side));
-            totalArea += CityGmlUtils.calculateWallArea(CityGmlUtils.toPoints(side));
+            totalArea += GeometryUtils.calculateWallArea(GeometryUtils.toPoints(side));
         }
 
         BuildingInstallation railing = new BuildingInstallation();
@@ -644,7 +678,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         CityGmlUtils.setGmlName(railing, "LOD3_BalconyRailing");
         railing.getDeprecatedProperties().setLod3Geometry(new GeometryProperty<>(multiSurface));
         CityGmlUtils.addStringAttribute(railing, "BldgFaceID", faceId);
-        CityGmlUtils.addStringAttribute(railing, "FACEAREA", CityGmlUtils.formatNum(totalArea));
+        CityGmlUtils.addStringAttribute(railing, "FACEAREA", GeometryUtils.formatNum(totalArea));
         CityGmlUtils.addStringAttribute(railing, "Geschoss", geschoss);
         CityGmlUtils.addStringAttribute(railing, "STRUKTUR", CityGmlUtils.STRUKTUR_BALCONY_RAILING);
         target.getBuildingInstallations().add(new BuildingInstallationProperty(railing));
@@ -653,7 +687,7 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
     private static Polygon railingSidePolygon(Point3D a, Point3D b, double zTop) {
         Point3D aTop = new Point3D(a.x, a.y, zTop);
         Point3D bTop = new Point3D(b.x, b.y, zTop);
-        return CityGmlUtils.createPolygon(new ArrayList<>(List.of(a, b, bTop, aTop)));
+        return GeometryUtils.createPolygon(new ArrayList<>(List.of(a, b, bTop, aTop)));
     }
 
     // ==================== Geometrie-Hilfsmethoden ====================
@@ -699,10 +733,18 @@ public class BalconyGenerator extends AbstractGenerator<BalconyGenerator.Generat
         public int balconiesSkippedNeighborConflict = 0;
         /** Einzelner Balkon eines Laufs passt nicht in die Wandkontur (Balkonbreite > verfuegbarer Platz). */
         public int balconiesSkippedRunTooWide = 0;
+        /** Fuehrender Ga-Lauf nicht reserviert: nach Balkon+Mindestabstaenden passt kein einziges
+         * Fenster mehr auf die Restwand (Mindest-Pattern-Pruefung) -- Wand wird stattdessen ganz
+         * normal befenstert. */
+        public int balconiesSkippedNoFollowUp = 0;
         /** Ga-Token im GaPa-Muster ohne entsprechendes Fenster an dieser Wand (Muster laenger als Fensterliste). */
         public int galleryTokensUnfulfilled = 0;
         /** Eligible Wand mit Ga-Token im Muster, aber ohne ein einziges vorhandenes Fenster zum Ersetzen. */
         public int wallsWithNoWindowsForPattern = 0;
+        /** Wand komplett Party-Wand zu einem anderen Gebaeudeteil (Anbau) — keine Balkone dort. */
+        public int wallsSkippedCoveredByPart = 0;
+        /** Balkon nicht platziert: Abschnitt (ganz oder teilweise) hinter einem Anbau verborgen. */
+        public int balconiesSkippedCoveredByPart = 0;
         /** Verteilung: Anzahl platzierter Balkone (Schluessel) -> Anzahl Waende mit dieser Anzahl. */
         public final java.util.Map<Integer, Integer> balconyCountHistogram = new java.util.TreeMap<>();
     }

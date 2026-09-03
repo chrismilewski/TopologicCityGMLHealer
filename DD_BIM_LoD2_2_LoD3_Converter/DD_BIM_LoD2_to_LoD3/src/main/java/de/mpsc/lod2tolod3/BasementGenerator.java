@@ -1,8 +1,11 @@
 package de.mpsc.lod2tolod3;
 
 import de.mpsc.lod2tolod3.model.ModuleParameters;
+import de.mpsc.lod2tolod3.util.BuildingQueryUtils;
 import de.mpsc.lod2tolod3.util.CityGmlUtils;
-import de.mpsc.lod2tolod3.util.CityGmlUtils.Point3D;
+import de.mpsc.lod2tolod3.util.GeometryUtils;
+import de.mpsc.lod2tolod3.util.Point3D;
+import de.mpsc.lod2tolod3.util.SolidShellUtils;
 import de.mpsc.lod2tolod3.util.DgmLoader;
 import de.mpsc.lod2tolod3.util.DgmProvider;
 import de.mpsc.lod2tolod3.util.ModuleParametersLoader;
@@ -98,7 +101,7 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
         Double hDgm = CityGmlUtils.parseDoubleAttribute(building, "H_DGM");
         if (hDgm == null) return;
 
-        for (var target : CityGmlUtils.getBuildingTargets(building)) {
+        for (var target : BuildingQueryUtils.getBuildingTargets(building)) {
             processAbstractBuilding(target, bp.sst(), hDgm, bp.params(), stats);
         }
     }
@@ -133,7 +136,7 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             if (msp == null || msp.getObject() == null) continue;
             for (var member : msp.getObject().getSurfaceMember()) {
                 if (!(member.getObject() instanceof Polygon poly)) continue;
-                List<CityGmlUtils.Point3D> pts = CityGmlUtils.toPoints(poly);
+                List<Point3D> pts = GeometryUtils.toPoints(poly);
                 if (pts.isEmpty()) continue;
                 double polyMinZ = pts.stream().mapToDouble(p -> p.z).min().orElse(hDgm);
                 if (polyMinZ <= hDgm + ELEVATED_THRESHOLD) {
@@ -141,7 +144,7 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
                     if (!gsToRemove.contains(boundary)) gsToRemove.add(boundary);
                 } else {
                     log.debug("  Erhöhte GroundSurface {} (minZ={}) bleibt erhalten (> H_DGM+{}m)",
-                            gs.getId(), CityGmlUtils.formatNum(polyMinZ), ELEVATED_THRESHOLD);
+                            gs.getId(), GeometryUtils.formatNum(polyMinZ), ELEVATED_THRESHOLD);
                 }
             }
         }
@@ -158,17 +161,17 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
 
         // === Hoehen berechnen (gerundet auf mm-Genauigkeit) ===
         // Keller-Oberkante = H_DGM + heightGr (oberirdischer Anteil)
-        double basementTopZ = CityGmlUtils.roundZ(hDgm + heightGr);
+        double basementTopZ = GeometryUtils.roundZ(hDgm + heightGr);
         // Kellerboden = Oberkante - Gesamthoehe
-        double basementFloorZ = CityGmlUtils.roundZ(basementTopZ - basementTotalHeight);
+        double basementFloorZ = GeometryUtils.roundZ(basementTopZ - basementTotalHeight);
 
         log.info("Verarbeite sst={} (gml:id={}): BA.height={}, BA.CeHe={}, heightGr={}, H_DGM={}, Top={}, Floor={}",
                 sst, targetId, basementHeight, basementCeHe, heightGr, hDgm,
-                CityGmlUtils.formatNum(basementTopZ), CityGmlUtils.formatNum(basementFloorZ));
+                GeometryUtils.formatNum(basementTopZ), GeometryUtils.formatNum(basementFloorZ));
 
         // === WindowPreference-Zuordnung vorbereiten ===
         // Bestehende Waende sammeln, um WindowPreference auf Kellerwaende zu uebertragen
-        List<WallSurface> existingWalls = CityGmlUtils.collectWallSurfaces(target);
+        List<WallSurface> existingWalls = BuildingQueryUtils.collectWallSurfaces(target);
 
         int floorCount = 0;
         int wallCount = 0;
@@ -180,16 +183,16 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
         for (Polygon groundPoly : groundPolygons) {
             // Nur entduplizieren, KEIN kollineares Mergen (desynchronisiert sonst geteilte Kanten zu GF-Waenden).
             List<Point3D> groundPoints =
-                    CityGmlUtils.dedupConsecutive(CityGmlUtils.toPoints(groundPoly), CityGmlUtils.POINT_MERGE_TOL);
+                    GeometryUtils.dedupConsecutive(GeometryUtils.toPoints(groundPoly), GeometryUtils.POINT_MERGE_TOL);
             if (groundPoints.size() < 3) continue;
 
             floorCount++;
 
             // ── Kellerboden als GroundSurface (physische Bodenplatte) ──
             // Normale muss nach unten zeigen (CityDoctor IsGroundCheck, siehe Doku.md).
-            List<Point3D> floorPoints = CityGmlUtils.orientForNormalZ(
-                    CityGmlUtils.projectToZ(groundPoints, basementFloorZ), false);
-            Polygon floorPoly = CityGmlUtils.createPolygon(floorPoints);
+            List<Point3D> floorPoints = GeometryUtils.orientForNormalZ(
+                    GeometryUtils.projectToZ(groundPoints, basementFloorZ), false);
+            Polygon floorPoly = GeometryUtils.createPolygon(floorPoints);
 
             GroundSurface ground = new GroundSurface();
             String groundFaceId = targetId + "_BA_Ground_" + floorCount;
@@ -198,8 +201,8 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             ground.setLod3MultiSurface(
                     CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(floorPoly));
 
-            double floorArea = CityGmlUtils.calculatePolygonArea2D(floorPoints);
-            CityGmlUtils.addHorizontalSurfaceAttributes(ground, groundFaceId,
+            double floorArea = GeometryUtils.calculatePolygonArea2D(floorPoints);
+            GeometryUtils.addHorizontalSurfaceAttributes(ground, groundFaceId,
                     basementFloorZ, hDgm, floorArea, "BA");
             CityGmlUtils.addStringAttribute(ground, "STRUKTUR", "Bodenplatte");
             CityGmlUtils.addStringAttribute(ground, "Lage", "belowGround");
@@ -207,8 +210,8 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             target.getBoundaries().add(new AbstractSpaceBoundaryProperty(ground));
 
             // ── Kellerwaende (WallSurface pro Kante), Oberkante basementTopZ, Unterkante basementFloorZ ──
-            List<Point3D> topProjected = CityGmlUtils.projectToZ(groundPoints, basementTopZ);
-            List<Point3D> topNoClose = CityGmlUtils.removeClosingPoint(topProjected);
+            List<Point3D> topProjected = GeometryUtils.projectToZ(groundPoints, basementTopZ);
+            List<Point3D> topNoClose = GeometryUtils.removeClosingPoint(topProjected);
             for (int i = 0; i < topNoClose.size(); i++) {
                 wallCount++;
                 Point3D a = topNoClose.get(i);
@@ -218,7 +221,7 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
 
                 // Polygon: A → B → B' → A' (CCW von aussen)
                 List<Point3D> wallPoints = List.of(a, b, bDown, aDown);
-                Polygon wallPoly = CityGmlUtils.createPolygon(new ArrayList<>(wallPoints));
+                Polygon wallPoly = GeometryUtils.createPolygon(new ArrayList<>(wallPoints));
 
                 WallSurface wall = new WallSurface();
                 String wallFaceId = targetId + "_BA_Wall_" + wallCount;
@@ -227,7 +230,7 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
                 wall.setLod3MultiSurface(
                         CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(wallPoly));
 
-                CityGmlUtils.addWallAttributes(wall, new ArrayList<>(wallPoints),
+                GeometryUtils.addWallAttributes(wall, new ArrayList<>(wallPoints),
                         wallFaceId, hDgm, "BA", "belowGround", "Kellerwand", null);
 
                 // WindowPreference vom zugehoerigen Original-Wall uebertragen
@@ -242,9 +245,9 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             // ── Kellerdecke (CeilingSurface), Z=basementTopZ, gml:id fuer XLink vom GF-Floor ──
             // Normale nach unten erzwungen (CityDoctor IsCeilingCheck, siehe Doku.md); der GF-Boden
             // referenziert dieses Polygon per umgekehrtem XLink (StoreyGenerator).
-            List<Point3D> ceilingPoints = CityGmlUtils.orientForNormalZ(
-                    CityGmlUtils.projectToZ(groundPoints, basementTopZ), false);
-            Polygon ceilingPoly = CityGmlUtils.createPolygon(ceilingPoints);
+            List<Point3D> ceilingPoints = GeometryUtils.orientForNormalZ(
+                    GeometryUtils.projectToZ(groundPoints, basementTopZ), false);
+            Polygon ceilingPoly = GeometryUtils.createPolygon(ceilingPoints);
 
             // gml:id auf dem Polygon setzen (fuer XLink-Referenz vom GF-Floor)
             String slabGmlId = "Slab_" + targetId + "_BA_" + floorCount;
@@ -257,8 +260,8 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             ceiling.setLod3MultiSurface(
                     CityGmlUtils.createMultiSurfacePropertyWithDefaultSrs(ceilingPoly));
 
-            double ceilingArea = CityGmlUtils.calculatePolygonArea2D(ceilingPoints);
-            CityGmlUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
+            double ceilingArea = GeometryUtils.calculatePolygonArea2D(ceilingPoints);
+            GeometryUtils.addHorizontalSurfaceAttributes(ceiling, ceilingFaceId,
                     basementTopZ, hDgm, ceilingArea, "BA");
 
             ceilings.add(new AbstractSpaceBoundaryProperty(ceiling));
@@ -270,7 +273,7 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
         target.setStoreysBelowGround(1);
 
         // === TerrainIntersectionCurve (TIC): ohne DGM flacher Ring, mit DGM bilinear interpoliert ===
-        MultiCurveProperty tic = CityGmlUtils.createTerrainIntersectionCurve(
+        MultiCurveProperty tic = SolidShellUtils.createTerrainIntersectionCurve(
                 groundPolygons, hDgm, dgm);
         if (tic != null) {
             target.setLod3TerrainIntersectionCurve(tic);
@@ -308,11 +311,11 @@ public class BasementGenerator extends AbstractGenerator<BasementGenerator.Gener
             String pref = CityGmlUtils.getStringAttribute(wall, "WindowPreference");
             if (pref == null) continue;
 
-            Polygon wallPoly = CityGmlUtils.getWallPolygon(wall);
+            Polygon wallPoly = BuildingQueryUtils.getWallPolygon(wall);
             if (wallPoly == null) continue;
 
-            List<Point3D> pts = CityGmlUtils.removeClosingPoint(CityGmlUtils.toPoints(wallPoly));
-            CityGmlUtils.BottomEdge edge = CityGmlUtils.findBottomEdge(pts);
+            List<Point3D> pts = GeometryUtils.removeClosingPoint(GeometryUtils.toPoints(wallPoly));
+            GeometryUtils.BottomEdge edge = GeometryUtils.findBottomEdge(pts);
             if (edge == null) continue;
 
             double wsx = edge.start().x, wsy = edge.start().y;

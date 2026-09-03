@@ -1,9 +1,12 @@
-﻿# LoD2 → LoD3 Konvertierungspipeline
+# LoD2 → LoD3 Konvertierungspipeline
 
-Konvertiert CityGML-Gebäude von **LoD2 auf LoD3** – mit Keller, Geschossen, Türen und Fenstern.
-Eingabe: CityGML-Datei + optionales DGM. Ausgabe: CityGML 1.0 (LoD3).
+Konvertiert CityGML-Gebäude von **LoD2 auf LoD3** – mit Keller, Geschossen, Türen, Fenstern,
+Balkonen und Dachfenstern. Eingabe: CityGML-Datei (oder ganzer Ordner mit Kacheln) + optionales
+DGM. Ausgabe: CityGML 1.0 (LoD3).
 
-> **Vollständige technische Dokumentation:** [Doku.md](Doku.md)
+Reines CMD-Tool — keine IDE nötig, läuft in jedem Terminal mit Java 21+ (`java -jar ...`).
+
+> **Vollständige technische Dokumentation, Verifikationsläufe, Bugfix-Historie:** [Doku.md](Doku.md)
 
 ---
 
@@ -23,27 +26,43 @@ Eingabe: CityGML-Datei + optionales DGM. Ausgabe: CityGML 1.0 (LoD3).
 mvn clean package -DskipTests
 ```
 
+Ergebnis: `target/lod2-zu-lod3-pipeline.jar` (Main-Class `Lod2ToLod3Pipeline`).
+
 ---
 
 ## Schnellstart
 
-### Vollständige Pipeline
+### Einzelne Datei
 
 ```sh
 java -jar target/lod2-zu-lod3-pipeline.jar  input.gml  Baukörpermodule_json/  output/  [dgm-pfad]
 ```
 
-Oder mit Maven direkt aus dem Quellcode:
+Schreibt genau eine Ausgabedatei nach `output/`, dabei `LoD2_...` → `LoD3_...` umbenannt.
+
+### Batch-Modus: ganzer Ordner mit Kacheln
+
+Wird automatisch erkannt, wenn das erste Argument ein Ordner statt einer Datei ist:
 
 ```sh
-mvn exec:java \
-  -Dexec.mainClass=de.mpsc.lod2tolod3.Lod2ToLod3Pipeline \
+java -jar target/lod2-zu-lod3-pipeline.jar  inputFolder/  Baukörpermodule_json/  output/  [dgm-pfad]
+```
+
+Verarbeitet alle `.gml`-Dateien im Ordner nacheinander, legt unter `output/` einen neuen
+Unterordner an (`LoD2_...` → `LoD3_...` umbenannt) und schreibt dort jede Kachel einzeln hinein.
+Bricht eine einzelne Kachel ab, läuft der Rest weiter; am Ende steht eine Liste fehlgeschlagener
+Dateien plus eine aufsummierte Gesamtstatistik über alle erfolgreichen Kacheln.
+
+### Mit Maven direkt aus dem Quellcode
+
+```sh
+mvn exec:java -Dexec.mainClass=de.mpsc.lod2tolod3.Lod2ToLod3Pipeline \
   -Dexec.args="input.gml Baukörpermodule_json/ output/"
 ```
 
 ### Einzelne Schritte
 
-Jeder Schritt kann auch standalone aufgerufen werden:
+Jeder Schritt kann auch standalone aufgerufen werden (gleiches Argument-Muster):
 
 ```sh
 java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.Lod2ToLod3Promoter   input.gml  [output.gml]
@@ -52,12 +71,8 @@ java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.StoreyGenerator   
 java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.DoorGenerator        input.gml  jsonDir/  [output.gml]
 java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.WindowGenerator      input.gml  jsonDir/  [output.gml]
 java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.BalconyGenerator     input.gml  jsonDir/  [output.gml]
+java -cp target/lod2-zu-lod3-pipeline.jar  de.mpsc.lod2tolod3.RoofWindowGenerator  input.gml  jsonDir/  [output.gml]
 ```
-
-`BalconyGenerator` ist seit 2026-08-10 fester Teil der Pipeline, seit 2026-08-12 zweiphasig
-verdrahtet (Phase 1 vor, Phase 2 nach den Fenstern — siehe "Pipeline-Ablauf" unten); der
-Standalone-Aufruf oben führt beide Phasen direkt nacheinander aus (für isolierte Tests an
-einer bereits Fenster-haltigen Datei) — siehe Status-Tabelle unten.
 
 ---
 
@@ -66,58 +81,35 @@ einer bereits Fenster-haltigen Datei) — siehe Status-Tabelle unten.
 ```
 CityGML LoD2
     │
-    ▼  Schritt 1 – Lod2ToLod3Promoter
-    │  LoD2-Geometrie auf LoD3 hochstufen
-    │  (WallSurface / RoofSurface / GroundSurface aus Solid extrahieren)
-    │
-    ▼  Schritt 2 – BasementGenerator
-    │  Keller unterhalb der Geländeoberfläche modellieren (DGM-gestützt)
-    │  Schnittlinie Gebäudehülle ↔ Geländefläche per Sutherland-Hodgman
-    │
-    ▼  Schritt 3 – StoreyGenerator
-    │  Wände in Geschosse aufteilen (EG / OG / DG / UG)
-    │  Horizontales Clipping mit automatischer Geschosshöhenberechnung
-    │
-    ▼  Schritt 4 – DoorGenerator
-    │  Türen auf EG-Außenwände platzieren (TIC-basierte Positionierung)
-    │
-    ▼  Schritt 5a – BalconyGenerator (Phase 1)
-    │  Führender Ga-Lauf pro Wand unabhängig platziert (HDistWaGa-Anker),
-    │  reserviert die belegte Wandspanne für Schritt 5b
-    │
-    ▼  Schritt 5b – WindowGenerator
-    │  Fenster auf alle Geschoss-Außenwände platzieren (TIC-Methode),
-    │  respektiert die Phase-1-Reservierung
-    │
-    ▼  Schritt 5c – BalconyGenerator (Phase 2)
-    │  Restliche Ga-Token eines Musters (falls > 1 Lauf, z.B. "GaWiGaWi")
-    │  gegen die jetzt echten Fenster platziert (HDistWiGa-Anker)
-    │
-    ▼  Schritt 7 – Junction-Conforming (streng formneutral)
-    │  T-Naht-Vertices auf bestehende Kanten einfügen → wasserdichtes lod3Solid
+    ▼  1  Lod2ToLod3Promoter        LoD2-Geometrie auf LoD3 hochstufen
+    ▼  2  BasementGenerator         Keller unterhalb der Geländeoberfläche (DGM-gestützt)
+    ▼  3  StoreyGenerator           Wände in Geschosse aufteilen (EG/OG/DG/UG)
+    ▼  4  DoorGenerator             Türen auf EG-Außenwände platzieren
+    ▼  5a BalconyGenerator Phase 1  Führender Balkon-Lauf je Wand (reserviert Wandspanne)
+    ▼  5b WindowGenerator           Fenster auf alle Geschoss-Außenwände
+    ▼  5c BalconyGenerator Phase 2  Restliche Balkon-Läufe gegen die echten Fenster
+    ▼  5d RoofWindowGenerator       Dachflächenfenster auf geneigten Dachflächen
+    ▼  4d DoorGenerator (Fallback)  Ersatztür für Gebäude mit Fenstern, aber ohne Tür
+    ▼  6  Junction-Conforming       T-Naht-Vertices einfügen (streng formneutral)
+    ▼  7  Pinch-Point-Aufspaltung   Selbstberührende Ringe in einfache Teilringe auftrennen
     │
     ▼
 CityGML LoD3
 ```
 
-**Single-Pass-Architektur:** Die Eingabedatei wird genau einmal gelesen, alle
-Schritte werden pro Gebäude im Speicher ausgeführt, das Ergebnis einmal geschrieben –
-keine Zwischendateien.
+**Single-Pass-Architektur:** jede Eingabedatei wird einmal gelesen, alle Schritte laufen pro
+Gebäude im Speicher, das Ergebnis wird einmal geschrieben — keine Zwischendateien.
 
-**Streng formneutrale Nachbearbeitung (Schritt 6):** Nach dem Einbau von Kellern,
-Geschossen, Türen und Fenstern fügt das Junction-Conforming fehlende T-Naht-Vertices
-*auf bestehende Kanten* ein — gemessen werden dabei **0 bestehende Vertices bewegt**.
-Es näht ausschließlich die eigenen Zusatzflächen zusammen; das Healing der
-Quellgeometrie (mm-Nähte, Planarität) verbleibt beim nachgelagerten Healer. Damit
-steigt die val3dity-Validität von 81,0 % auf **89,1 %** bei einer Quell-Obergrenze von
-92,2 % (Details siehe [Doku.md](Doku.md)).
+**Schritte 6+7 sind streng formneutral:** kein bestehender Vertex wird bewegt, nur fehlende
+Punkte auf bestehende Kanten eingefügt bzw. selbstberührende Ringe sauber aufgetrennt. Das
+Healing der Quellgeometrie (mm-Nähte, Planarität) bleibt beim nachgelagerten Healer.
 
 ---
 
 ## Baukörpermodule (JSON)
 
-Für jedes Gebäude wird eine JSON-Datei (`{gml:id}.json`) oder ein Fallback
-(`_default.json`) aus dem `jsonDir`-Verzeichnis geladen:
+Für jedes Gebäude wird eine JSON-Datei (`{gml:id}.json`) oder ein Fallback (`_default.json`)
+aus dem `jsonDir`-Verzeichnis geladen:
 
 ```json
 {
@@ -142,34 +134,20 @@ Für jedes Gebäude wird eine JSON-Datei (`{gml:id}.json`) oder ein Fallback
 | Format | Beschreibung |
 |---|---|
 | `.asc` | ESRI ASCII Grid (einzelne Kachel) |
-| `.tif` / `.tiff` | GeoTIFF (javax.imageio) |
+| `.tif` / `.tiff` | GeoTIFF |
 | `.zip` | ZIP-Archiv mit `.asc`-Dateien |
-| Verzeichnis | Automatisches Mosaik aus mehreren Kacheln |
+| Verzeichnis | Automatisches Mosaik aus mehreren Kacheln (z.B. ganze Stadt) |
 
 Format wird automatisch erkannt (`DgmLoader`-Factory).
 
 ---
 
-## Implementierungsstatus
+## Status
 
-| # | Schritt | Klasse | Status |
-|---|---|---|---|
-| 1 | LoD2→LoD3 Promotion | `Lod2ToLod3Promoter` | ✅ Fertig |
-| 2 | Keller | `BasementGenerator` | ✅ Fertig — `WindowPreference`-Zuordnung an Kellerwände 2026-08-03 gefixt (Mittelpunkt- statt Kollinearitätsprüfung ließ ~40% der Kellerwände ohne `WindowPreference`, dadurch fälschlich wie Party-Wand behandelt); siehe [Doku.md](Doku.md#schritt-2-keller-generator-basementgenerator) |
-| 3 | Geschosse | `StoreyGenerator` | ✅ Fertig — 2026-08-04 Bugfix: Wände, die den Mehrfach-Schnitt umgehen (z.B. schräg zulaufende Walmdach-Innenwände), hingen sonst unterhalb `egFloorZ` und überlappten die Kellerwand (`NON_MANIFOLD_CASE`/`SHELL_NOT_CLOSED`, val3dity-verifiziert); jetzt hartes Nachtrimmen auf `egFloorZ` in allen drei betroffenen Codepfaden — siehe [Doku.md](Doku.md#schritt-3-geschoss-generator). **2026-08-12 Bugfix:** "fliegende" Geschossdecke bei BuildingPart-losen Anbauten (geteiltes Grundpolygon mit dem Hauptbau) behoben — Höhengrenze wird jetzt pro Grundpolygon-Kante statt als ein Gesamtwert berechnet, der Anbau-Anteil wird als Kerbe aus dem Ring geschnitten statt fälschlich eine zusätzliche Etage zu bekommen; val3dity-neutral verifiziert (identische Fehlerverteilung vorher/nachher). **2026-08-20 Umbau:** der Kanten-Matching-Mechanismus dafür (nach drei weiteren Patches) durch echte 2D-Polygon-Differenz (JTS, `Polygon.difference()` gegen die Anbau-Dachflächen) ersetzt — behebt zwei weitere reale Fälle, die eine einzelne gerade Schließkante strukturell nicht darstellen konnte; val3dity-Fehlerprofil weiterhin byte-identisch zur Baseline, siehe [Doku.md](Doku.md#ablösung-anbau-zuschnitt-durch-echte-2d-polygon-differenz-statt-kanten-matching-jts-2026-08-20) |
-| 4 | Türen | `DoorGenerator` | ✅ Fertig |
-| 5 | Fenster | `WindowGenerator` | ✅ Fertig — Fensterblock wird seit 2026-08-03 immer auf den Wandabschnitt zentriert (vorher: `HDistWaWi`-verankert, Zentrierung nur als Fallback); seit 2026-08-11 Kellerfenster (BA) hart auf 1 Reihe begrenzt (vorher konnten vereinzelt 2 Reihen übereinander entstehen); siehe [Doku.md](Doku.md#fensterpositionen) und [Bugfix](Doku.md#bugfix-doppeltegestapelte-kellerfenster-2026-08-11) |
-| 6 | Balkone | `BalconyGenerator` | ✅ Fertig — seit 2026-08-10 in `Lod2ToLod3Pipeline` verdrahtet, seit 2026-08-11 als `BuildingInstallation` (Deck + Brüstung) statt RoofSurface/WallSurface modelliert — CityGML-1.0-XSD-konform verifiziert, kein `boundedBy`/Solid-Ausschluss-Hack mehr nötig. **Seit 2026-08-12 zweiphasig um die Fenster herum** (Phase 1 platziert den führenden `Ga`-Lauf unabhängig VOR den Fenstern über `HDistWaGa` verankert, Phase 2 platziert restliche `Ga`-Token eines Musters NACH den Fenstern über `HDistWiGa` verankert statt zu zentrieren) — hebt die Balkon-Zahl auf der vollen Kachel von 630 auf **1.075** (+70 %), da Balkone nicht mehr von einem bereits vom `WindowGenerator` platzierten Fenster abhängen. Verifiziert an 14 echten Testgebäuden UND an der vollen 3.801-Gebäude-Kachel (1.075 Balkone, 0 doppelte IDs). **val3dity: identisch zur Pipeline ohne Balkone — 0 zusätzliche Fehler; `citygml-tools validate`: schema-valide.** Eligibilität über `WindowPreference` (0/1/2) und eine modulbezogene Mindestwandlänge (`GaLen + HDistMinWaGa`). Einzelne Positionierungs-Annahmen bleiben inferiert statt spec-belegt (u.a. `HDistWiGa` vs. `HDistGaGa` bei durch Fenster getrennten Balkon-Läufen) — Geometrie-Validität ist davon unabhängig bewiesen; siehe [Doku.md](Doku.md#schritt-6-balkon-generator-balconygenerator) (Abschnitt "Redesign 3") und Javadoc der Klasse. **2026-08-18 Bugfix:** Balkon-Eligibilität bei `WindowPreference=2` folgt jetzt exakt derselben `Z_Fenster_ASL`-Höhenlogik wie `WindowGenerator` (kein Balkon unterhalb der Verschattungsgrenze der Nachbarwand) — hebt die Kachel-Zahl auf **1.352** Balkone. Die dabei aufgetretene val3dity-`601`-Zunahme (+23) und CityDoctor-Meldung `SE_POLYGON_WITHOUT_SURFACE` auf allen Fenstern/Türen/Balkonen wurden als Tooling-Limitierungen der Prüfwerkzeuge identifiziert und quellcodebasiert verifiziert (nicht als Fehler unserer Ausgabe) — siehe [Doku.md](Doku.md#citydoctor2-se_polygon_without_surface-ist-ein-mapper-bug-im-tool-kein-fehler-unsererseits-2026-08-18) und [val3dity-Abschnitt](Doku.md#val3dity-601-buildingparts_overlap-bei-mehrteil-gebaeuden-ist-ein-nef-erosions-effekt-kein-reales-volumen-overlap-2026-08-18). |
-| 7 | Junction-Conforming | `CityGmlUtils.conformJunctions` | ✅ Fertig |
-| 8 | Dachfenster | – | 📋 TODO |
-
-Getestet mit **3 801 Gebäuden** (Testdatensatz Sachsen LoD2), Laufzeit ca. **20 s**.
-Geometrische Validität (val3dity, 658-Gebäude-Kachel): **89,1 %** valide Solids bei
-**0 mm** Veränderung bestehender Geometrie; Ausgabe ist CityGML-1.0-schema-valide. Balkone
-fügen auf der vollen 3.801-Gebäude-Kachel nachweislich **0 zusätzliche val3dity-Fehler**
-hinzu (A/B-Vergleich mit den aktuellen 1.075 Balkonen: fehlerscharf identische Verteilung
-mit/ohne Balkone, alle 2.150 neuen `BuildingInstallation`-Objekte zu 100 % valide — siehe
-[Doku.md](Doku.md#schritt-6-balkon-generator-balconygenerator), Abschnitt "Redesign 3").
+Alle 8 Pipeline-Schritte (1–7 inkl. 4d/5a–5d) sind fertig und produktiv im Einsatz. Letzter
+kompletter Stadt-Lauf (Dresden, 98 Kacheln, 141.670 Gebäude): val3dity 98,36 % valide Features,
+CityDoctor2 92,24 % fehlerfreie Gebäude. Verifikationshistorie, Einzelfixe und genaue Zahlen:
+[Doku.md](Doku.md).
 
 ---
 
@@ -177,16 +155,26 @@ mit/ohne Balkone, alle 2.150 neuen `BuildingInstallation`-Objekte zu 100 % valid
 
 ```
 src/main/java/de/mpsc/lod2tolod3/
-├── Lod2ToLod3Pipeline.java         Haupt-Pipeline (Single-Pass)
+├── Lod2ToLod3Pipeline.java         Haupt-Pipeline (Single-Pass + Batch-Modus)
 ├── Lod2ToLod3Promoter.java         Schritt 1: Geometrie-Promotion
 ├── AbstractGenerator.java          Gemeinsame Generator-Basis (Template-Method)
 ├── BasementGenerator.java          Schritt 2: Keller
 ├── StoreyGenerator.java            Schritt 3: Geschosse
-├── DoorGenerator.java              Schritt 4: Türen
-├── WindowGenerator.java            Schritt 5: Fenster
-├── BalconyGenerator.java           Schritt 6: Balkone (ersetzt Fenster-Slots gemäß GaPa-Muster)
+├── DoorGenerator.java              Schritt 4 + 4d: Türen (inkl. Fallback-Türen)
+├── WindowGenerator.java            Schritt 5b: Fenster
+├── BalconyGenerator.java           Schritt 5a/5c: Balkone
+├── RoofWindowGenerator.java        Schritt 5d: Dachflächenfenster
 ├── util/
-│   ├── CityGmlUtils.java           Shared Utilities (conformJunctions, splitWallByZ, …)
+│   ├── CityGmlUtils.java           Attribut-Helfer, GML-Datei-I/O, SRS
+│   ├── GeometryUtils.java          Geometrie-Grundlagen (Basis-Klasse der meisten anderen)
+│   ├── BuildingQueryUtils.java     Boundary-/Target-Sammlung, Dach-Z-Bereich
+│   ├── WallCuttingUtils.java       Horizontaler Wand-Schnitt (Sutherland-Hodgman + JTS)
+│   ├── SlabClippingUtils.java      Geschossflächen-Zuschnitt bei Anbauten (JTS)
+│   ├── SolidShellUtils.java        TerrainIntersectionCurve + Solid-Shell-Neuaufbau
+│   ├── JunctionConformingUtils.java T-Naht-Konformierung + Pinch-Point-Aufspaltung (Schritt 6+7)
+│   ├── OpeningUtils.java           Fenster-/Tür-Platzierungsprüfung und -Erzeugung
+│   ├── PartyWallCoverageUtils.java Wand-Deckung durch Nachbarbauteile (Anbau)
+│   ├── Point3D.java                3D-Punkt-Klasse
 │   ├── DgmLoader.java              DGM-Format-Erkennung (Factory)
 │   ├── DgmReader.java              ESRI ASCII Grid Parser
 │   ├── GeoTiffReader.java          GeoTIFF Parser
@@ -195,7 +183,7 @@ src/main/java/de/mpsc/lod2tolod3/
 │   └── ModuleParametersLoader.java JSON-Parameter-Loader mit Cache
 └── model/
     ├── ModuleParameters.java       Datenklasse für JSON-Baukörpermodule
-    └── WindowPreference.java       Enum: NONE/NORMAL/ABOVE_NEIGHBOR (Fenster- und Balkon-Eligibilität)
+    └── WindowPreference.java       Enum: NONE/NORMAL/ABOVE_NEIGHBOR
 ```
 
 ---
