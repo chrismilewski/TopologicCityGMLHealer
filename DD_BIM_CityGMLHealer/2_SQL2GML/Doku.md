@@ -166,6 +166,22 @@ sichtbar kaputte Geometrie produziert (fehlende Waende, schwebendes Dach). Bis d
 Healer-Code dafuer reif ist, disqualifiziert jede solche PartIdGml das gesamte Building —
 Original-Geometrie bleibt vollstaendig erhalten, wie bei jedem anderen Valid-Gate-Fehlschlag.
 
+**Erweiterung auf die Rueckrichtung (2026-09-02):** die urspruengliche Fassung des Gates
+prüfte nur DB→GML (jede vom Healer vergebene `PartIdGml` muss ein bestehendes GML-Part
+treffen), nicht aber GML→DB (jeder bestehende GML-Part muss einen DB-Gegenpart haben). Ein
+GML-BuildingPart, fuer den die Healer-DB ueberhaupt KEINE Zeile mehr liefert (beobachtet an
+einem Anbau, der nach dem Healer-Lauf komplett aus der Ausgabe verschwunden war — kein
+Loeschungs-Log, keine Fehlermeldung, einfach weg), wurde bisher klaglos vom
+"überholte-Parts-entfernen"-Schritt geloescht statt das Building wie jeden anderen
+Merge/Split-Fall unangetastet zu lassen. Fix: das Gate prueft jetzt BEIDE Richtungen; fehlt
+auch nur ein GML-Part komplett in der DB, bleibt das gesamte Building unveraendert (dieselbe
+Buergschaft wie beim urspruenglichen Gate). Verifiziert an einer echten 2.918-Gebaeude-Kachel
+(556 davon mehrteilig) — Vorher/Nachher-Statistik (Buildings replaced/unchanged/kept-invalid,
+Surfaces written) exakt identisch, kein einziges Building hat die Klassifizierung gewechselt;
+dieser konkrete Datensatz enthielt also keinen Fall, den das erweiterte Gate zusaetzlich
+gefangen haette, aber auch keinen, den es faelschlich neu blockiert haette (reine
+Sicherheitsnetz-Erweiterung ohne beobachtbare Nebenwirkung).
+
 ### Tabellen
 
 #### CityGmlFiles
@@ -1083,6 +1099,41 @@ geschlossen ist (siehe Memory-Notiz „CityDoctor TIN false positive"). Für die
 existiert `PolygonOnlyReplaceWorkflow` (siehe oben) als reine Ausgabe-Variante — an der
 zugrundeliegenden Geometrie ändert sich dabei nichts, nur die GML-Repräsentation
 (N einzelne Polygone statt einer TriangulatedSurface).
+
+---
+
+## Bugfixes (2026-09-02)
+
+### gml:name ging bei jeder zurückgeschriebenen Fläche verloren
+
+**Root Cause:** `createBoundarySurface()` baute für jede aus der DB geschriebene Fläche ein
+brandneues `WallSurface`/`RoofSurface`/`GroundSurface`-Objekt und setzte daran nur die
+`gml:id` — `gml:name` wurde nirgendwo im Code gesetzt. Tiefere Ursache: das DB-Schema kennt
+gar keine Name-Spalte (`Surfaces`-Tabelle hat nur `Id, SurfaceIdGml, BuildingPartId,
+SurfaceTypeId, Attributes, IsValid, Log`), der Healer erfaßt `gml:name` also gar nicht erst.
+
+**Fix:** `gml:name` wird nicht aus der DB gelesen (die hat ihn nicht), sondern direkt aus
+`SurfaceTypeId` abgeleitet — an zwei unabhängigen echten Kacheln (33_412_5656 und 33_416_5656,
+zusammen ~110.000 Flächen) verifiziert: **jede** WallSurface im LoD2-Quelldatenformat heißt
+ausnahmslos `LOD2_Wall`, jede RoofSurface `LOD2_Roof`, jede GroundSurface `LOD2_Ground` — die
+Zuordnung ist 1:1 deterministisch, keine Ausnahme in beiden Stichproben. `createBoundarySurface()`
+setzt den Namen daher im selben `switch`, der ohnehin schon den Java-Typ anhand von
+`SurfaceTypeId` wählt.
+
+**Verifikation:** Lauf auf realer 2.918-Gebäude-Kachel (33_416_5656), Vorher/Nachher-Diff der
+Ausgabedatei: `gml:name`-Anzahl 27.956 → 59.867 (+31.911, exakt gleich der Zahl "Surfaces
+written" aus der Konsolen-Ausgabe — jede einzige geschriebene Fläche bekommt genau einen
+Namen). Diff enthält **ausschließlich** neue `<gml:name>`-Zeilen, keine einzige Zeile wurde
+entfernt oder anderweitig verändert.
+
+### BuildingPart (Anbau) verschwand komplett aus der Ausgabe
+
+Siehe „Solid-Merge-Gate" oben, Abschnitt „Erweiterung auf die Rueckrichtung (2026-09-02)" —
+das Gate prüfte bisher nur, ob jede DB-`PartIdGml` ein bestehendes GML-Part trifft, nicht aber
+ob jedes bestehende GML-Part einen DB-Gegenpart hat. Ein GML-Part ohne jede DB-Zeile wurde
+dadurch vom „überholte-Parts-entfernen"-Schritt (`replaceBuilding()`) klaglos gelöscht, obwohl
+kein DB-Eintrag dem ausdrücklich widersprach. Jetzt disqualifiziert eine fehlende Zeile für
+einen bestehenden GML-Part das gesamte Building genauso wie eine neue/unbekannte `PartIdGml`.
 
 ---
 

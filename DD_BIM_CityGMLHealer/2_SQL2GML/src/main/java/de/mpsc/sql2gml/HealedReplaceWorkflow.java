@@ -22,6 +22,7 @@ import org.citygml4j.xml.writer.CityGMLOutputFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xmlobjects.gml.model.base.AbstractGML;
+import org.xmlobjects.gml.model.basictypes.Code;
 import org.xmlobjects.gml.model.feature.BoundingShape;
 import org.xmlobjects.gml.model.geometry.DirectPositionList;
 import org.xmlobjects.gml.model.geometry.aggregates.MultiSurface;
@@ -387,9 +388,17 @@ public class HealedReplaceWorkflow {
         // BuildingParts zu einem Solid verschmolzen, oder ein Teil in mehrere Solids
         // aufgespalten) noch nicht ausgereift genug — beobachtete Faelle mit sichtbar
         // kaputter Geometrie (fehlende Waende, schwebendes Dach). Bis der Healer-Code dafuer
-        // reif ist, akzeptieren wir nur eine 1:1-Zuordnung zu bereits vorhandenen GML-
-        // BuildingParts; jede von der Healer-DB neu vergebene PartIdGml ohne bestehende
-        // Entsprechung disqualifiziert das gesamte Building (Original-Geometrie bleibt erhalten).
+        // reif ist, akzeptieren wir nur eine 1:1-Zuordnung zwischen DB- und GML-BuildingParts,
+        // in BEIDEN Richtungen:
+        //   DB → GML: jede von der Healer-DB neu vergebene PartIdGml ohne bestehende
+        //             Entsprechung disqualifiziert das gesamte Building.
+        //   GML → DB: jeder bestehende GML-Part, fuer den die Healer-DB ueberhaupt KEINE Zeile
+        //             mehr liefert (z.B. ein Anbau, der beim Party-Wall-Merge/-Split still-
+        //             schweigend nicht mehr ausgegeben wird), disqualifiziert ebenfalls das
+        //             gesamte Building — sonst wuerde replaceBuilding() diesen Part klaglos als
+        //             "vom Healer weggelassen" loeschen (siehe Doku.md, 2026-09-02 nachgetragen).
+        // In beiden Faellen bleibt die Original-Geometrie des GESAMTEN Buildings unangetastet
+        // (kein Teil-Ersatz, siehe Valid-Gate-Begruendung oben: Risiko SHELL_NOT_CLOSED).
         Set<String> gmlPartIds = new HashSet<>();
         if (gmlBuilding.isSetBuildingParts()) {
             for (BuildingPartProperty partProp : gmlBuilding.getBuildingParts()) {
@@ -399,10 +408,18 @@ public class HealedReplaceWorkflow {
                 }
             }
         }
+        Set<String> dbPartIds = new HashSet<>();
         for (de.mpsc.sql2gml.model.BuildingPart part : dbBuilding.getBuildingParts()) {
             String partGmlId = part.getPartIdGml();
-            if (partGmlId != null && !partGmlId.isBlank() && !gmlPartIds.contains(partGmlId)) {
-                return false;
+            if (partGmlId == null || partGmlId.isBlank()) continue;
+            dbPartIds.add(partGmlId);
+            if (!gmlPartIds.contains(partGmlId)) {
+                return false; // DB → GML: neue/unbekannte PartIdGml
+            }
+        }
+        for (String gmlPartId : gmlPartIds) {
+            if (!dbPartIds.contains(gmlPartId)) {
+                return false; // GML → DB: bestehender Part fehlt komplett in der Healer-DB
             }
         }
         return true;
@@ -567,7 +584,8 @@ public class HealedReplaceWorkflow {
     /** Erstellt die passende citygml4j-Klasse fuer den SurfaceTypeId aus der DB (0=None→WallSurface). */
     private static AbstractThematicSurface createBoundarySurface(de.mpsc.sql2gml.model.Surface dbSurface) {
         String id = dbSurface.getSurfaceIdGml();
-        AbstractThematicSurface surface = switch (dbSurface.getSurfaceTypeId()) {
+        int typeId = dbSurface.getSurfaceTypeId();
+        AbstractThematicSurface surface = switch (typeId) {
             case TYPE_GROUND -> new GroundSurface();
             case TYPE_WALL   -> new WallSurface();
             case TYPE_ROOF   -> new RoofSurface();
@@ -576,7 +594,21 @@ public class HealedReplaceWorkflow {
         if (id != null) {
             ((AbstractGML) surface).setId(id);
         }
+        surface.getNames().add(new Code(gmlNameForType(typeId)));
         return surface;
+    }
+
+    /** gml:name je Flaechentyp — die LoD2-Quelldaten benennen jede Flaeche strikt nach ihrem Typ
+     * (LOD2_Wall/LOD2_Roof/LOD2_Ground, ueber zwei unabhaengige Kacheln mit insgesamt ~110.000
+     * Flaechen ohne eine einzige Ausnahme bestaetigt, 2026-09-02). Der Name laesst sich daher rein
+     * aus SurfaceTypeId ableiten statt aus der DB gelesen zu werden — die DB kennt gml:name gar
+     * nicht (siehe Doku.md, Tabelle Surfaces). */
+    private static String gmlNameForType(int surfaceTypeId) {
+        return switch (surfaceTypeId) {
+            case TYPE_GROUND -> "LOD2_Ground";
+            case TYPE_ROOF   -> "LOD2_Roof";
+            default          -> "LOD2_Wall"; // TYPE_WALL, und Fallback fuer 0=None (siehe oben)
+        };
     }
 
     // ─────────────────────────────────────────────────────────────────────────
